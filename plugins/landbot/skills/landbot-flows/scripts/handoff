@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Print the one-line handoff contract for a bot, so the style skill (or a person) can pick it up:
+#
+#   handoff <bot_uuid>
+#   → LANDBOT_HANDOFF bot=<uuid> builder=<numeric id> share=<url> channel=<numeric id> version=<3.0.0|3.1.0>
+#
+# Reads only. Three APIs answer the five fields, and none of them answers all five:
+#   v0-alpha  GET /bots/{uuid}          → the channel uuid(s)
+#   v2        GET /bots/{uuid}/         → the numeric builder id
+#   v1        GET /channels/?limit=&offset= → numeric channel id, share token (H-<id>-...), landbot.version
+#             (paginated, ignores ?bot=; walked to the end)
+# A field that could not be read is printed as `?` and the exit code is 2, so a partial line is
+# never mistaken for a complete one. The token is never printed; `lb` handles it.
+set -uo pipefail
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+LB="$HERE/lb"
+V2="${LANDBOT_API_V2_URL:-https://api.landbot.io/v2}"
+V1="${LANDBOT_API_V1_URL:-https://api.landbot.io/v1}"
+SHARE_HOST="${LANDBOT_SHARE_HOST:-https://landbot.pro/v3}"
+
+BOT="${1:-}"
+if [ -z "$BOT" ]; then echo "usage: handoff <bot_uuid>" >&2; exit 64; fi
+
+builder="?"; channel="?"; version="?"; share="?"; ch_uuid="?"; partial=0
+
+bot_json="$("$LB" GET "/bots/$BOT" 2>/dev/null)" || { echo "could not read /bots/$BOT on v0-alpha" >&2; partial=1; }
+if [ -n "${bot_json:-}" ]; then
+  ch_uuid="$(printf '%s' "$bot_json" | jq -r '.data.channels[0] // empty' 2>/dev/null)"
+  [ -n "$ch_uuid" ] || { ch_uuid="?"; partial=1; }
+fi
+
+v2_json="$(LANDBOT_API_URL="$V2" "$LB" GET "/bots/$BOT/" 2>/dev/null)" || partial=1
+if [ -n "${v2_json:-}" ]; then
+  builder="$(printf '%s' "$v2_json" | jq -r '.bot.id // empty' 2>/dev/null)"
+  [ -n "$builder" ] || { builder="?"; partial=1; }
+fi
+
+if [ "$ch_uuid" != "?" ]; then
+  # GET /v1/channels/ is paginated (`total`, `channels`, ascending id) and ignores ?bot=. A bot
+  # made today has one of the newest channels, so read `total` first and walk the pages from the
+  # END backwards; fall back to a forward walk when `total` is missing. MAX_PAGES bounds the walk.
+  row=""; LIMIT=100; MAX_PAGES="${LANDBOT_HANDOFF_MAX_PAGES:-50}"; pages=0
+  page() { LANDBOT_API_URL="$V1" "$LB" GET "/channels/?limit=$LIMIT&offset=$1" 2>/dev/null; }
+  find_row() { printf '%s' "$1" | jq -c --arg u "$ch_uuid" '(.channels // .) | map(select(.uuid==$u)) | .[0] // empty' 2>/dev/null; }
+  first="$(page 0)" || { first=""; partial=1; }
+  if [ -n "$first" ]; then
+    row="$(find_row "$first")"
+    total="$(printf '%s' "$first" | jq -r '.total // empty' 2>/dev/null)"
+    case "$total" in ''|*[!0-9]*) total="" ;; esac
+    if [ -z "$row" ] && [ -n "$total" ] && [ "$total" -gt "$LIMIT" ]; then
+      offset=$((total - LIMIT))
+      while [ "$offset" -gt 0 ] && [ "$pages" -lt "$MAX_PAGES" ]; do
+        pg="$(page "$offset")" || { partial=1; break; }
+        row="$(find_row "$pg")"; [ -n "$row" ] && break
+        offset=$((offset - LIMIT)); [ "$offset" -lt 0 ] && offset=0
+        pages=$((pages + 1))
+        [ "$offset" -eq 0 ] && break   # page 0 was already read
+      done
+    elif [ -z "$row" ] && [ -z "$total" ]; then
+      offset=$LIMIT
+      while [ "$pages" -lt "$MAX_PAGES" ]; do
+        pg="$(page "$offset")" || { partial=1; break; }
+        row="$(find_row "$pg")"; [ -n "$row" ] && break
+        n="$(printf '%s' "$pg" | jq -r '(.channels // .) | length' 2>/dev/null)"
+        case "$n" in ''|*[!0-9]*) break ;; esac
+        [ "$n" -lt "$LIMIT" ] && break
+        offset=$((offset + LIMIT)); pages=$((pages + 1))
+      done
+    fi
+  fi
+  if [ -n "$row" ]; then
+    channel="$(printf '%s' "$row" | jq -r '.id // "?"')"
+    token="$(printf '%s' "$row" | jq -r '.token // empty')"
+    version="$(printf '%s' "$row" | jq -r '.landbot.version // .version // "?"')"
+    [ -n "$token" ] && share="$SHARE_HOST/$token/index.html"
+  else
+    partial=1
+  fi
+fi
+for v in "$builder" "$channel" "$version" "$share"; do [ "$v" = "?" ] && partial=1; done
+
+echo "LANDBOT_HANDOFF bot=$BOT builder=$builder share=$share channel=$channel version=$version"
+if [ "$partial" = 1 ]; then
+  echo "handoff is PARTIAL: a '?' above could not be read. Say so; do not fill it in by hand." >&2
+  exit 2
+fi

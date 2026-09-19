@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Check what the visitor actually gets, from the outside, without a token:
+#
+#   verify-share <share-url | H-<id>-<code>> [expected-substring-of-css]
+#
+# Reads the published channel config (index.json) behind a share URL and answers three things:
+#   1. is the channel on the v4 renderer (use_surrogate_interaction / version 3.1.0)?
+#   2. is Custom CSS present in the PUBLISHED config (it is dropped on Sandbox plans)?
+#   3. does that CSS contain the marker you expect (proves the last Publish carried your paste)?
+# Exit 0 only when all three hold. Anything else is a real failure, not a warning.
+# It does not render the page: computed styles and anchor counts are checked in the browser
+# console on the share URL (see SKILL.md, "Verify").
+set -uo pipefail
+IN="${1:-}"; MARK="${2:-}"
+if [ -z "$IN" ]; then echo "usage: verify-share <share-url | H-<id>-<code>> [expected-css-substring]" >&2; exit 64; fi
+TOKEN="$(printf '%s' "$IN" | grep -oE 'H-[0-9]+-[A-Z0-9]+' | head -1)"
+if [ -z "$TOKEN" ]; then echo "no channel token (H-<id>-<code>) found in: $IN" >&2; exit 65; fi
+CHANNEL_ID="$(printf '%s' "$TOKEN" | cut -d- -f2)"
+CONFIG_URL="${LANDBOT_CONFIG_BASE:-https://storage.googleapis.com/landbot.pro/v3}/$TOKEN/index.json"
+
+body="$(curl -sS -f "$CONFIG_URL")" || { echo "could not read $CONFIG_URL (not published yet, or the token is wrong)" >&2; exit 1; }
+
+v4="$(printf '%s' "$body" | jq -r '.use_surrogate_interaction // empty')"
+ver="$(printf '%s' "$body" | jq -r '.version // empty')"
+style_len="$(printf '%s' "$body" | jq -r '(.style // "") | length')"
+ok=0
+echo "channel:   $CHANNEL_ID"
+echo "config:    $CONFIG_URL"
+echo "version:   ${ver:-?}   use_surrogate_interaction: ${v4:-?}"
+echo "style:     ${style_len} characters in the published config"
+if [ "$v4" != "true" ] && [ "$ver" != "3.1.0" ]; then
+  echo "FAIL: this channel is not on the v4 renderer. Custom CSS will not render here. Stop and report it." >&2; ok=1
+fi
+if [ "$style_len" = "0" ]; then
+  echo "FAIL: no Custom CSS in the published config. Either Publish was not clicked, or the plan is Sandbox (Custom CSS is dropped)." >&2; ok=1
+fi
+if [ -n "$MARK" ]; then
+  if printf '%s' "$body" | jq -r '.style // ""' | grep -qF -- "$MARK"; then
+    echo "marker:    found"
+  else
+    echo "FAIL: the published CSS does not contain '$MARK'. The paste did not reach Publish." >&2; ok=1
+  fi
+fi
+[ "$ok" = 0 ] && echo "OK: v4 renderer and Custom CSS are live at $CONFIG_URL. Now check the share URL itself in a browser (see SKILL.md)."
+exit "$ok"

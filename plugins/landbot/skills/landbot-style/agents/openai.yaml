@@ -1,0 +1,4 @@
+interface:
+  display_name: "Landbot Style"
+  short_description: "Style Landbot chats and experimental form interfaces"
+  default_prompt: "Use $landbot-style to prepare a visual prototype for my Landbot bot and verify its supported styling surface."

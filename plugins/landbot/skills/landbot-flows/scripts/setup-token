@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# Manage the Landbot API token that `lb` uses.
+#
+#   setup-token              # macOS: store it from the clipboard (or replace the one already there)
+#   setup-token --prompt     # macOS: same, but typed instead (hidden; needs a real terminal)
+#   setup-token --whoami     # whose token is in use, without printing it (any OS)
+#   setup-token --check      # verify LANDBOT_API_TOKEN from the environment (Linux, Windows, CI)
+#   setup-token --forget     # macOS: remove it from the keychain
+#
+# Where the token lives:
+#   macOS            the login keychain, entry "landbot-api-token" (LANDBOT_TOKEN_KEYCHAIN_SERVICE to rename).
+#   Linux / Windows  the LANDBOT_API_TOKEN environment variable, set in your own shell, never in a file
+#                    this skill writes. `lb` reads it and nothing else does.
+#
+# The token is verified against the API before it is stored, and is never printed, never written to
+# a file, and never passed as an argument. On success the clipboard is cleared.
+set -uo pipefail
+
+KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
+BASE="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"
+V2="${LANDBOT_API_V2_URL:-https://api.landbot.io/v2}"
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ACCESS_URL="${LANDBOT_SKILLS_ACCESS_URL:-https://github.com/landbot-org/landbot-ai-skills/issues}"
+
+have_keychain() { command -v security >/dev/null 2>&1; }
+
+# Who a token belongs to, asked of the API rather than guessed. Takes the token on stdin so it is
+# never an argument; answers with the account's email, and nothing about the token itself.
+account_of() {
+  local token body
+  token="$(cat)"
+  body="$(printf 'header = "Authorization: Token %s"\n' "$token" |
+    curl -sS "$V2/agents/me/" --config -)" || return 1
+  printf '%s' "$body" | jq -r '.agent | "\(.full_name // "?") <\(.email // "?")>"' 2>/dev/null ||
+    return 1
+}
+
+# HTTP status of GET /blocks with the token on stdin. 200 proves environment, token and permission.
+check_blocks() {
+  local token
+  token="$(cat)"
+  printf 'header = "Authorization: Token %s"\n' "$token" |
+    curl -sS -o /dev/null -w '%{http_code}' "$BASE/blocks" --config -
+}
+
+explain_code() {
+  case "$1" in
+  200) return 0 ;;
+  401 | 403)
+    cat >&2 <<EOM
+the API refused it ($1). The answer does not say why; the three causes, most likely first:
+  1. Your Landbot account is not enabled for the Bots API yet. Landbot switches it on per
+     account; no token fixes it. Ask at $ACCESS_URL with your account email (never the token)
+     and say you are using the coding-agent skills.
+  2. It is not the whole token: copy the read-only "API token" field again.
+  3. Your user lacks the "view chatbot" permission in the workspace.
+Do not paste the token into the chat to check it.
+EOM
+    return 1 ;;
+  404) echo "$BASE has no Bots API ($1). Check LANDBOT_API_URL." >&2; return 1 ;;
+  *) echo "unexpected answer from $BASE: HTTP $1" >&2; return 1 ;;
+  esac
+}
+
+report_acting_as() {
+  local who="$1" source="$2"
+  echo "Acting as $who"
+  echo "  token source:   $source"
+  echo "  environment:    $BASE"
+}
+
+case "${1:-}" in
+--whoami)
+  if [ -n "${LANDBOT_API_TOKEN:-}" ]; then
+    WHO="$(printf '%s' "$LANDBOT_API_TOKEN" | account_of)" || {
+      echo "LANDBOT_API_TOKEN is set, but $V2 would not say whose it is. It may be wrong or revoked." >&2
+      exit 1
+    }
+    report_acting_as "$WHO" "LANDBOT_API_TOKEN (environment variable)"
+    exit 0
+  fi
+  if ! have_keychain; then
+    echo "no token: LANDBOT_API_TOKEN is not set, and there is no keychain on this OS." >&2
+    echo "Set it in your own shell:  export LANDBOT_API_TOKEN='<your token>'  then run: $HERE/setup-token --check" >&2
+    exit 77
+  fi
+  STORED="$(security find-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null)" || {
+    echo "no token stored under '$KEYCHAIN_SERVICE'. Run setup-token to add one." >&2
+    exit 77
+  }
+  WHO="$(printf '%s' "$STORED" | account_of)" || {
+    echo "a token is stored under '$KEYCHAIN_SERVICE', but $V2 would not say whose." >&2
+    echo "It may have been revoked. Replace it with: setup-token" >&2
+    exit 1
+  }
+  unset STORED
+  case "$WHO" in *"?"*)
+    echo "a token is stored under '$KEYCHAIN_SERVICE', but the answer did not name an account." >&2
+    exit 1 ;;
+  esac
+  report_acting_as "$WHO" "keychain entry '$KEYCHAIN_SERVICE'"
+  exit 0
+  ;;
+--check)
+  if [ -z "${LANDBOT_API_TOKEN:-}" ]; then
+    cat >&2 <<EOM
+LANDBOT_API_TOKEN is not set. Copy the read-only "API token" field from
+https://app.landbot.io/gui/settings/account and set it in your own shell, for this terminal only:
+
+    export LANDBOT_API_TOKEN='<paste here>'
+
+Do not paste it into the chat and do not write it into a file. Then run this again.
+EOM
+    exit 65
+  fi
+  echo "Checking LANDBOT_API_TOKEN against $BASE ..." >&2
+  CODE="$(printf '%s' "$LANDBOT_API_TOKEN" | check_blocks)" || { echo "could not reach $BASE" >&2; exit 1; }
+  explain_code "$CODE" || exit 1
+  WHO="$(printf '%s' "$LANDBOT_API_TOKEN" | account_of 2>/dev/null)" || WHO="whoever this token belongs to — $V2 would not say"
+  echo "OK: GET /blocks answered 200." >&2
+  report_acting_as "$WHO" "LANDBOT_API_TOKEN (environment variable)"
+  exit 0
+  ;;
+--forget)
+  if ! have_keychain; then
+    echo "There is no keychain on this OS. Unset the variable instead:  unset LANDBOT_API_TOKEN" >&2
+    exit 78
+  fi
+  if security delete-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1; then
+    echo "Removed the token stored under '$KEYCHAIN_SERVICE'." >&2
+    echo "The skill cannot reach the API until you add one again." >&2
+  else
+    echo "There was no token under '$KEYCHAIN_SERVICE' to remove." >&2
+  fi
+  exit 0
+  ;;
+"" | --prompt) ;;
+*)
+  echo "usage: setup-token [--prompt | --whoami | --check | --forget]" >&2
+  exit 64
+  ;;
+esac
+
+if ! have_keychain; then
+  cat >&2 <<'EOM'
+This stores the token in the macOS keychain, and this is not macOS.
+Set it in your own shell instead, for this terminal only:
+
+    export LANDBOT_API_TOKEN='<your token>'
+
+then verify it with:  setup-token --check
+EOM
+  exit 78
+fi
+
+# Setting a token replaces whatever is there, so say what is being replaced before doing it.
+if PREVIOUS="$(security find-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null)"; then
+  PREVIOUS_WHO="$(printf '%s' "$PREVIOUS" | account_of 2>/dev/null)" || PREVIOUS_WHO=""
+  unset PREVIOUS
+  if [ -n "$PREVIOUS_WHO" ]; then
+    echo "Replacing the token for $PREVIOUS_WHO under '$KEYCHAIN_SERVICE'." >&2
+  else
+    echo "Replacing the token already stored under '$KEYCHAIN_SERVICE'." >&2
+  fi
+fi
+
+TOKEN=""
+case "${1:-}" in
+--prompt)
+  if [ ! -t 0 ]; then
+    echo "--prompt needs a real terminal. Run it yourself in Terminal, or drop the flag to use the clipboard." >&2
+    exit 64
+  fi
+  printf 'Paste your Landbot API token (it will not be shown): ' >&2
+  read -rs TOKEN
+  printf '\n' >&2
+  ;;
+"")
+  if ! command -v pbpaste >/dev/null 2>&1; then
+    echo "no pbpaste here: run with --prompt from a terminal instead" >&2
+    exit 78
+  fi
+  TOKEN="$(pbpaste | tr -d '[:space:]')"
+  if [ -z "$TOKEN" ]; then
+    cat >&2 <<'EOM'
+The clipboard is empty.
+
+Copy your token first: https://app.landbot.io/gui/settings/account
+It is the read-only "API token" field. Then run this again.
+EOM
+    exit 65
+  fi
+  ;;
+esac
+
+# Anything with a space or a newline in it is not a token — most likely the wrong thing was copied.
+case "$TOKEN" in
+*[[:space:]]*)
+  echo "that does not look like a token: it has whitespace in it. Copy just the API token field." >&2
+  exit 65
+  ;;
+esac
+
+# A Landbot API token is a 40-character hex string. Say so when it is not, because "you copied
+# something else" is a far more useful thing to hear than the 401 that would follow. It is a warning
+# rather than a refusal: the API is the authority on what it accepts, not this shape check.
+if ! printf '%s' "$TOKEN" | grep -qE '^[0-9a-f]{40}$'; then
+  printf 'Heads up: a Landbot API token is 40 hex characters, and this is %d character(s).\n' \
+    "${#TOKEN}" >&2
+  echo "If that was not deliberate, you may have copied the wrong thing — the field is called" >&2
+  echo "'API token' at https://app.landbot.io/gui/settings/account. Trying it anyway." >&2
+fi
+
+echo "Checking it against $BASE ..." >&2
+CODE="$(printf '%s' "$TOKEN" | check_blocks)" || {
+  echo "could not reach $BASE — check your connection and try again" >&2
+  exit 1
+}
+explain_code "$CODE" || exit 1
+
+WHO="$(printf '%s' "$TOKEN" | account_of 2>/dev/null)" || WHO=""
+
+security add-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w "$TOKEN" -U || {
+  echo "the keychain refused to store it" >&2
+  exit 1
+}
+unset TOKEN
+
+if command -v pbcopy >/dev/null 2>&1; then
+  printf '' | pbcopy
+  CLEARED=" The clipboard has been cleared."
+else
+  CLEARED=""
+fi
+
+cat >&2 <<EOM
+Done. The token is in your keychain under '$KEYCHAIN_SERVICE' and nothing else has a copy of it.${CLEARED}
+
+The skill now acts as ${WHO:-"whoever this token belongs to — $V2 would not say"}, against $BASE.
+Everything it does, it does with that account's permissions.
+
+macOS will ask once whether to let this read it back — choose Always Allow.
+To change it later, run this again. To check who it is: $HERE/setup-token --whoami
+EOM

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Talk to the Landbot Bots API v0-alpha.
+#
+#   lb GET  /blocks
+#   lb POST /bots '{"name":"Demo","channel_family":"landbot"}'
+#   lb PUT  /bots/<uuid>/draft @payload.json
+#
+# The path is appended to $LANDBOT_API_URL, so it starts at the version root: `/bots`,
+# not `/v0-alpha/bots`. A body is either inline JSON or `@file`.
+#
+# One exception: `/ai-agents` is a door onto the API that owns agents, and it did not move with
+# this one — it is served under `/v3` alone. A path to it goes to the `/v3` beside $LANDBOT_API_URL
+# (`https://api.landbot.io/v3`, `http://localhost:8000/api/v3`), or to $LANDBOT_AGENTS_API_URL when
+# that is set.
+#
+# Writes `HTTP <code>` to stderr and the body to stdout, and exits non-zero from 400 up,
+# so a failure is never read as a success. The token is never printed.
+set -uo pipefail
+
+BASE="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"
+BASE="${BASE%/}"
+AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
+KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
+
+if [ "${1:-}" = "--version" ]; then echo "landbot-flows 0.3.0"; exit 0; fi
+if [ "$#" -lt 2 ]; then
+  echo "usage: lb <METHOD> <PATH> [JSON|@FILE]" >&2
+  exit 64
+fi
+
+METHOD="$1"
+PATH_="$2"
+BODY="${3:-}"
+
+case "$PATH_" in
+/ai-agents | /ai-agents/*) BASE="${AGENTS_BASE%/}" ;;
+esac
+
+TOKEN="${LANDBOT_API_TOKEN:-}"
+if [ -z "$TOKEN" ] && command -v security >/dev/null 2>&1; then
+  TOKEN="$(security find-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null || true)"
+fi
+if [ -z "$TOKEN" ]; then
+  echo "no token: set LANDBOT_API_TOKEN, or store one in the keychain under '$KEYCHAIN_SERVICE'" >&2
+  exit 77
+fi
+
+ARGS=(-sS -X "$METHOD" "$BASE$PATH_" -w '\n%{http_code}' --config -)
+if [ -n "$BODY" ]; then
+  ARGS+=(-H 'Content-Type: application/json' --data-binary "$BODY")
+fi
+
+# The header goes in over stdin rather than on the command line, so the token is never an argument
+# of a running process and never reaches `ps`.
+RESPONSE="$(printf 'header = "Authorization: Token %s"\n' "$TOKEN" | curl "${ARGS[@]}")" \
+  || { echo "the request did not complete" >&2; exit 1; }
+
+CODE="${RESPONSE##*$'\n'}"
+PAYLOAD="${RESPONSE%$'\n'*}"
+
+echo "HTTP $CODE" >&2
+if command -v jq >/dev/null 2>&1; then
+  printf '%s' "$PAYLOAD" | jq . 2>/dev/null || printf '%s\n' "$PAYLOAD"
+else
+  printf '%s\n' "$PAYLOAD"
+fi
+
+[ "$CODE" -lt 400 ] 2>/dev/null || exit 1

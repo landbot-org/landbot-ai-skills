@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Read or change ONE web channel through the v1 channels API, with the user's own token.
+#
+#   channel get <channel_id>                            read the channel (version, style length, created)
+#   channel v4  <channel_id> --bot <bot_uuid>           set version 3.1.0 (the v4 web chat) — a WRITE
+#   channel css <channel_id> <file.css> --bot <bot_uuid> set Custom CSS from a file          — a WRITE
+#
+# Guards on every write, because a channel write is live for visitors as soon as it is published:
+#   - --bot is required, and the channel must belong to that bot (read from the Bots API).
+#   - the channel must be younger than LANDBOT_CHANNEL_MAX_AGE_H hours (default 24): this script is
+#     for channels the skill created in this session, never for a customer's existing bot.
+#     Set LANDBOT_CHANNEL_ALLOW_OLD=1 only when the user explicitly asked for an older channel.
+#   - a write is LIVE FOR VISITORS AT ONCE: the published config behind the share URL is regenerated
+#     by the channels API itself (verified 2026-09-19 on production: version and Custom CSS showed up
+#     in index.json without a new publish). So get the user's yes BEFORE running a write, as for a publish.
+# Reads only otherwise. Exits non-zero from HTTP 400 up. The token is never printed; `lb` handles it.
+set -uo pipefail
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+LB="$HERE/lb"
+V1="${LANDBOT_API_V1_URL:-https://api.landbot.io/v1}"
+MAX_AGE_H="${LANDBOT_CHANNEL_MAX_AGE_H:-24}"
+
+usage() { echo "usage: channel get <id> | channel v4 <id> --bot <uuid> | channel css <id> <file.css> --bot <uuid>" >&2; exit 64; }
+
+OP="${1:-}"; ID="${2:-}"
+[ -n "$OP" ] && [ -n "$ID" ] || usage
+case "$ID" in ''|*[!0-9]*) echo "channel id must be the numeric id (from the LANDBOT_HANDOFF line), not a uuid" >&2; exit 65 ;; esac
+
+# v1 answers {"success": true, "channel": {...}}; unwrap it.
+read_channel() { LANDBOT_API_URL="$V1" "$LB" GET "/channels/$ID/" | jq '.channel // .'; }
+
+summarise() {
+  jq -r '"channel:    \(.id)  \(.name // "?")
+version:    \(.version // .landbot.version // "?")   (3.1.0 = v4 web chat, 3.0.0 = legacy renderer)
+uuid:       \(.uuid // "?")
+created:    \(.created_at // "?")
+style:      \((.style // "") | length) characters of Custom CSS on the channel
+bots:       \([.bots[]? | if type == "object" then .id else . end] | map(tostring) | join(", "))"'
+}
+
+if [ "$OP" = "get" ]; then
+  body="$(read_channel)" || exit 1
+  printf '%s' "$body" | summarise
+  exit 0
+fi
+
+# ---- writes -------------------------------------------------------------------------------------
+BOT=""; FILE=""
+case "$OP" in
+v4)  shift 2 ;;
+css) FILE="${3:-}"; [ -n "$FILE" ] || usage; [ -r "$FILE" ] || { echo "cannot read $FILE" >&2; exit 66; }; shift 3 ;;
+*)   usage ;;
+esac
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+  --bot) BOT="${2:-}"; shift 2 ;;
+  *) usage ;;
+  esac
+done
+[ -n "$BOT" ] || { echo "--bot <bot_uuid> is required for a write: the channel must belong to a bot this session created" >&2; exit 64; }
+
+body="$(read_channel)" || { echo "could not read channel $ID on $V1" >&2; exit 1; }
+ch_uuid="$(printf '%s' "$body" | jq -r '.uuid // empty')"
+created="$(printf '%s' "$body" | jq -r '.created_at // empty')"
+cur_version="$(printf '%s' "$body" | jq -r '.version // .landbot.version // "?"')"
+
+bot_json="$("$LB" GET "/bots/$BOT" 2>/dev/null)" || { echo "could not read /bots/$BOT on the Bots API" >&2; exit 1; }
+if ! printf '%s' "$bot_json" | jq -e --arg u "$ch_uuid" '.data.channels | index($u) != null' >/dev/null 2>&1; then
+  echo "refusing: channel $ID ($ch_uuid) is not a channel of bot $BOT. Only a channel of a bot this session created may be changed." >&2
+  exit 70
+fi
+
+if [ "${LANDBOT_CHANNEL_ALLOW_OLD:-}" != "1" ]; then
+  now="$(date +%s)"; age_h="?"
+  case "$created" in
+  ''|*[!0-9.]*) echo "refusing: the channel does not report created_at, so its age cannot be checked" >&2; exit 70 ;;
+  *) age_h=$(( (now - ${created%.*}) / 3600 )) ;;
+  esac
+  if [ "$age_h" -gt "$MAX_AGE_H" ]; then
+    echo "refusing: channel $ID was created about ${age_h} h ago (limit ${MAX_AGE_H} h). This script only changes channels the skill created in this session." >&2
+    echo "If the user explicitly asked for this older channel, re-run with LANDBOT_CHANNEL_ALLOW_OLD=1." >&2
+    exit 70
+  fi
+fi
+
+case "$OP" in
+v4)
+  if [ "$cur_version" = "3.1.0" ]; then echo "channel $ID is already on 3.1.0; nothing to do."; exit 0; fi
+  payload='{"version":"3.1.0"}'
+  ;;
+css)
+  payload="$(jq -Rs '{style: .}' < "$FILE")"
+  ;;
+esac
+
+LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/" "$payload" >/dev/null || { echo "the write was refused; nothing to publish" >&2; exit 1; }
+after="$(read_channel)" || exit 1
+case "$OP" in
+v4)  new="$(printf '%s' "$after" | jq -r '.version // .landbot.version // "?"')"
+     [ "$new" = "3.1.0" ] || { echo "PATCH answered but the channel still reports version $new" >&2; exit 1; }
+     echo "channel $ID: version $cur_version → 3.1.0 (v4 web chat)." ;;
+css) len="$(printf '%s' "$after" | jq -r '(.style // "") | length')"
+     want="$(wc -c < "$FILE" | tr -d ' ')"
+     echo "channel $ID: Custom CSS set, $len characters on the channel (file: $want)." ;;
+esac
+echo "This is live for visitors now (the published config is regenerated by the channels API). Run verify-share on the share URL to confirm."

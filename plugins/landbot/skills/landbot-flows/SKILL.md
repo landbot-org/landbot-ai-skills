@@ -1,0 +1,368 @@
+---
+name: landbot-flows
+description: Build and edit Landbot bots through the Bots API v0-alpha — read the block catalog, create a bot, place and wire blocks, configure an AI agent block, deploy to test and publish, and hand back a builder link with a plain-language description of the flow. Use when asked to create a bot from a description, change an existing bot's flow, look up what params a block takes, or explain why a draft cannot be published.
+allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash(jq *)
+metadata:
+  short-description: Build and edit Landbot bots via the Bots API v0-alpha
+  version: 0.3.0
+---
+
+**First line of your first reply when this skill activates: `landbot-flows 0.3.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+
+Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
+
+Drive the Bots API v0-alpha. Two things are the reference, and everything you send is answered by them:
+
+- **`GET /openapi.yml`** — the contract. Every operation, every schema, every failure shape, and what each one means. Served by the environment you are talking to, so it describes that environment and not another.
+- **`GET /blocks`** — the live catalog. The only source of what blocks exist and what params they take.
+- **`GET /ai-agents/schema`** — only for an AI agent. `/ai-agents` is a door onto the API that owns agents, so what a request to it carries is defined over there and served from here. The contract does not repeat it and the catalog does not describe it, because none of an agent is stored in a diagram.
+
+All three come from the environment. **The live schema is not bundled with this skill.** Historical pilot notes in REFERENCE.md can become stale; reconcile them against the live contract and exercised runtime.
+
+Fetch the contract once at the start and grep the file — it is ~2300 lines, and reading it whole wastes what you need it for:
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /openapi.yml > "${TMPDIR:-/tmp}/landbot-openapi.yml"
+grep -n "draft/blocks" -A 40 "${TMPDIR:-/tmp}/landbot-openapi.yml"
+```
+
+It comes back as YAML, so `lb` prints it through rather than as JSON. Re-fetch it if you change `LANDBOT_API_URL` mid-session: a different environment is a different contract.
+
+Never answer from memory of how Landbot bots work. A block's params, outputs and defaults come from the catalog; the request and response shapes come from the contract; an agent's shape comes from `/ai-agents/schema`.
+
+## Where the scripts are
+
+This skill ships `scripts/lb`, `scripts/setup-token`, `scripts/handoff` and `scripts/channel`, next to this file. Every command below names them as `${CLAUDE_SKILL_DIR}/scripts/…`:
+
+- **Claude Code** replaces `${CLAUDE_SKILL_DIR}` with this skill's folder before you read this file, so the commands run as written and the read-only ones are pre-approved.
+- **Codex, Cursor, other agents:** `scripts/install.sh` writes the absolute folder into this file when it copies the skill. If the commands here still show a placeholder in braces (`CLAUDE_SKILL_DIR`) instead of a folder, replace it in every command with the folder this SKILL.md lives in (for Codex usually `~/.codex/skills/landbot-flows` or the plugin cache under `~/.codex/plugins/cache/`). Do not guess a different folder; look at where this file is.
+
+All four scripts reach the network, and on macOS `lb` reads the keychain. Under a restricted sandbox that is denied before the request is made, which looks like a connection failure rather than a permission one. Follow the host's permissions; do not request escalation where the host forbids it. **Report a sandbox refusal separately from an API failure** — they need different fixes.
+
+## Step 0 — Preconditions
+
+`scripts/lb` wraps every call: it resolves the base URL and the token, prints `HTTP <code>` to stderr, and exits non-zero from 400 up.
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /blocks
+```
+
+A `200` means the environment, the token and its permissions are all good. Anything else, stop and report it:
+
+| Answer | What it is |
+|---|---|
+| `no token: …` | Neither `LANDBOT_API_TOKEN` nor the keychain has one. Offer `scripts/setup-token` — see below. |
+| `401`/`403` | The API refused the token, and the body does not say why. Three causes, in order of likelihood for a new account: **the account is not enabled for the Bots API yet** (Landbot switches it on per account; no token fixes it), the token is incomplete, or the user lacks `VIEW_CHATBOT`/`EDIT_CHATBOT`. Both codes are served for the same cause, so treat them alike. Say plainly: "Your Landbot account is not enabled for the Bots API yet, or the token was not copied whole. This is not something to fix by re-copying three times." Then point them at the help in README (issue on the repo, or the assistant on the skills page), and tell them to give their account email, never the token. Stop until they come back. |
+| `404` | This environment is older than the v0-alpha API. |
+
+`LANDBOT_API_URL` picks the environment and **defaults to production, `https://api.landbot.io/v0-alpha`**. Read it before the first write and say which environment you are about to touch.
+
+### Say whose account this is, before the first write
+
+The token is an account, and everything below acts as that account. **Which one is not something the user can see**, so say it rather than assuming they know:
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami
+```
+
+It answers `Acting as <name> <email>` with the keychain entry and the environment, and never prints the token. Report it verbatim before the first write of a session, together with the environment. If it says no token is stored, that is the answer to `no token: …` above.
+
+### Changing the token is the user's to ask for, and yours to offer
+
+`setup-token` is the only way the token is set, and running it again **replaces** what is there:
+
+| The user wants | The command |
+|---|---|
+| To set one, or switch account | `scripts/setup-token` — takes it from the clipboard, so tell them to copy it from `https://app.landbot.io/gui/settings/account` first |
+| To type it instead of copying | `scripts/setup-token --prompt`, **which they must run themselves in a terminal** — it needs one, and you do not have one |
+| To know whose it is | `scripts/setup-token --whoami` |
+| To remove it | `scripts/setup-token --forget` |
+| Linux, Windows, CI (no keychain) | The user sets `export LANDBOT_API_TOKEN='…'` **in their own shell**, then `scripts/setup-token --check` verifies it. You never set that variable yourself and never write it into a file. |
+
+**The token never travels through this conversation.** The clipboard is how it reaches the keychain without passing through you: the user copies it in the app, `setup-token` reads it in the shell, and it goes clipboard → keychain. You never see the value, which is the point.
+
+So the flow when there is no token is exactly this, and nothing else:
+
+1. Tell the user to copy it from `https://app.landbot.io/gui/settings/account` — the read-only **API token** field.
+2. Wait for them to say they have it. **Do not ask them to show it, confirm it, or read any part of it back.**
+3. Run `"${CLAUDE_SKILL_DIR}/scripts/setup-token"`, which takes it from the clipboard, checks it against the API, stores it, and clears the clipboard.
+4. Report the account it answers with.
+
+- **Never ask the user to paste the token into the chat.** Not as a whole, not "just the last four", not "to check it".
+- **If they paste it anyway, stop and say so.** Do not use it, and do not run `setup-token` afterwards as if nothing happened — the clipboard is not where it came from. Tell them plainly: it is now in this conversation and in the session's local history, that is not where a credential that cannot be rotated belongs, and it is worth raising with the team. Then have them copy it from the app and start at step 1.
+- **Never put the token anywhere yourself**: not in a file, not in an env var you set, not in a command, not in a `curl` you write. `setup-token` writes it to the keychain and `lb` reads it back; nothing else touches it.
+- Two environments at once is two keychain entries, via `LANDBOT_TOKEN_KEYCHAIN_SERVICE`. Do not overwrite one token to reach another environment.
+
+### Writes on production touch real bots
+
+Everything below the catalog mutates a real brand's real bots — the ones the token's own account can edit.
+
+- **Say which bot you are about to write to, and get a yes, before the first write** to a bot the user did not create in this session. Creating a new scratch bot needs no confirmation.
+- **`PUT /bots/{id}/test` and `POST /bots/{id}/versions` need their own explicit yes, every time.** The first replaces what the test link serves; the second is what visitors get. Neither is implied by "build me this bot".
+- Never delete a block from a bot you did not build, without naming it first.
+- **Never write the token into a command and never echo it.** `lb` reads it itself; keep it out of the transcript.
+
+## Step 1 — Read the catalog
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /blocks | jq -r '.data[] | "\(.name)\t\(.title)"'
+```
+
+`{"data": [...]}`, one entry per block: semantic `name` — which is what you address a block by — `title`, `description`, `can_be_welcome`, and `variants`. A block whose behaviour depends on a param is described once per variant, with its own `params`, `outputs`, `required_tier`, `channel_restriction` and the `selector` that picks it.
+
+The spec's `BlockDefinition`, `BlockVariant`, `Param` and `ParamSelector` schemas document every field, including the ones that are easy to read wrong. The four that catch people out:
+
+- **`has_default` tells a missing default from a default of `null`.** `has_default: false` means the block declares none. Leave a param out unless the description asks for it.
+- **`rules` carry their own constraint** — `pattern`, `max_length`, `enum`. Nothing validates them for you before you send.
+- **`outputs` are not uniform.** Some ids carry a `$` prefix and some do not, and the two are not interchangeable. Read the variant's `outputs`; never guess an output id.
+- **Some outputs are derived from params** — a `buttons` block reports one output per button, an `ai_agent` one per exit. `output_derivations` says how, and `read_when` says when a param is read at all.
+
+**The catalog is partial by design.** It grows one block family at a time, and a block it does not describe is still stored in a diagram — just never validated. If the user asks for a block that is not listed, say so and name the family; do not substitute a different block.
+
+## Step 2 — Create the bot
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" POST /bots '{"name":"…","channel_family":"landbot"}'
+```
+
+`201` with the bot under `data`. Read the UUID from the actual response: the pilot returned `data.id` (older skill text said `data.bot_id`). Use that UUID for later calls. `channel_family` is one of `landbot`, `whatsapp`, `facebook`, `apichat`.
+
+Check `data.channels` is not empty on a web bot: without a channel the builder will not open it.
+
+Then read what you were given, rather than assuming it:
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /bots/<bot_id>/draft | jq '.data.diagram.nodes | keys'
+```
+
+**A new bot is very nearly empty: one node, `hidden`, at `top: 0, left: 0`, and no connections.** No greeting, nothing wired. Read the draft rather than assuming — but expect to build everything, greeting included.
+
+### The greeting is yours to create, and the bot is not publishable without it
+
+The greeting is **a role a node plays, decided by its id** — not a block type and not something the API places for you:
+
+| | |
+|---|---|
+| **The node id** | `welcome` on `landbot`, `bot_start` on `facebook` and `apichat`. WhatsApp does not restrict the slot at all, since there the bot only ever answers a message the contact sent first. |
+| **Which blocks may take it** | Only these seven: `ask_date`, `ask_number`, `ask_phone`, `ask_question`, `ask_url`, `ask_yes_no`, `buttons`. The greeting has to ask something and wait, so **`send_text` cannot be the greeting** — nor can `ask_email`, which waits just the same and is still not allowed. `can_be_welcome` in the catalog is the answer per block. |
+| **`params.version: 3`, on `landbot`** | Required, and **no param in the catalog declares it** — the slot wants it, not the block. Without it the builder reads the node as the welcome template it used to be and offers to delete it rather than replace it. |
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" POST /bots/<bot_id>/draft/blocks '{
+  "blocks": [{"id": "welcome", "type": "ask_question", "name": "Greeting",
+              "params": {"text": "Hi! What is your name?", "destination": "name", "version": 3}}]
+}'
+```
+
+**Filling the slot changes where the bot starts.** The head is the greeting when the slot is filled and the start point when it is not, so a bot with no greeting heads from `hidden` — which runs, and is not publishable.
+
+**And nothing warns you.** The rule reads as *"if there is a greeting, is it allowed?"*, so a diagram with no greeting at all reports **no violation**: the draft comes back `IS_PRESAVED` with `violations: []` and cannot be published. Do not read a clean draft as a publishable one — see Known gaps.
+
+## Step 3 — Place and wire the blocks
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" POST /bots/<bot_id>/draft/blocks '{
+  "blocks": [{"type": "send_text", "params": {…}, "id": "greet", "name": "Greeting"}],
+  "connections": [{"sourcePath": "greet", "targetPath": "n0", "type": "$success"}]
+}'
+```
+
+This **merges** into the diagram rather than replacing it. Grep the spec for `/draft/blocks` for the full contract; what to hold on to:
+
+- **`type` is the semantic name from the catalog** (`send_text`, `ask_question`, `buttons`), not a template.
+- **`id` is optional.** Left out, the API assigns `n0`, `n1`, … Give one when you need to wire it in a later request, or when the id is meaningful.
+- **A connection's `type` is an output id exactly as the catalog reports it**, `$` and all. Its `id` is optional and defaults to `source.output--target`.
+- Connections may reference blocks in the same request or blocks already in the diagram.
+- Everything must be reachable from the block the bot heads from. A node nothing arrives at is stored and never runs.
+- **On a web channel born v4 (`version 3.1.0`, which is what every skills-journey brand gets) never place `ask_yes_no` or `code`.** Both are in the catalog and both fail silently at runtime on v4: `ask_yes_no` shows "Thinking..." forever, `code` is skipped without a log. Build Yes/No as a `buttons` block. Catalog presence is not evidence of renderer support.
+- **Before any `PUT /draft` or `DELETE`, snapshot the whole diagram; after it, read it back and compare node and connection counts and identities.** A pilot lost all 49 connections on a `DELETE` that reported `removed_connections: []`. If anything unexplained is missing, restore the snapshot with `PUT /draft` and do not publish.
+
+### Three different failures, and only two of them are a refusal
+
+- **`200` does not mean the diagram is valid.** Broken rules are *stored with the draft* so no work is lost, and reported in `save_state` and `violations` — each with its `code`, `param` and `block_id`. **Always read `violations` after a write; never trust the status alone.** A draft with violations cannot be published or deployed to test.
+- **`422` with `violations` means the request was wrong and nothing was written.** An unknown `type`, an `id` already taken, a connection leaving an output the source does not declare, a derived param that will not compile. All or nothing, and the reason is under `error.violations` rather than at the top level. Fixing the payload fixes it.
+- **`422` with no `violations` means the bot is not one this API writes** — a previous builder built it. Nothing is wrong with the request, so changing it achieves nothing. See Known gaps.
+
+**The two `422`s are told apart by whether `violations` is there**, not by the status. Read for it before deciding what to say, because the advice is opposite: one means fix the payload, the other means this bot cannot be written at all.
+
+Report `save_state` verbatim, and each violation's `code`.
+
+## Step 4 — Edit what is there
+
+Grep the spec for the operation before using it; the descriptions carry the traps.
+
+| Change | Operation | The thing to know |
+|---|---|---|
+| One block's params or label | `PATCH /draft/blocks/{block_id}` | **`params` is replaced whole** — a param you omit comes back as its default. Params the catalog does not declare are kept. The block is not retyped. |
+| Remove a block | `DELETE /draft/blocks/{block_id}` | Intended to drop incident connections. A pilot lost all connections despite an empty `removed_connections`; read back and compare the complete graph before any publish. |
+| Replace the greeting | `DELETE` it, then `POST` a block with the same id | Only a block whose catalog entry says `can_be_welcome: true` may take the slot. Between the two calls the draft breaks `start_connection`. |
+| The whole diagram at once | `PUT /draft` | Body is `{"diagram": {…}}`, **not the diagram bare**. It replaces everything and derives nothing. |
+| An `ai_agent` block's agent | Not here — `PUT /ai-agents/{agent_id}` | The agent is not in the diagram. See below. |
+
+Several blocks changed together, or an edit that has to drop a connection with it, is `PATCH /bots/{bot_id}/draft` — check its `x-implemented` first.
+
+### An `ai_agent` block takes two requests, to two different resources
+
+The block holds only what running an agent takes — which agent, and the exits the flow may leave by. Everything the agent *is* lives in the agents API, reached through `/ai-agents`, a door this API opens onto it. **That door did not move with the API**: the rest of the API is served under `/v0-alpha`, `/ai-agents` under `/v3` alone. You do not have to care — `lb` sends any `/ai-agents` path to the `/v3` beside `LANDBOT_API_URL` on its own, so write it like every other path below. So a working AI Agent is two requests, in whichever order suits you:
+
+```bash
+# 1. The agent. What this body takes is not described in this API's contract and not in the
+#    catalog either — that API writes its own account of itself, so read it first:
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /ai-agents/schema
+
+"${CLAUDE_SKILL_DIR}/scripts/lb" POST /ai-agents '{…}'   # → the agent, and its id
+
+# 2. The block naming it, with the exits it routes. Each exit's id is a uuid you generate,
+#    written the same in both requests.
+"${CLAUDE_SKILL_DIR}/scripts/lb" POST /bots/<bot_id>/draft/blocks '{
+  "blocks": [{"type": "ai_agent", "id": "agent", "params": {
+    "assistantId": "<the agent id>",
+    "outputs": [{"id": "3f2b9c40-7a1e-4d52-9b8c-0e6f1a2d3c45", "name": "Escalate"}]
+  }}],
+  "connections": [{"sourcePath": "agent", "targetPath": "handoff",
+                   "type": "$3f2b9c40-7a1e-4d52-9b8c-0e6f1a2d3c45"}]
+}'
+```
+
+- **Never invent the agent payload.** `GET /ai-agents/schema` is that API's own OpenAPI document, generated over there. Its paths are its own — the agent it names under `ai-agents` is the one this door carries. If a field is not in it, it does not exist.
+- **`assistantId` and `outputs` are both required.** A block placed before there is an agent to name is stored with `param_required` against each — which is a state this API holds on purpose, not a failure. It cannot be published until both are written.
+- **Each exit's `id` is a uuid, and you generate it** — the same one in both requests, which is why nothing has to be read back: the block reports one output per exit as `$<id>`, so a connection leaving it travels in the same request that places it. Only the exit's `name` is yours to word. **The agent's own schema declares that id a plain string and it is wrong**: `GET /ai-agents/schema` gives `ExitCondition.id` no `format: uuid` although `Flow.id` beside it has one, and a non-uuid is answered with a `502` from inside the agents service rather than a `422`. The block takes whatever id it is given and never checks, so the two halves of an exit disagree and only one of them says so.
+- **`PUT /ai-agents/{agent_id}` replaces an agent whole.** What the body leaves out goes back to that API's default — knowledge and interactive components a person set up in the editor included. Never use it to tweak one field of an agent someone else configured; read it, or leave it alone.
+- **The block reports the exits it was last written with.** An exit renamed or removed straight through the agents API is not reflected in the diagram. Rewrite the block's `outputs` when you change them there.
+- `assistantId` is not resolved when it is written. An id from another brand is accepted and answered as `assistant_not_found` when the bot is compiled.
+- **A `502` is not proof the agents service is down.** It is also how that service answers a body it fails to validate before it crashes on it — an `exit_conditions` id that is not a uuid is one. Retry **once**. If it repeats, stop retrying and bisect instead: send the minimum the schema requires, then add one field per call until it breaks. Three retries of a whole payload tell you nothing; three calls that grow by one field name the culprit. `429` is the per-brand rate on making agents.
+
+## Step 5 — Test and publish only within the authorized scope
+
+**Ask.** A bot nobody can talk to is half a deliverable, and the user cannot ask for a step they do not know exists — so offer both when you hand the bot back, saying plainly what each one does:
+
+> The bot is built but not live. I can **deploy it to test**, which makes the test link serve this version so you can try it yourself, or **publish it**, which is what real visitors get. Or leave it as a draft. Which?
+
+Offering is not permission. Use explicit authorization already given for the named action and target; do not ask twice for the same authorized work. If publication or test deployment is not authorized, finish the reviewable draft and ask at that boundary. If the user said never to publish, do not offer it again.
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" PUT  /bots/<bot_id>/test       # what the test link serves
+"${CLAUDE_SKILL_DIR}/scripts/lb" POST /bots/<bot_id>/versions   # what visitors get
+```
+
+Publishing answers `201`. Say what happened in the user's terms — that the test link now serves it, or that visitors now get it — and give the link again.
+
+### When one is refused, say which of these it is
+
+Both validate before they write, so a refusal means **nothing was published**. The draft is untouched and the previous published version keeps running. Five different things can come back, and the answers are not interchangeable:
+
+| What comes back | What it means | What to do |
+|---|---|---|
+| `422` with `violations` | The draft breaks rules. Each violation carries `code`, `param` and `block_id`, and the violations are **saved to the draft** as a side effect of the attempt. | Name the block and the param for each one, in plain language, and offer to fix them. These are yours to fix. |
+| `422` with no `violations` | A previous builder built this bot. Nothing about the request is wrong. | Report the message and stop. Retrying, or sending less, changes nothing — the bot has to be migrated. |
+| `502` | The compiler is a separate service and it failed. The message is deliberately generic; the real detail is in that service's log, not in the answer. | Retry **once**. If it repeats, say the compiler is failing and that it is not the user's payload. Do not start editing the diagram to appease it. |
+| `403` | The token's account lacks *edit chatbot*. | Say whose account it is — `setup-token --whoami` — because the fix is a permission, not a change to the bot. |
+| `201`, but the builder still complains | The draft passed every rule this API checks and something outside them is unhappy. The greeting is the known case: a bot with no greeting reports no violation and is still not publishable. | Check the greeting slot first. Then report honestly that the API accepted it and the builder disagrees, rather than guessing. |
+
+**Never present a clean `violations` as "ready to publish".** It means no rule fired, which is not the same thing — see Known gaps.
+
+## Step 5a — Put a bot you created on the v4 web chat (the version the style skill needs)
+
+A brand-new channel is born on the brand's default renderer, and today that is often `3.0.0` (the legacy web chat). Custom CSS from `landbot-style` only renders on `3.1.0` (the v4 web chat). **For a bot this session created, switch its channel yourself instead of sending the person to support:**
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/handoff" <bot_id>              # read channel=<numeric id> and version=
+"${CLAUDE_SKILL_DIR}/scripts/channel" get <channel_id>       # read-only: version, age, Custom CSS length
+"${CLAUDE_SKILL_DIR}/scripts/channel" v4 <channel_id> --bot <bot_id>   # WRITE, live at once: version → 3.1.0
+"${CLAUDE_SKILL_DIR}/scripts/handoff" <bot_id>              # now reports version=3.1.0
+```
+
+Rules, and the script enforces the first two:
+
+- **Only a channel of a bot this session created.** `channel` refuses a channel that does not belong to `--bot`, and any channel older than 24 hours. Never flip a channel of a bot the person already had: their published bot would change renderer under their visitors.
+- **A channel write is live for visitors the moment it answers** (the channels API regenerates the published config itself; no publish step in between). So it needs the same explicit yes as a publish: say what changes for visitors (same conversation, new renderer, Custom CSS becomes possible), get the yes, then run it.
+- Do it right after the first publish, before styling, so `landbot-style` never meets `3.0.0` on a bot you built. Do not flip a channel "just in case" when the person did not ask for styling.
+- Known differences on `3.1.0`: `ask_yes_no` does not render and `code` blocks are skipped (see Step 3). A flow built by this skill avoids both.
+
+## Step 5b — Lay it out before handing it back
+
+`POST /draft/blocks` takes no position, so every block it adds lands at `top: 0, left: 0` and the builder draws the whole flow as one pile. The flow is correct and runs; it is just unreadable. **Lay it out yourself, always, before you hand the bot back** — a link to a pile is not something a person can check.
+
+Read the draft, work out a position for every node, and `PUT` the whole diagram back:
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /bots/<bot_id>/draft | jq '.data.diagram' > /tmp/d.json
+# edit each node's top and left, then:
+"${CLAUDE_SKILL_DIR}/scripts/lb" PUT /bots/<bot_id>/draft "$(jq '{diagram: .}' /tmp/d.json)"
+```
+
+The diagram travels through this API unchanged, so keys it does not model survive the round trip. Change `top` and `left` and nothing else.
+
+**Do not move the start point.** `hidden` sits at `top: 0, left: 0` and the builder draws it in a fixed place; a layout that walks every node and repositions it moves the one node that is not yours to move. Anchor on the greeting instead, which a new bot is given at `top: 200, left: 500`, and go right from there. Leave `hidden` exactly as the draft reports it.
+
+Place the rest on the builder's own grid — it puts a greeting at `top: 200, left: 500` and the block after it at `top: 200, left: 850`:
+
+- **Left is how far along the conversation is.** Start at `500` and add `350` per step. A block goes to the right of *every* block that points at it, so when two paths meet, the block they meet at goes past the furthest of them.
+- **Top is which branch you are on.** Start at `200`. A block's **first exit keeps its parent's `top`**, so the main path is one straight horizontal line; the other exits go below it, `250` apart. A block with many exits is tall, so leave `250 + 30` per exit below it.
+- **Never give two blocks the same `top` and `left`.** Check it, because overlapping blocks are invisible in the builder:
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /bots/<bot_id>/draft \
+  | jq '[.data.diagram.nodes[] | "\(.top),\(.left)"] | group_by(.) | map(select(length > 1))'
+```
+
+`[]` means no two blocks share a cell. Anything else, move them and `PUT` again.
+
+- A loop back to an earlier block does not move anything — the edge just runs backwards, which is what a loop looks like.
+- Anything the start cannot reach goes in a column of its own, past everything else. It is also a bug worth reporting: a block nothing arrives at never runs.
+
+Use the branch names to decide what goes below what: an error or fallback path reads better under the path it recovers from, and the order the user described the flow in usually is the order to stack it.
+
+## Step 6 — Hand it back
+
+**Every bot you create or change ends with a link and a description of it.** Never finish with only an id: a uuid is not something a person can open, and a list of block types is not something they can check. Both are always part of the answer.
+
+### The link, and the handoff line
+
+The builder routes by the legacy numeric id, not the uuid, and v0-alpha does not report it. The style skill needs the numeric **channel** id and the channel version, which v0-alpha does not report either. One script reads all of it, from three APIs, and prints one line:
+
+```bash
+"${CLAUDE_SKILL_DIR}/scripts/handoff" <bot_id>
+# LANDBOT_HANDOFF bot=<uuid> builder=<numeric id> share=https://landbot.pro/v3/H-<channel>-<code>/index.html channel=<numeric id> version=3.1.0
+```
+
+**End every hand-back with that line, verbatim, as the last line of your answer.** It is the contract the style skill consumes. If the script exits `2`, a field is `?` and it says so: report the line as printed, say which field is missing, and never fill it in by hand.
+
+The builder link is `${LANDBOT_APP_URL:-https://app.landbot.io}/gui/bot/<builder>/builder`. If the bot has an `ai_agent` block, give that one too: `…/builder/ai_agent/<block_id>` opens the agent's own editor.
+
+**`version=3.0.0` on a bot you created this session** means the channel is still on the legacy renderer: run Step 5a (`channel v4`, with the person's yes) before handing off to the style skill. On a bot you did not create, say that Custom CSS needs the v4 web chat and that the switch is something Landbot does per account; do not flip it.
+
+### The description
+
+Describe **what a person talking to the bot goes through**, in order, in plain language. Not the block types — the conversation. Someone who never asked for a `send_text` should be able to read it and tell you whether it is the bot they wanted:
+
+> Greets the visitor, asks for their name, then asks for their email — and if the email is not valid it asks again. Then it thanks them by name and ends. The AI agent takes over if they ask something the flow does not cover, and hands back to a human when it cannot answer.
+
+Where the flow branches, say what sends it each way. Where it can end, say so.
+
+### Then the rest
+
+- the bot name, and **which environment it is in**
+- the uuid (v0-alpha) and the numeric id (builder)
+- `save_state` and any violations left, verbatim
+- **every choice you made that the request did not specify** — a wording you invented, a validation you added, a default you accepted. This is the part the person is most likely to want changed, and the part they cannot see from the link.
+
+Say plainly whether it is published. A bot you built and did not deploy is not serving anyone yet; do not let a builder link imply otherwise.
+
+## Known gaps
+
+**The contract is written by hand, not derived from the code.** Serving it does not make it true — it makes it the same everywhere, which a copy taken by hand does not. A contract test beside it is what keeps it honest. So if the API answers something the contract does not describe, **the API is still right**: report the difference rather than working around it, because it means the document has drifted from the code it describes.
+
+**A bot a previous builder built cannot be written at all.** Every write refuses it with `422`, and **that refusal carries no `violations`** — the bot itself is the reason, so there is no rule to attribute. Reading it and reading its draft still work. The message says to migrate the bot, and that is the whole answer: there is nothing to fix in the request, and retrying, sending fewer blocks or rebuilding the payload changes nothing.
+
+This is the failure most likely to meet a real brand, because most bots in one predate this API. Recognise it by a `422` whose `error` has no `violations`, report the message as it comes, and offer to build a new bot instead — never read it as "the draft broke a rule".
+
+**Different environments are at different versions.** The catalog grows one block family at a time, and a block reaches an environment only once it is deployed there — so a block production lists may be missing on a staging environment, and the reverse. `GET /blocks` is the only answer for the environment you are talking to. Never carry over what a catalog said somewhere else.
+
+**No violation means no rule fired — not that the bot is publishable.** The clearest case is the greeting: the rule asks whether an existing greeting is *allowed*, so a diagram with none at all reports nothing, and the draft comes back `IS_PRESAVED` with `violations: []` while the product refuses to publish it. So `violations: []` is the absence of a complaint, not a verdict. Never tell the user a bot is ready on the strength of it; say the draft broke no rule this API checks, which is a smaller claim and a true one.
+
+**This API records the tier a diagram needs. It does not enforce the plan.** `required_tier` is per variant, the publish *calculates* it and stores it on the bot, and nothing in this API compares it with the brand's subscription — the catalog does not report the plan either, and there is no operation that answers it. So do not promise that a block above the plan will be refused here, and do not promise it will work: whether something downstream refuses it is outside this API and not yours to assert. What is worth doing is naming the tier when you place a block that needs one above `sandbox` — `formulas` wants professional; `ai_agent`, `conditions` and `webhook` want starter — so the user knows before, not after.
+
+**A v0-alpha path never takes a trailing slash.** `GET /blocks/` is a `404` served by the marketing site as a page of HTML, not a JSON error — so there is no `error` to read and `lb` prints the page. If a call comes back as HTML, check the path before anything else.
+
+**Not every operation in the spec is served.** Each one carries `x-implemented`; a `false` one is agreed and not built, and its description says what a request to it answers today. Check it before building a plan around an operation.
