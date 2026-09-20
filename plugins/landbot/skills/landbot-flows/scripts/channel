@@ -9,7 +9,7 @@
 #   - --bot is required, and the channel must belong to that bot (read from the Bots API).
 #   - the channel must be younger than LANDBOT_CHANNEL_MAX_AGE_H hours (default 24): this script is
 #     for channels the skill created in this session, never for a customer's existing bot.
-#     Set LANDBOT_CHANNEL_ALLOW_OLD=1 only when the user explicitly asked for an older channel.
+#     There is no override: an older channel is refused, full stop.
 #   - a write is LIVE FOR VISITORS AT ONCE: the published config behind the share URL is regenerated
 #     by the channels API itself (verified 2026-09-19 on production: version and Custom CSS showed up
 #     in index.json without a new publish). So get the user's yes BEFORE running a write, as for a publish.
@@ -70,7 +70,7 @@ if ! printf '%s' "$bot_json" | jq -e --arg u "$ch_uuid" '.data.channels | index(
   exit 70
 fi
 
-if [ "${LANDBOT_CHANNEL_ALLOW_OLD:-}" != "1" ]; then
+if true; then
   now="$(date +%s)"; age_h="?"
   case "$created" in
   ''|*[!0-9.]*) echo "refusing: the channel does not report created_at, so its age cannot be checked" >&2; exit 70 ;;
@@ -78,7 +78,7 @@ if [ "${LANDBOT_CHANNEL_ALLOW_OLD:-}" != "1" ]; then
   esac
   if [ "$age_h" -gt "$MAX_AGE_H" ]; then
     echo "refusing: channel $ID was created about ${age_h} h ago (limit ${MAX_AGE_H} h). This script only changes channels the skill created in this session." >&2
-    echo "If the user explicitly asked for this older channel, re-run with LANDBOT_CHANNEL_ALLOW_OLD=1." >&2
+    echo "There is no override. If the person wants this channel changed, they do it in the Landbot app (Design > Custom code) or ask Landbot support." >&2
     exit 70
   fi
 fi

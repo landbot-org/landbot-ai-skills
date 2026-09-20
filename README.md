@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-skills/scr
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.3.0`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.3.1`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 
@@ -63,9 +63,9 @@ Each skill prints its version (`landbot-flows 0.3.0`) the first time it runs. If
 
 ## First bot
 
-> Build a lead-qualification bot for `<your site>`: greet, ask name, email and company size, route companies over 50 people to a human handoff, thank the rest. Publish it and give me the builder link and the share URL.
+> Build a lead-qualification bot for `<your site>`: greet, ask name, email and company size, tell companies over 50 people a person will follow up, thank the rest. Publish it and give me the builder link and the share URL.
 
-The skill names the account it is about to write to, asks before publishing, and ends with one line:
+The skill names the account it is about to write to, asks once before building (that yes covers the publish, the switch to the current web chat and, if you described a look, the CSS it pushes) or before every write on a bot you already had, and ends with one line:
 
 ```
 LANDBOT_HANDOFF bot=<uuid> builder=<id> share=https://landbot.pro/v3/H-<channel>-<code>/index.html channel=<id> version=3.1.0

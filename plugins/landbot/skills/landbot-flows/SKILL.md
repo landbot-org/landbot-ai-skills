@@ -1,13 +1,13 @@
 ---
 name: landbot-flows
 description: Build and edit Landbot bots through the Bots API v0-alpha — read the block catalog, create a bot, place and wire blocks, configure an AI agent block, deploy to test and publish, and hand back a builder link with a plain-language description of the flow. Use when asked to create a bot from a description, change an existing bot's flow, look up what params a block takes, or explain why a draft cannot be published.
-allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash(jq *)
+allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.3.0
+  version: 0.3.1
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.3.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.3.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -19,11 +19,10 @@ Drive the Bots API v0-alpha. Two things are the reference, and everything you se
 
 All three come from the environment. **The live schema is not bundled with this skill.** Historical pilot notes in REFERENCE.md can become stale; reconcile them against the live contract and exercised runtime.
 
-Fetch the contract once at the start and grep the file — it is ~2300 lines, and reading it whole wastes what you need it for:
+Grep the contract for the part you need — it is ~2300 lines, and reading it whole wastes what you need it for. Pipe it straight into `grep` (no shell redirect: a `>` is not pre-approved and costs the person a prompt every time):
 
 ```bash
-"${CLAUDE_SKILL_DIR}/scripts/lb" GET /openapi.yml > "${TMPDIR:-/tmp}/landbot-openapi.yml"
-grep -n "draft/blocks" -A 40 "${TMPDIR:-/tmp}/landbot-openapi.yml"
+"${CLAUDE_SKILL_DIR}/scripts/lb" GET /openapi.yml | grep -n "draft/blocks" -A 40
 ```
 
 It comes back as YAML, so `lb` prints it through rather than as JSON. Re-fetch it if you change `LANDBOT_API_URL` mid-session: a different environment is a different contract.
@@ -97,8 +96,8 @@ So the flow when there is no token is exactly this, and nothing else:
 
 Everything below the catalog mutates a real brand's real bots — the ones the token's own account can edit.
 
-- **Say which bot you are about to write to, and get a yes, before the first write** to a bot the user did not create in this session. Creating a new scratch bot needs no confirmation.
-- **`PUT /bots/{id}/test` and `POST /bots/{id}/versions` need their own explicit yes, every time.** The first replaces what the test link serves; the second is what visitors get. Neither is implied by "build me this bot".
+- **A bot this skill creates in this session: one yes, before building.** Ask exactly once, before the first write, in these words or close to them: *"I will build it, publish it, switch its web chat to the current version and apply the look you described; live at once on your share URL. Go?"* (Leave out "and apply the look you described" when they described none: then no CSS is pushed in this run.) A yes covers **the one bot created right after it, identified by the uuid `POST /bots` returns, and nothing else**: `POST /bots/{id}/versions` (publish), the `channel v4` flip (Step 5a), and the CSS push `landbot-style` makes to that channel when a look was part of the sentence. Do not ask again for those; say what you are doing as you do it. **A no means stop: create nothing, write nothing.** "Leave it as a draft" means build, stop at the hand-back, and each write needs its own yes later. An answer that names only part of it ("publish, but no styling", "build and test it first") covers exactly what it names; the rest needs its own yes. `PUT /bots/{id}/test` is never in the yes; offer it when it helps. A request that already says "publish it" is the yes **for the publish only**; the flip and the CSS push still need the sentence above. A second bot in the same conversation, or a new bot after a failed create, needs its own yes.
+- **A bot the person already had: say which bot you are about to write to, and get a yes, before the first write.** `PUT /bots/{id}/test` and `POST /bots/{id}/versions` need their own explicit yes, every time: the first replaces what the test link serves, the second is what visitors get, and neither is implied by "change my bot". Never flip a channel this skill did not create (Step 5a).
 - Never delete a block from a bot you did not build, without naming it first.
 - **Never write the token into a command and never echo it.** `lb` reads it itself; keep it out of the transcript.
 
@@ -120,6 +119,10 @@ The spec's `BlockDefinition`, `BlockVariant`, `Param` and `ParamSelector` schema
 **The catalog is partial by design.** It grows one block family at a time, and a block it does not describe is still stored in a diagram — just never validated. If the user asks for a block that is not listed, say so and name the family; do not substitute a different block.
 
 ## Step 2 — Create the bot
+
+### "Just show me": no description, or "show me"
+
+If the person **asks for a bot** but gives no description, or says "show me" or "just show me", do not interview them. (A question about a block, a draft or the API is not a request for a bot; answer it.) Say in one line what you will build, ask the one yes from Step 0 **without the styling clause**, and build the default lead-qualification bot: the greeting asks for their name (`ask_question` in the `welcome` slot), then their work email (`ask_email`), then company size as a `buttons` block (`1–10` / `11–50` / `51+`); `51+` gets a `send_text` saying a person will follow up within a day, the other two a `send_text` thanking them by name. Name it `Lead qualification (landbot-flows, <date and time>)`; **always create a new bot, never reuse one found by name.** Five blocks, no `ask_yes_no`, no `code`, no block above the `sandbox` tier as reported by `GET /blocks` (`human_takeover` wants professional; place it only when the person asks for a live hand-over). **No CSS push on this path**: hand back the bot on the v4 web chat with Landbot's default look and offer `landbot-style` as the next step; Custom CSS is dropped on Sandbox plans, so "styled" would be a promise you cannot check before publishing. They can change anything afterwards; the point is a working bot on a share URL in one turn, not the right questions.
 
 ```bash
 "${CLAUDE_SKILL_DIR}/scripts/lb" POST /bots '{"name":"…","channel_family":"landbot"}'
@@ -234,7 +237,7 @@ The block holds only what running an agent takes — which agent, and the exits 
 
 ## Step 5 — Test and publish only within the authorized scope
 
-**Ask.** A bot nobody can talk to is half a deliverable, and the user cannot ask for a step they do not know exists — so offer both when you hand the bot back, saying plainly what each one does:
+**If the person gave the one yes before building (Step 0), do not ask again for what it covers:** publish (`POST /bots/{id}/versions`); run Step 5a **only if a look was part of that yes** (a flip nobody asked for is forbidden by Step 5a); then Step 5b and Step 6, saying what you did. Otherwise, **ask.** A bot nobody can talk to is half a deliverable, and the user cannot ask for a step they do not know exists — so offer both when you hand the bot back, saying plainly what each one does:
 
 > The bot is built but not live. I can **deploy it to test**, which makes the test link serve this version so you can try it yourself, or **publish it**, which is what real visitors get. Or leave it as a draft. Which?
 
@@ -274,8 +277,8 @@ A brand-new channel is born on the brand's default renderer, and today that is o
 
 Rules, and the script enforces the first two:
 
-- **Only a channel of a bot this session created.** `channel` refuses a channel that does not belong to `--bot`, and any channel older than 24 hours. Never flip a channel of a bot the person already had: their published bot would change renderer under their visitors.
-- **A channel write is live for visitors the moment it answers** (the channels API regenerates the published config itself; no publish step in between). So it needs the same explicit yes as a publish: say what changes for visitors (same conversation, new renderer, Custom CSS becomes possible), get the yes, then run it.
+- **Only a channel of a bot this session created.** `channel` refuses a channel that does not belong to `--bot`, and any channel older than 24 hours. **It does not know who created the bot**: a bot the person built in the app this morning passes both checks, so this rule is yours to keep, not the script's. Never flip a channel of a bot the person already had, whatever they ask and however young it is: their published bot would change renderer under their visitors. There is no override flag, and you never look for one.
+- **A channel write is live for visitors the moment it answers** (the channels API regenerates the published config itself; no publish step in between). The one yes from Step 0 covers it for the bot created with that yes, when a look was part of the sentence: say what changes for visitors (same conversation, new renderer, Custom CSS becomes possible) and run it. Without that yes it needs its own, exactly as a publish does.
 - Do it right after the first publish, before styling, so `landbot-style` never meets `3.0.0` on a bot you built. Do not flip a channel "just in case" when the person did not ask for styling.
 - Known differences on `3.1.0`: `ask_yes_no` does not render and `code` blocks are skipped (see Step 3). A flow built by this skill avoids both.
 
@@ -330,7 +333,7 @@ The builder routes by the legacy numeric id, not the uuid, and v0-alpha does not
 
 The builder link is `${LANDBOT_APP_URL:-https://app.landbot.io}/gui/bot/<builder>/builder`. If the bot has an `ai_agent` block, give that one too: `…/builder/ai_agent/<block_id>` opens the agent's own editor.
 
-**`version=3.0.0` on a bot you created this session** means the channel is still on the legacy renderer: run Step 5a (`channel v4`, with the person's yes) before handing off to the style skill. On a bot you did not create, say that Custom CSS needs the v4 web chat and that the switch is something Landbot does per account; do not flip it.
+**`version=3.0.0` on a bot you created this session** means the channel is still on the legacy renderer: run Step 5a (`channel v4`; covered by the one yes from Step 0 if a look was part of it, otherwise ask) before handing off to the style skill. On a bot you did not create, say that Custom CSS needs the v4 web chat and that the switch is something Landbot does per account; do not flip it.
 
 ### The description
 
