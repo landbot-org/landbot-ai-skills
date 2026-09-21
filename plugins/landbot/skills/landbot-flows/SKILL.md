@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.3.1
+  version: 0.3.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.3.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.3.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -122,7 +122,7 @@ The spec's `BlockDefinition`, `BlockVariant`, `Param` and `ParamSelector` schema
 
 ### "Just show me": no description, or "show me"
 
-If the person **asks for a bot** but gives no description, or says "show me" or "just show me", do not interview them. (A question about a block, a draft or the API is not a request for a bot; answer it.) Say in one line what you will build, ask the one yes from Step 0 **without the styling clause**, and build the default lead-qualification bot: the greeting asks for their name (`ask_question` in the `welcome` slot), then their work email (`ask_email`), then company size as a `buttons` block (`1–10` / `11–50` / `51+`); `51+` gets a `send_text` saying a person will follow up within a day, the other two a `send_text` thanking them by name. Name it `Lead qualification (landbot-flows, <date and time>)`; **always create a new bot, never reuse one found by name.** Five blocks, no `ask_yes_no`, no `code`, no block above the `sandbox` tier as reported by `GET /blocks` (`human_takeover` wants professional; place it only when the person asks for a live hand-over). **No CSS push on this path**: hand back the bot on the v4 web chat with Landbot's default look and offer `landbot-style` as the next step; Custom CSS is dropped on Sandbox plans, so "styled" would be a promise you cannot check before publishing. They can change anything afterwards; the point is a working bot on a share URL in one turn, not the right questions.
+If the person **asks for a bot** but gives no description, or says "show me" or "just show me", do not interview them. (A question about a block, a draft or the API is not a request for a bot; answer it.) Say in one line what you will build, ask the one yes from Step 0 **without the styling clause**, and build the default lead-qualification bot: the greeting asks for their name (`ask_question` in the `welcome` slot), then their work email (`ask_email`), then company size as a `buttons` block (`1–10` / `11–50` / `51+`); `51+` gets a `send_text` saying a person will follow up within a day, the other two a `send_text` thanking them by name. Name it `Lead qualification <MM-DD HH:MM>` (for example `Lead qualification 09-22 10:05`; any name you choose stays at 50 characters or fewer, which is the API's limit and `lb` refuses a longer one before sending); **always create a new bot, never reuse one found by name.** Five blocks, no `ask_yes_no`, no `code`, no block above the `sandbox` tier as reported by `GET /blocks` (`human_takeover` wants professional; place it only when the person asks for a live hand-over). **No CSS push on this path**: hand back the bot on the v4 web chat with Landbot's default look and offer `landbot-style` as the next step; Custom CSS is dropped on Sandbox plans, so "styled" would be a promise you cannot check before publishing. They can change anything afterwards; the point is a working bot on a share URL in one turn, not the right questions.
 
 ```bash
 "${CLAUDE_SKILL_DIR}/scripts/lb" POST /bots '{"name":"…","channel_family":"landbot"}'
@@ -269,15 +269,15 @@ Both validate before they write, so a refusal means **nothing was published**. T
 A brand-new channel is born on the brand's default renderer, and today that is often `3.0.0` (the legacy web chat). Custom CSS from `landbot-style` only renders on `3.1.0` (the v4 web chat). **For a bot this session created, switch its channel yourself instead of sending the person to support:**
 
 ```bash
-"${CLAUDE_SKILL_DIR}/scripts/handoff" <bot_id>              # read channel=<numeric id> and version=
-"${CLAUDE_SKILL_DIR}/scripts/channel" get <channel_id>       # read-only: version, age, Custom CSS length
-"${CLAUDE_SKILL_DIR}/scripts/channel" v4 <channel_id> --bot <bot_id>   # WRITE, live at once: version → 3.1.0
+"${CLAUDE_SKILL_DIR}/scripts/channel" get --bot <bot_id>    # read-only: finds the bot's channel; version, age, Custom CSS length
+"${CLAUDE_SKILL_DIR}/scripts/channel" v4 --bot <bot_id>     # WRITE, live at once: version → 3.1.0
 "${CLAUDE_SKILL_DIR}/scripts/handoff" <bot_id>              # now reports version=3.1.0
 ```
 
 Rules, and the script enforces the first two:
 
-- **Only a channel of a bot this session created.** `channel` refuses a channel that does not belong to `--bot`, and any channel older than 24 hours. **It does not know who created the bot**: a bot the person built in the app this morning passes both checks, so this rule is yours to keep, not the script's. Never flip a channel of a bot the person already had, whatever they ask and however young it is: their published bot would change renderer under their visitors. There is no override flag, and you never look for one.
+- **Never type a channel id.** `channel` finds the channel from `--bot` (the bot uuid from `POST /bots`). The bot uuid, the builder number and the channel uuid are three different ids and none of them is the channel id; the script refuses all three, and refuses a numeric id that is not the bot's own channel.
+- **Only a channel of a bot this session created.** `channel` refuses any channel older than 24 hours; the limit is fixed and nothing raises it. **It does not know who created the bot**: a bot the person built in the app this morning passes both checks, so this rule is yours to keep, not the script's. Never flip a channel of a bot the person already had, whatever they ask and however young it is: their published bot would change renderer under their visitors. There is no override flag, and you never look for one.
 - **A channel write is live for visitors the moment it answers** (the channels API regenerates the published config itself; no publish step in between). The one yes from Step 0 covers it for the bot created with that yes, when a look was part of the sentence: say what changes for visitors (same conversation, new renderer, Custom CSS becomes possible) and run it. Without that yes it needs its own, exactly as a publish does.
 - Do it right after the first publish, before styling, so `landbot-style` never meets `3.0.0` on a bot you built. Do not flip a channel "just in case" when the person did not ask for styling.
 - Known differences on `3.1.0`: `ask_yes_no` does not render and `code` blocks are skipped (see Step 3). A flow built by this skill avoids both.

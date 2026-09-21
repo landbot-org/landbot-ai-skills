@@ -22,7 +22,7 @@ BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-if [ "${1:-}" = "--version" ]; then echo "landbot-flows 0.3.1"; exit 0; fi
+if [ "${1:-}" = "--version" ]; then echo "landbot-flows 0.3.2"; exit 0; fi
 if [ "$#" -lt 2 ]; then
   echo "usage: lb <METHOD> <PATH> [JSON|@FILE]" >&2
   exit 64
@@ -35,6 +35,21 @@ BODY="${3:-}"
 case "$PATH_" in
 /ai-agents | /ai-agents/*) BASE="${AGENTS_BASE%/}" ;;
 esac
+
+# The API refuses a bot name over 50 characters (422 bot_name_not_accepted). Say so before the call,
+# so a create never fails on its name. Covers POST /bots only; a rename is not checked here.
+MAX_NAME=50
+if [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; } && [ -n "$BODY" ] && command -v jq >/dev/null 2>&1; then
+  case "$BODY" in
+  @*) name_len="$(jq -r '(.name // "") | length' < "${BODY#@}" 2>/dev/null)" ;;
+  *)  name_len="$(printf '%s' "$BODY" | jq -r '(.name // "") | length' 2>/dev/null)" ;;
+  esac
+  case "$name_len" in ''|*[!0-9]*) name_len=0 ;; esac
+  if [ "$name_len" -gt "$MAX_NAME" ]; then
+    echo "refusing: the bot name is $name_len characters; Landbot accepts at most $MAX_NAME. Shorten it and create again. Nothing was sent." >&2
+    exit 65
+  fi
+fi
 
 TOKEN="${LANDBOT_API_TOKEN:-}"
 if [ -z "$TOKEN" ] && command -v security >/dev/null 2>&1; then

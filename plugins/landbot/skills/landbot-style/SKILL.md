@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.3.1
+  version: 0.3.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.3.1`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.3.2`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -32,7 +32,7 @@ How to know:
 1. **From the handoff line.** `landbot-flows` ends with `LANDBOT_HANDOFF bot=… builder=… share=… channel=… version=…`. Read `version` and `share` from it.
 2. **From a share URL** the user gives you: `"${CLAUDE_SKILL_DIR}/scripts/verify-share" <share-url>` prints the version and whether Custom CSS is present in the published config.
 
-If the version is `3.0.0` and the bot was **created in this session by `landbot-flows`**: do not stop. Run that skill's Step 5a (`channel v4 <channel_id> --bot <bot_id>`; the channel write is live at once, no republish; covered by the one yes the person gave `landbot-flows` before building if a look was part of that sentence, otherwise ask) and re-read the handoff line. If the bot is one the person already had: **stop.** Say the channel is on the legacy renderer, Custom CSS will not render there, and that Landbot switches the web chat version per account; do not flip a channel you did not create and do not generate CSS "just in case".
+If the version is `3.0.0` and the bot was **created in this session by `landbot-flows`**: do not stop. Run that skill's Step 5a (`channel v4 --bot <bot_id>`; the channel write is live at once, no republish; covered by the one yes the person gave `landbot-flows` before building if a look was part of that sentence, otherwise ask) and re-read the handoff line. If the bot is one the person already had: **stop.** Say the channel is on the legacy renderer, Custom CSS will not render there, and that Landbot switches the web chat version per account; do not flip a channel you did not create and do not generate CSS "just in case".
 
 Also say, once: the builder's Design preview never renders Custom CSS. Only the share URL counts.
 
@@ -65,10 +65,10 @@ Two ways. Use the first for a bot `landbot-flows` created in this session; the s
 **A. Push it through the API (bots created this session).** Write the block to a file and push it to the channel. **The push is live for visitors the moment it answers** (the channels API regenerates the published config; no publish step). If the person gave `landbot-flows` the one yes before building this bot in this session **and that sentence included applying the look they described**, that yes covers this push: say you are pushing, and push. A yes given without the styling clause ("just show me", or "build and publish it"), or for a different bot, does not; say what you are about to push and get a yes, exactly as for a publish:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" css <channel_id> /path/to/style.css --bot <bot_id>   # WRITE, live at once
+"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" css /path/to/style.css --bot <bot_id>   # WRITE, live at once; the channel is found from the bot
 ```
 
-`channel` refuses a channel that is not the bot's or that is older than 24 hours. It does not know who created the bot, so the rule "only bots `landbot-flows` created in this session" is yours to keep; a bot the person built in the app today would pass the script. Say before the push that the channel's Custom CSS field is replaced whole.
+`channel` finds the channel from the bot (never type a channel id) and refuses any channel older than 24 hours; the limit is fixed. When it refuses for age, give the person path B below. It does not know who created the bot, so the rule "only bots `landbot-flows` created in this session" is yours to keep; a bot the person built in the app today would pass the script. Say before the push that the channel's Custom CSS field is replaced whole.
 
 **B. The person pastes it in the app (any bot).** Give them exactly this, no more:
 

@@ -37,7 +37,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-skills/scr
 
 **No terminal (Claude desktop app, Cowork):** the person opens **Customize › Plugins › Add marketplace**, pastes `landbot-org/landbot-ai-skills`, installs **landbot**, then starts a new session. The rest of these steps are the same, with one difference in step 4.
 
-After installing, check the skill answers with `landbot-flows 0.3.1` as its first line. An older number means a stale copy is also installed; remove it before going on. A new session sees the plugin at once; if you installed it inside a running Claude Code session, run `/reload-plugins` (Claude Code prints "Run /reload-plugins to activate" when that is needed).
+After installing, check the skill answers with `landbot-flows 0.3.2` as its first line. An older number means a stale copy is also installed; remove it before going on. A new session sees the plugin at once; if you installed it inside a running Claude Code session, run `/reload-plugins` (Claude Code prints "Run /reload-plugins to activate" when that is needed).
 
 ## 3. HUMAN: copy the API token
 Ask them to open https://app.landbot.io/gui/settings/account and copy the read-only **API token** field, then tell you "done". Do not ask them to show or confirm it. On macOS only (`uname` prints `Darwin`) you may run `open https://app.landbot.io/gui/settings/account` so the page is one click away; the copy stays theirs.
