@@ -67,5 +67,18 @@ t "same name within 15 min refused" 65:0 "$L" POST /bots '{"name":"Dup test"}'
 t "different name passes the guard" 1:0 "$L" POST /bots '{"name":"Other name"}'
 kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
 ua="$(grep -c 'landbot-plugin/' "$SRC/lb")"; [ "$ua" -ge 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL user agent missing in lb"; }
+# date-format guard: pickerFormat and format must agree, or nothing is sent (exit 65)
+dfb='{"blocks":[{"type":"ask_date","params":{"text":"When?","destination":"d","pickerFormat":"dd/MM/yyyy","format":["%Y/%m/%d"]}}]}'
+dfg='{"blocks":[{"type":"ask_date","params":{"text":"When?","destination":"d","pickerFormat":"dd/MM/yyyy","format":["%d/%m/%Y"]}}]}'
+dfn='{"params":{"text":"When?","destination":"d","pickerFormat":"MM/dd/yyyy"}}'
+dfd='{"diagram":{"nodes":{"v":{"params":{"pickerFormat":"yyyy/MM/dd","format":["%d/%m/%Y"]}}}}}'
+t "date formats disagree"      65:0 "$L" POST /bots/x/draft/blocks "$dfb"
+t "date formats agree"          1:0 "$L" POST /bots/x/draft/blocks "$dfg"
+t "picker without format"      65:0 "$L" PATCH /bots/x/draft/blocks/v "$dfn"
+t "date mismatch in PUT diagram" 65:0 "$L" PUT /bots/x/draft "$dfd"
+printf '%s' "$dfb" > "$T/d.json"
+t "date mismatch in @file"     65:0 "$L" POST /bots/x/draft/blocks "@$T/d.json"
+t "GET with date body ignored"  1:0 "$L" GET /bots/x/draft/blocks "$dfb"
+
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]

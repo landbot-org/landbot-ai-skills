@@ -48,6 +48,19 @@ esac
 
 # The API refuses a bot name over 50 characters (422 bot_name_not_accepted). Say so before the call,
 # so a create never fails on its name. Covers POST /bots only; a rename is not checked here.
+# The picker→strftime pairs the API's own enum allows. Any params object that carries a
+# pickerFormat is checked, wherever it sits in the body (add-blocks, PATCH one block, PUT diagram).
+DATE_FORMAT_CHECK='
+  def want: {"yyyy/MM/dd":"%Y/%m/%d","yy/MM/dd":"%y/%m/%d","dd/MM/yyyy":"%d/%m/%Y",
+             "dd/MM/yy":"%d/%m/%y","MM/dd/yy":"%m/%d/%y","MM/dd/yyyy":"%m/%d/%Y"};
+  [ .. | objects | select(has("pickerFormat") and (.pickerFormat != null))
+    | (want[.pickerFormat]) as $w
+    | (if (.format | type) == "array" then .format elif (.format | type) == "string" then [.format]
+       else ["%Y/%m/%d"] end) as $have
+    | select($w != null and ($have | index($w) | not))
+    | "a date block writes \(.pickerFormat) but accepts \($have | join(", ")); it needs \($w) in \"format\"."
+  ] | first // empty'
+
 MAX_NAME=50
 if [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; } && [ -n "$BODY" ] && command -v jq >/dev/null 2>&1; then
   case "$BODY" in
@@ -57,6 +70,22 @@ if [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]
   case "$name_len" in ''|*[!0-9]*) name_len=0 ;; esac
   if [ "$name_len" -gt "$MAX_NAME" ]; then
     echo "refusing: the bot name is $name_len characters; Landbot accepts at most $MAX_NAME. Shorten it and create again. Nothing was sent." >&2
+    exit 65
+  fi
+fi
+
+# An `ask_date` block accepts only the patterns listed in `format` (strftime), while the calendar
+# writes the date in `pickerFormat`. Set the picker alone and every date the visitor sends is
+# refused in a loop: the API reports no violation, the publish answers 201, and only a walk of the
+# chat shows it. So refuse a write whose two formats disagree, before it is sent.
+if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && command -v jq >/dev/null 2>&1; then
+  case "$BODY" in
+  @*) date_bad="$(jq -r "$DATE_FORMAT_CHECK" < "${BODY#@}" 2>/dev/null)" ;;
+  *)  date_bad="$(printf '%s' "$BODY" | jq -r "$DATE_FORMAT_CHECK" 2>/dev/null)" ;;
+  esac
+  if [ -n "${date_bad:-}" ]; then
+    echo "refusing: $date_bad" >&2
+    echo "The block accepts only the patterns in \"format\"; the calendar writes \"pickerFormat\". Mismatched, every date the visitor sends is rejected in a loop and nothing in the API says so. Set both. Nothing was sent." >&2
     exit 65
   fi
 fi
