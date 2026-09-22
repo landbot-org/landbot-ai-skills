@@ -28,6 +28,9 @@ So, before every `PUT /draft` or `DELETE /draft/blocks/{id}`:
 
 - `ask_yes_no` never renders ("Thinking..." forever). `code` blocks are skipped silently. Use `buttons` for Yes/No; do not rely on `code`.
   Re-checked 2026-09-22 on one published flow, before and after the channel's switch to `3.1.0`. On `3.0.0` its `code` block ran: the page title changed, a window variable was set, a console line and a network request appeared. On `3.1.0` none of the four happened, and the chat went straight on to the next block. The `ask_yes_no` after it never appeared on `3.1.0` (waited over 20 s); the chat stops there. On `3.0.0` it rendered and answered.
+- On `3.1.0` the `ask_yes_no` question IS sent: the inbox shows it with its buttons. Only the visitor's page never draws it, so the visitor is stuck while the chat looks normal to an agent reading the inbox.
+- A bot open in the builder overwrites API writes on its next save, and `edited_at` does not move (verified 2026-09-22). Opening a bot and leaving it untouched changed nothing in 60 s; no empty `minChars`/`maxChars` were written.
+- `https://app.landbot.io/gui/chats_v4/<chat uuid>` opens that exact chat in the inbox (verified 2026-09-22).
 - A `set_a_field` block with value `${chat_uuid}` stores the chat's id (a uuid) on both renderers. Use it when an alert or webhook needs to name the exact chat.
 - An AI agent's `instructions` are capped at 9,000 characters (9,001 → `422` "Instructions must be 9000 characters or less"; checked 2026-09-22 on `/ai-agents`).
 - `ask_date`: the block accepts only the patterns in `format`, while the calendar writes `pickerFormat`. Mismatched, every answer is rejected in a loop (verified 2026-09-22). Tapping a day does not fill the input; the visitor types the date.
