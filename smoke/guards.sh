@@ -18,7 +18,7 @@ case "$M $P" in
    jq -n --arg v "$ver" --arg s "$sty" --argjson c "$c" '{success:true,channel:{id:777,uuid:"cu-1",version:$v,style:$s,created_at:$c}}';;
 "PATCH /channels/777/") printf '%s' "$B" | jq -c . >> "$D/patches"
    v=$(printf '%s' "$B" | jq -r '.version // empty'); [ -n "$v" ] && echo "$v" > "$D/ver"
-   printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j .style > "$D/style"; echo '{}';;
+   printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j '.style | sub("\\s+$"; "")' > "$D/style"; echo '{}';;
 *) exit 1;;
 esac
 E
@@ -41,6 +41,8 @@ t "no created_at"             70:0 env MOCK_NOCREATED=1 "$C" v4 --bot BOT
 t "channel not resolvable"     1:0 env MOCK_RESOLVED='?' "$C" v4 --bot BOT
 t "v4"                         0:1 "$C" v4 --bot BOT
 t "css"                        0:1 "$C" css "$T/s.css" --bot BOT
+printf 'a{color:red}\n\n' > "$T/nl.css"
+t "css ending in newlines"     0:1 "$C" css "$T/nl.css" --bot BOT
 t "v4 <id> --bot (0.3.1 form)" 0:1 "$C" v4 777 --bot BOT
 t "css <id> <file> --bot (0.3.1 form)" 0:1 "$C" css 777 "$T/s.css" --bot BOT
 t "--id matching"              0:1 "$C" v4 --id 777 --bot BOT

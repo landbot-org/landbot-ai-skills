@@ -289,17 +289,7 @@ Rules, and the script enforces the first two:
 
 ## Step 5b — Lay it out before handing it back
 
-`POST /draft/blocks` takes no position, so every block it adds lands at `top: 0, left: 0` and the builder draws the whole flow as one pile. The flow is correct and runs; it is just unreadable. **Lay it out yourself, always, before you hand the bot back** — a link to a pile is not something a person can check.
-
-Read the draft, work out a position for every node, and `PUT` the whole diagram back:
-
-```bash
-"${CLAUDE_SKILL_DIR}/scripts/lb" GET /bots/<bot_id>/draft | jq '.data.diagram' > /tmp/d.json
-# edit each node's top and left, then:
-"${CLAUDE_SKILL_DIR}/scripts/lb" PUT /bots/<bot_id>/draft "$(jq '{diagram: .}' /tmp/d.json)"
-```
-
-The diagram travels through this API unchanged, so keys it does not model survive the round trip. Change `top` and `left` and nothing else.
+A block added without `top` and `left` lands at `top: 0, left: 0`, and a flow of them is drawn as one pile. The flow runs; it is just unreadable. **Give every block its `top` and `left` in the same `POST /draft/blocks` request that places it** (the add-blocks operation takes them beside `id` and `type`; verified 2026-09-22). To move a block that is already there, `PATCH /draft/blocks/{block_id}` with `top` and `left`. **Do not `PUT` the whole diagram just to lay it out**: that is the operation that once lost every connection. A link to a pile is not something a person can check, so lay it out before you hand it back.
 
 **Do not move the start point.** `hidden` sits at `top: 0, left: 0` and the builder draws it in a fixed place; a layout that walks every node and repositions it moves the one node that is not yours to move. Anchor on the greeting instead, which a new bot is given at `top: 200, left: 500`, and go right from there. Leave `hidden` exactly as the draft reports it.
 

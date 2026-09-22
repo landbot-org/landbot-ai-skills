@@ -28,11 +28,11 @@ Codex:
 codex plugin marketplace add landbot-org/landbot-ai-skills
 codex plugin add landbot@landbot-skills
 ```
-Or, on any Codex version: `git clone https://github.com/landbot-org/landbot-ai-skills && landbot-skills/scripts/install.sh codex`
+Or, on any Codex version: `git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh codex`
 
 Cursor (from the project root; add `--global` for all projects):
 ```bash
-git clone https://github.com/landbot-org/landbot-ai-skills && landbot-skills/scripts/install.sh cursor
+git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
 **No terminal (Claude desktop app, Cowork):** the person opens **Customize › Plugins › Add marketplace**, pastes `landbot-org/landbot-ai-skills`, installs **landbot**, then starts a new session. The rest of these steps are the same, with one difference in step 4.
