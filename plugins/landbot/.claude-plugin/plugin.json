@@ -1,7 +1,7 @@
 {
   "name": "landbot",
   "description": "Build, style and publish Landbot bots from your coding agent. Two skills: landbot-flows builds and edits the flow through the Bots API (live block catalog, AI agent block, publish on your say-so); landbot-style turns a brief into Custom CSS for the v4 web chat and verifies it on the share URL. Uses your own API token, kept in your keychain or shell.",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "author": { "name": "Landbot", "url": "https://landbot.io" },
   "homepage": "https://github.com/landbot-org/landbot-ai-skills",
   "repository": "https://github.com/landbot-org/landbot-ai-skills",

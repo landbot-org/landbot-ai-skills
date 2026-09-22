@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.3.2
+  version: 0.3.3
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.3.2`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.3.3`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -95,6 +95,24 @@ getComputedStyle(document.querySelector('[data-lb-part="option-button"]')).backg
 ```
 
 Take a screenshot if you can. Report what you checked and what you did not: a full-page share URL check does not verify the embedded bubble on a customer site.
+
+### Look at it yourself in the in-app browser, when there is one
+
+`verify-share` proves the CSS is in the published config, not that the chat looks right. **If this session has Claude's in-app browser** (the Claude desktop app's Code tab: tools named `mcp__Claude_Browser__*`), look at the chat there after the push. The person watches the look change in the side pane:
+
+1. Open the share URL (`preview_start` with `url`, or `navigate` when the pane is open). Answer the first question with fake data so a user reply and the next question are on screen.
+2. Run the three console checks above with `javascript_tool`, and take a screenshot at desktop width.
+3. `resize_window` with preset `mobile`, reload the share URL with a new query string (`?look=2`), answer once, and take a second screenshot. Then `resize_window` with preset `desktop` to put the pane back.
+4. Check these four things on both screenshots, against the brief:
+   (a) every bot message is readable against its background;
+   (b) the brand colours are on the bot bubble and the buttons;
+   (c) the brand font is used (`document.fonts.check` is true);
+   (d) every button and the input can be reached, and nothing is covered.
+5. If one fails, fix the CSS, push again (same bot, still inside the yes), and repeat from step 1. Stop after three rounds and report what is still wrong.
+
+In the hand-back, say "looked at by me in the in-app browser at desktop and phone width", plus the result of each of the four checks.
+
+**No in-app browser** (terminal, Codex, Cursor): give the share URL and the four checks above, and ask the person to open it on a computer and a phone. Until they answer, say "the CSS is live", never "styled".
 
 ## Step 5 — Hand back
 

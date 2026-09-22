@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.3.2
+  version: 0.3.3
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.3.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.3.3`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -230,6 +230,7 @@ The block holds only what running an agent takes — which agent, and the exits 
 - **Never invent the agent payload.** `GET /ai-agents/schema` is that API's own OpenAPI document, generated over there. Its paths are its own — the agent it names under `ai-agents` is the one this door carries. If a field is not in it, it does not exist.
 - **`assistantId` and `outputs` are both required.** A block placed before there is an agent to name is stored with `param_required` against each — which is a state this API holds on purpose, not a failure. It cannot be published until both are written.
 - **Each exit's `id` is a uuid, and you generate it** — the same one in both requests, which is why nothing has to be read back: the block reports one output per exit as `$<id>`, so a connection leaving it travels in the same request that places it. Only the exit's `name` is yours to word. **The agent's own schema declares that id a plain string and it is wrong**: `GET /ai-agents/schema` gives `ExitCondition.id` no `format: uuid` although `Flow.id` beside it has one, and a non-uuid is answered with a `502` from inside the agents service rather than a `422`. The block takes whatever id it is given and never checks, so the two halves of an exit disagree and only one of them says so.
+- **An agent's `instructions` stop at 9,000 characters.** The schema declares no limit, but 9,001 is answered `422` with code `internal_error` and the message "Instructions must be 9000 characters or less". Count before you send; if it is over, shorten it. Do not retry the same body.
 - **`PUT /ai-agents/{agent_id}` replaces an agent whole.** What the body leaves out goes back to that API's default — knowledge and interactive components a person set up in the editor included. Never use it to tweak one field of an agent someone else configured; read it, or leave it alone.
 - **The block reports the exits it was last written with.** An exit renamed or removed straight through the agents API is not reflected in the diagram. Rewrite the block's `outputs` when you change them there.
 - `assistantId` is not resolved when it is written. An id from another brand is accepted and answered as `assistant_not_found` when the bot is compiled.
@@ -351,6 +352,20 @@ Where the flow branches, say what sends it each way. Where it can end, say so.
 - **every choice you made that the request did not specify** — a wording you invented, a validation you added, a default you accepted. This is the part the person is most likely to want changed, and the part they cannot see from the link.
 
 Say plainly whether it is published. A bot you built and did not deploy is not serving anyone yet; do not let a builder link imply otherwise.
+
+### Walk it in the in-app browser, when there is one
+
+A published bot is only proven by talking to it. **If this session has Claude's in-app browser** (the Claude desktop app's Code tab: tools named `mcp__Claude_Browser__*`, such as `preview_start`, `navigate`, `find`, `computer`, `get_page_text`, `resize_window`), walk the conversation there yourself after the publish (and after the style push, when there is one). The person watches the bot run in the side pane while you do it:
+
+1. Open the share URL: `preview_start` with `url` set to it, or `navigate` when the pane is already open. The person may be asked once to allow `landbot.pro`; that is theirs to answer.
+2. Answer every question with obviously fake data (`Test Visitor`, `test@example.com`); each walk creates a real chat in their inbox, so say so once. Find buttons by their text with `find` and click the ref; type into the input and press Enter.
+3. **Take every branch to its ending.** For the next branch, load the share URL again with a new query string (`?walk=2`, `?walk=3`) to start a fresh chat.
+4. Read what the bot said with `get_page_text`, not from screenshots. If no new bot message arrives within 15 seconds of an answer, that is a dead end: name the block it stopped after and report it; do not publish a fix without the person's yes.
+5. In the hand-back, say exactly what was walked: "walked by me in the in-app browser: <branch> → <ending>, …". Never merge it with what the person walked.
+
+Never sign in anywhere in that browser, never open `app.landbot.io` for the person, and never type real personal data into the chat.
+
+**No in-app browser** (terminal, Codex, Cursor): give the share URL, list the branches, and ask the person to walk each one to its ending. Until they say they have, say "published", never "works".
 
 ## Known gaps
 

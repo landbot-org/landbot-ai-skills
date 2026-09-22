@@ -17,7 +17,7 @@ Requirements: a Landbot account (free to create; the 14-day trial includes the A
 
 Pick your agent. Each install gives you both skills.
 
-**Claude desktop app (Cowork or Code tab), no terminal.** Open **Customize › Plugins**, choose **Add marketplace**, paste `landbot-org/landbot-ai-skills`, then install **landbot**. Say "set up my Landbot token" in a new session.
+**Claude desktop app (Cowork or Code tab), no terminal.** Open **Customize › Plugins**, choose **Add marketplace**, paste `landbot-org/landbot-ai-skills`, then install **landbot**. Say "set up my Landbot token" in a new session. In the Code tab the agent also opens your chat in the app's built-in browser: it talks to the bot on every branch and checks the look at desktop and phone width while you watch.
 
 **Claude Code (terminal).** Your agent can run these itself; you can also type them:
 
@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-skills/scr
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.3.2`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.3.3`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 
