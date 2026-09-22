@@ -130,7 +130,7 @@ If the person **asks for a bot** but gives no description, or says "show me" or 
 
 `201` with the bot under `data`. Read the UUID from the actual response: the pilot returned `data.id` (older skill text said `data.bot_id`). Use that UUID for later calls. `channel_family` is one of `landbot`, `whatsapp`, `facebook`, `apichat`.
 
-Check `data.channels` is not empty on a web bot: without a channel the builder will not open it.
+**Create once.** Never run `POST /bots` a second time for the same request. If the answer looked wrong (an error, a timeout, `data.channels` empty or missing), the bot very likely exists anyway: its web channel can attach a few seconds after the create. Wait five seconds and read it with `GET /bots/<uuid>` (or find it by name on the first page of `GET /bots`) and carry on with that bot. `lb` refuses a second bot with the same name within 15 minutes and prints the one that exists. Only a bot with no channel after that re-read is a real problem: say so and stop; do not create another.
 
 Then read what you were given, rather than assuming it:
 

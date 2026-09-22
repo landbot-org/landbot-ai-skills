@@ -20,6 +20,7 @@ KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 BASE="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"
 V2="${LANDBOT_API_V2_URL:-https://api.landbot.io/v2}"
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+UA="landbot-plugin/$("$HERE/lb" --version | awk '{print $2}') (setup-token)"   # same tag as lb, see SECURITY.md
 ACCESS_URL="${LANDBOT_SKILLS_ACCESS_URL:-https://github.com/landbot-org/landbot-ai-skills/issues}"
 
 have_keychain() { command -v security >/dev/null 2>&1; }
@@ -30,7 +31,7 @@ account_of() {
   local token body
   token="$(cat)"
   body="$(printf 'header = "Authorization: Token %s"\n' "$token" |
-    curl -sS "$V2/agents/me/" --config -)" || return 1
+    curl -sS -A "$UA" "$V2/agents/me/" --config -)" || return 1
   printf '%s' "$body" | jq -r '.agent | "\(.full_name // "?") <\(.email // "?")>"' 2>/dev/null ||
     return 1
 }
@@ -40,7 +41,7 @@ check_blocks() {
   local token
   token="$(cat)"
   printf 'header = "Authorization: Token %s"\n' "$token" |
-    curl -sS -o /dev/null -w '%{http_code}' "$BASE/blocks" --config -
+    curl -sS -A "$UA" -o /dev/null -w '%{http_code}' "$BASE/blocks" --config -
 }
 
 explain_code() {

@@ -56,5 +56,16 @@ printf '{"name":"%s"}' "$n51" > "$T/b.json"
 t "name 51 in @file refused"   65:0 "$L" POST /bots "@$T/b.json"
 t "50 accented chars pass"      1:0 "$L" POST /bots "{\"name\":\"$(printf 'é%.0s' $(seq 50))\"}"
 t "rename not guarded"          1:0 "$L" PATCH /bots/x "{\"name\":\"$n51\"}"
+
+# duplicate-create guard: a local server answers GET /bots with a bot of the same name created now
+W="$T/www"; mkdir -p "$W"; now=$(date -u +%Y-%m-%dT%H:%M:%S)
+printf '{"data":[{"id":"u-dup","name":"Dup test","created_at":"%s"}]}' "$now" > "$W/bots"
+PORT=$(( 20000 + RANDOM % 20000 )); (cd "$W" && python3 -m http.server "$PORT" --bind 127.0.0.1 >/dev/null 2>&1) & SRV=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "http://127.0.0.1:$PORT/bots" && break; sleep 0.3; done
+export LANDBOT_API_URL="http://127.0.0.1:$PORT"
+t "same name within 15 min refused" 65:0 "$L" POST /bots '{"name":"Dup test"}'
+t "different name passes the guard" 1:0 "$L" POST /bots '{"name":"Other name"}'
+kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
+ua="$(grep -c 'landbot-plugin/' "$SRC/lb")"; [ "$ua" -ge 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL user agent missing in lb"; }
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]
