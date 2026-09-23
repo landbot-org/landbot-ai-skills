@@ -9,7 +9,7 @@ One plugin, `landbot`, with two skills:
 | Skill | What it does |
 |---|---|
 | `landbot-flows` | Reads the live block catalog, creates the bot, places and wires blocks, sets up an AI agent block, publishes when you say so, puts the web chat on the current renderer, and hands back the builder link plus a one-line handoff. |
-| `landbot-style` | Turns "make it look like our site / dark / like a form" into one Custom CSS block, pushes it to the channel (or tells you where to paste it) and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves on Starter, Professional and Business plans, not during the trial; the chat works without them. |
+| `landbot-style` | Turns "make it look like our site / dark / like a form" into one Custom CSS block, pushes it to the channel (or tells you where to paste it) and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code feature (the trial has it); the chat works without them. |
 
 Requirements: a Landbot account (free to create; the 14-day trial includes the API token), `bash`, `curl`, `jq`. macOS, Linux or WSL.
 

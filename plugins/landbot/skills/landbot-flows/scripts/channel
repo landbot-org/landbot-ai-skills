@@ -11,8 +11,8 @@
 # Every css/js write first saves what the channel held to a backup file and prints its path, so
 # `channel css|js <backup> --bot <uuid>` puts it back. Custom JS is checked before anything is
 # sent (see check_js below), and after the write the published config is read to tell "live for
-# visitors" from "stored but not served": Landbot serves Custom JS only on plans with the Custom
-# Code add-on (Starter, Professional, Business), not on Sandbox and not during the free trial.
+# visitors" from "stored but not served": Landbot serves Custom JS only to accounts with the Custom
+# Code feature, so what the published config carries is the only answer.
 #
 # The channel is found from the bot; you never type its id. A numeric id may still be given
 # (`channel v4 <channel_id> --bot <uuid>`, `channel css <channel_id> <file.css> --bot <uuid>`, or
@@ -218,7 +218,7 @@ js)  same="$(jq -n --argjson a "$after" --argjson p "$payload" '(($a.foot // "")
          echo "served: the published config carries it ($served characters): live for visitors now."
        else
          echo "NOT SERVED: the Custom JS is stored on the channel, but the published config does not carry it." >&2
-         echo "Landbot serves Custom JS only on plans with the Custom Code add-on (Starter, Professional, Business); not on Sandbox and not during the free trial. Visitors get the chat without it, which is why a behaviour module must never be needed for the chat to work." >&2
+         echo "Landbot serves Custom JS only to accounts with the Custom Code feature, and this account's published config does not carry it. Visitors get the chat without it, which is why a behaviour module must never be needed for the chat to work." >&2
          exit 3
        fi
      fi

@@ -70,6 +70,6 @@ Read `version` in the handoff line.
 Offer to add the embed snippet (builder › Share › Embed) to their site's code. **HUMAN** deploys.
 
 ## Limits
-Bots API preview: 24 block types; on the v4 web chat use `buttons` for yes/no and do not rely on `code` blocks. Custom CSS needs the trial or a paid plan. Custom JS (the messaging and step-form behaviours) is served only on Starter, Professional and Business, not during the trial: the chat works without it. Chat apps (claude.ai, ChatGPT) are not supported yet.
+Bots API preview: 24 block types; on the v4 web chat use `buttons` for yes/no and do not rely on `code` blocks. Custom CSS needs the trial or a paid plan. Custom JS (the messaging and step-form behaviours) is served only to accounts with the Custom Code feature (the trial has it); the chat works without it. Chat apps (claude.ai, ChatGPT) are not supported yet.
 
 Help: open an issue at https://github.com/landbot-org/landbot-ai-skills (bot id and step; never a token) or use the assistant on the skills page.
