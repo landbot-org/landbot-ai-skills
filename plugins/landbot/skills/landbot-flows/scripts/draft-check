@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Know what is in a bot's draft before you build on it or publish it.
 #
-#   draft-check save <bot_uuid>   remember the draft as it is now (lb does this after every draft write)
+#   draft-check save <bot_uuid>   accept the draft as it is now as "what this plugin last wrote" (run it only after
+#                                 the person agreed the draft is right; it also clears a pending change, see below)
 #   draft-check diff <bot_uuid>   what changed since then: run it at the start of every new request
 #   draft-check gate <bot_uuid>   the checks before a publish (lb runs it before POST /bots/<id>/versions)
 #
@@ -18,10 +19,16 @@
 #   - a connection points at a block that does not exist;
 #   - a question still shows Landbot's placeholder "Ask anything" instead of its wording;
 #   - the draft changed since this plugin last wrote it (someone edited it in the builder, or a builder
-#     tab saved an old copy). Look with `diff`, tell the person, and once they agree the draft is
-#     right, `save` it and publish.
+#     tab saved an old copy), including a connection pointed somewhere else. Look with `diff`, tell the
+#     person, and once they agree the draft is right, `save` it and publish;
+#   - `lb` saw such a change before one of its own writes (a pending change, kept in <bot>.pending):
+#     the write went ahead, so the snapshot alone no longer shows it. Only `save` clears it;
+#   - there is no snapshot of this bot on this machine: nothing proves the draft is the one you meant.
+#     Read it with the person, then `save`.
 # gate WARNS (exit 0, say it in the hand-back) about blocks nothing reaches, questions with no next
-# step, a display copy that differs from the wording, and a missing snapshot.
+# step and a display copy that differs from the wording.
+# Landbot's API has no "changed since I read it" lock, so a change landing between the check and the
+# publish cannot be ruled out; the check narrows that window, it does not close it.
 #
 # Snapshots live in $LANDBOT_STATE_DIR/drafts (default ~/.landbot/drafts), one file per bot.
 # Reads only, except the snapshot file. The token is never printed; `lb` handles it.
@@ -30,11 +37,12 @@ HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LB="$HERE/lb"
 STATE="${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts"
 
-OP="${1:-}"; BOT="${2:-}"
+OP="${1:-}"; BOT="${2:-}"; MODE="${3:-}"
 case "$OP" in save|diff|gate) ;; *) echo "usage: draft-check save|diff|gate <bot_uuid>" >&2; exit 64 ;; esac
 [ -n "$BOT" ] || { echo "usage: draft-check $OP <bot_uuid>" >&2; exit 64; }
 case "$BOT" in *[!A-Za-z0-9-]*) echo "refusing: '$BOT' is not a bot uuid" >&2; exit 65 ;; esac
 SNAP="$STATE/$BOT.json"
+PENDING="$STATE/$BOT.pending"   # changes lb saw before one of its writes; cleared only by a manual save
 
 draft="$("$LB" GET "/bots/$BOT/draft" 2>/dev/null)" || { echo "could not read the draft of $BOT" >&2; exit 1; }
 printf '%s' "$draft" | jq -e '.data.diagram.nodes' >/dev/null 2>&1 || { echo "the draft of $BOT came back without a diagram" >&2; exit 1; }
@@ -53,6 +61,8 @@ COMPARE='
   [ ($ck - ($ck - $sk))[] | select($c.nodes[.] != $s.nodes[.]) | "changed block \(lab($cur.nodes; .))" ],
   [ (($c.connections | keys) - ($s.connections | keys))[] | "added connection \(.)" ],
   [ (($s.connections | keys) - ($c.connections | keys))[] | "removed connection \(.)" ],
+  [ (($c.connections | keys) - (($c.connections | keys) - ($s.connections | keys)))[] | select($c.connections[.] != $s.connections[.])
+      | "changed connection \(.) (now \($c.connections[.].sourcePath) → \($c.connections[.].targetPath) on \($c.connections[.].type))" ],
   [ ($ck - ($ck - $sk))[] | select(($c.nodes[.] == $s.nodes[.]) and (($cur | pos)[.] != ($snap | pos)[.])) | "moved block \(lab($cur.nodes; .))" ]
   | .[]'
 
@@ -73,12 +83,17 @@ changes() {  # prints one line per change; empty when the draft matches the snap
 case "$OP" in
 save)
   save || exit $?
-  echo "draft-check: saved the draft of $BOT as the one this plugin last wrote ($(jq -r '.diagram.nodes | length' "$SNAP") blocks, $(jq -r '.diagram.connections | length' "$SNAP") connections)."
+  if [ "$MODE" = "--auto" ]; then exit 0; fi   # lb after its own write: a pending change stays pending
+  if [ -f "$PENDING" ]; then rm -f "$PENDING"; cleared=" The pending change lb had seen is now accepted."; else cleared=""; fi
+  echo "draft-check: saved the draft of $BOT as the one this plugin last wrote ($(jq -r '.diagram.nodes | length' "$SNAP") blocks, $(jq -r '.diagram.connections | length' "$SNAP") connections).$cleared"
   ;;
 
 diff)
   if [ ! -f "$SNAP" ]; then echo "draft-check: no snapshot of $BOT yet (this plugin has not written it on this machine)."; exit 2; fi
   out="$(changes)"
+  if [ -n "$out" ] && [ "$MODE" = "--record" ]; then
+    mkdir -p "$STATE" 2>/dev/null; printf '%s\n' "$out" >> "$PENDING"
+  fi
   if [ -z "$out" ]; then echo "draft-check: the draft is exactly as this plugin last wrote it ($(jq -r .saved_at "$SNAP"))."; exit 0; fi
   echo "draft-check: the draft of $BOT changed since this plugin last wrote it ($(jq -r .saved_at "$SNAP")):"
   printf '%s\n' "$out" | sed 's/^/  - /'
@@ -91,8 +106,9 @@ gate)
   family="$("$LB" GET "/bots/$BOT" 2>/dev/null | jq -r '.data.channel_family // "landbot"')"
   snapjson='null'; [ -f "$SNAP" ] && snapjson="$(jq '.diagram' "$SNAP")"
   report="$(printf '%s' "$draft" | jq -r --arg fam "$family" --argjson snap "$snapjson" '
-    def plain: gsub("<[^>]*>"; " ") | gsub("&nbsp;"; " ") | gsub("&amp;"; "&") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&quot;"; "\"") | gsub("&#39;"; "'"'"'") | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ");
-    def alnum: ascii_downcase | gsub("[^a-z0-9]"; "");
+    def plain: gsub("<br\\s*/?>"; "\n") | gsub("</p>\\s*<p[^>]*>"; "\n") | gsub("<[^>]*>"; "") | gsub("&nbsp;"; " ") | gsub("&amp;"; "&") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&quot;"; "\"") | gsub("&#39;|&#x27;|&apos;"; "'"'"'");
+    def norm: gsub("[*_~`]"; "") | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ");
+    def undecidable($t; $r): ($t | test("<[a-zA-Z/]") or test("\\]\\(")) or ($r | plain | test("&#?[a-zA-Z0-9]+;"));
     .data as $d | ($d.diagram.nodes // {}) as $n | ($d.diagram.connections // {}) as $cn |
     ($n | keys) as $ids |
     [ $cn[] | {s: .sourcePath, t: .targetPath} ] as $edges |
@@ -111,10 +127,10 @@ gate)
           | "BLOCK: connection \(.key) points at a block that does not exist" ),
       ( $n | to_entries[] | .key as $id | (.value.params // {}) as $p
           | ([["text","richText"],["errorText","richErrorText"]][] | select(($p[.[0]] | type) == "string" and ($p[.[1]] | type) == "string" and ($p[.[0]] != "") and ($p[.[1]] != "")) ) as $pair
-          | ($p[$pair[1]] | plain) as $shown | ($p[$pair[0]]) as $word
-          | if ($shown | ascii_downcase) == "ask anything" and ($word | alnum) != "askanything" then
+          | ($p[$pair[1]] | plain | norm) as $shown | ($p[$pair[0]]) as $word
+          | if ($shown | ascii_downcase) == "ask anything" and ($word | norm | ascii_downcase) != "ask anything" then
               "BLOCK: block \(lbl($id)) shows visitors \"Ask anything\" instead of its \($pair[0]) \"\($word | .[0:60])\". Send the wording again with \($pair[1]) left out (the API derives it) and check"
-            elif ($word | test("<[a-zA-Z/]") | not) and ($shown | alnum) != ($word | alnum) then
+            elif (undecidable($word; $p[$pair[1]]) | not) and $shown != ($word | norm) then
               "WARN: block \(lbl($id)): visitors see \"\($shown | .[0:60])\" while the builder shows \"\($word | .[0:60])\" (\($pair[1]) and \($pair[0]) disagree)"
             else empty end ),
       ( ($ids - $reach - ["hidden"])[] | select(($n[.].template // "") | startswith("note") | not) | "WARN: block \(lbl(.)) is not reached from the start, so it never runs" ),
@@ -122,8 +138,13 @@ gate)
           | select((($p.buttons // []) | length > 0) or ($tpl != "chat" and (($p.destination // "") | type) == "string" and ($p.destination // "") != ""))
           | select([ $edges[] | select(.s == $id) ] | length == 0)
           | "WARN: block \(lbl($id)) asks something and has no next step: the chat ends after the answer" ),
-      ( if $snap == null then "WARN: no snapshot of this bot on this machine, so a builder overwrite cannot be ruled out" else empty end )
+      ( if $snap == null then "BLOCK: no snapshot of this bot on this machine, so nothing shows this draft is the one you meant. Go through it with the person, then run draft-check save and publish" else empty end )
     ] | .[]')" || { echo "draft-check: could not evaluate the draft of $BOT; treat it as not checked" >&2; exit 1; }
+  if [ -f "$PENDING" ]; then
+    report="$(printf '%s\n%s' "$report" "BLOCK: before one of this plugin's writes, the draft already had changes it did not make:")"
+    report="$(printf '%s\n%s' "$report" "$(sed 's/^/  - /' "$PENDING")")"
+    report="$(printf '%s\n%s' "$report" "  Tell the person; once they agree the draft is right, run draft-check save.")"
+  fi
   if [ "$snapjson" != "null" ]; then
     ch="$(changes)"
     if [ -n "$ch" ]; then

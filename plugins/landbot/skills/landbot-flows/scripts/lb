@@ -103,17 +103,21 @@ fi
 # A question keeps its words twice: `text` (the builder) and `richText` (what the visitor's chat shows).
 # A write that carries a `richText` saying something else than its `text` (typically copied from an
 # earlier read) changes the builder and not the chat: 200, no violation, a clean publish, and visitors
-# keep the old words (verified 2026-09-23). Leaving the rich copy out is always safe: the API derives
-# it. So refuse a write whose two copies disagree, before it is sent.
+# keep the old words (verified 2026-09-23). Leaving the rich copy out is safe on every write: add-blocks
+# and PATCH derive it, and after a PUT /draft it is stored empty and the chat shows `text` (both verified
+# 2026-09-23). So refuse a write whose two copies disagree, before it is sent. The comparison keeps
+# every character but formatting marks and spacing, so "$1.00" and "$100" differ; text carrying HTML or
+# a link, or an entity it cannot decode, is not compared.
 RICH_CHECK='
-  def plain: gsub("<[^>]*>"; " ") | gsub("&nbsp;"; " ") | gsub("&amp;"; "&") | gsub("&#39;"; "") | gsub("&[a-z]+;"; " ");
-  def alnum: ascii_downcase | gsub("[^a-z0-9]"; "");
+  def plain: gsub("<br\\s*/?>"; "\n") | gsub("</p>\\s*<p[^>]*>"; "\n") | gsub("<[^>]*>"; "") | gsub("&nbsp;"; " ") | gsub("&amp;"; "&") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&quot;"; "\"") | gsub("&#39;|&#x27;|&apos;"; "'"'"'");
+  def norm: gsub("[*_~`]"; "") | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ");
+  def undecidable($t; $r): ($t | test("<[a-zA-Z/]") or test("\\]\\(")) or ($r | plain | test("&#?[a-zA-Z0-9]+;"));
   [ .. | objects | . as $o
     | (["text","richText"], ["errorText","richErrorText"])
     | select(($o[.[0]] | type) == "string" and ($o[.[1]] | type) == "string" and $o[.[1]] != "")
-    | select(($o[.[0]] | test("<[a-zA-Z/]")) | not)
-    | select(($o[.[1]] | plain | alnum) != ($o[.[0]] | alnum))
-    | "\(.[1]) says \"\($o[.[1]] | plain | .[0:50])\" but \(.[0]) says \"\($o[.[0]] | .[0:50])\""
+    | select(undecidable($o[.[0]]; $o[.[1]]) | not)
+    | select(($o[.[1]] | plain | norm) != ($o[.[0]] | norm))
+    | "\(.[1]) says \"\($o[.[1]] | plain | norm | .[0:50])\" but \(.[0]) says \"\($o[.[0]] | norm | .[0:50])\""
   ] | first // empty'
 if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && command -v jq >/dev/null 2>&1; then
   case "$BODY" in
@@ -122,7 +126,7 @@ if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && comm
   esac
   if [ -n "${rich_bad:-}" ]; then
     echo "refusing: $rich_bad." >&2
-    echo "Visitors would keep seeing the rich copy. Leave richText/rawText (and richErrorText/rawErrorText) out of the write: the API derives them from the plain text. Nothing was sent." >&2
+    echo "Visitors would keep seeing the rich copy. Leave richText/rawText (and richErrorText/rawErrorText) out of the write: the chat then shows the plain text. Nothing was sent." >&2
     exit 65
   fi
 fi
@@ -162,8 +166,13 @@ fi
 
 DC="$HERE/draft-check"
 DRAFT_BOT=""
-if [ "$METHOD" != "GET" ] && [[ "$PATH_" =~ ^/bots/([A-Za-z0-9-]+)/draft ]]; then DRAFT_BOT="${BASH_REMATCH[1]}"; fi
-if [ "$METHOD" = "POST" ] && [[ "$PATH_" =~ ^/bots/([A-Za-z0-9-]+)/versions/?$ ]] && [ -x "$DC" ]; then
+BARE_PATH="${PATH_%%\?*}"; BARE_PATH="${BARE_PATH%%#*}"
+if [ "$METHOD" != "GET" ] && [[ "$BARE_PATH" =~ ^/bots/([A-Za-z0-9-]+)/draft ]]; then DRAFT_BOT="${BASH_REMATCH[1]}"; fi
+if [ "$METHOD" != "GET" ] && [[ "$BARE_PATH" =~ ^/+bots/+([A-Za-z0-9-]+)/+versions/*$ ]]; then
+  if [ ! -x "$DC" ]; then
+    echo "refusing to publish: the draft check ($DC) is missing or not executable, so the draft cannot be checked. Reinstall the plugin. Nothing was published." >&2
+    exit 65
+  fi
   gate_out="$("$DC" gate "${BASH_REMATCH[1]}" 2>&1)"; gate_rc=$?
   printf '%s\n' "$gate_out" >&2
   if [ "$gate_rc" -ne 0 ]; then
@@ -172,10 +181,10 @@ if [ "$METHOD" = "POST" ] && [[ "$PATH_" =~ ^/bots/([A-Za-z0-9-]+)/versions/?$ ]
   fi
 fi
 if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ] && [ -f "${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts/$DRAFT_BOT.json" ]; then
-  pre="$("$DC" diff "$DRAFT_BOT" 2>/dev/null)"
+  pre="$("$DC" diff "$DRAFT_BOT" --record 2>/dev/null)"
   if [ $? -eq 1 ]; then
     { echo "WARNING: before this write, the draft had changed since this plugin last wrote it:"; printf '%s\n' "$pre" | sed -n 's/^  - /  - /p'
-      echo "Tell the person. Their edits stay in the draft; anything of yours that is gone, offer to put back."; } >&2
+      echo "Tell the person. Their edits stay in the draft; anything of yours that is gone, offer to put back. Publishing stays blocked until you run draft-check save."; } >&2
   fi
 fi
 
@@ -196,10 +205,10 @@ PAYLOAD="${RESPONSE%$'\n'*}"
 # before anything is printed, so a caller that stops reading early (`| head`) cannot skip it.
 if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
   if [ -n "$DRAFT_BOT" ]; then
-    "$DC" save "$DRAFT_BOT" >/dev/null 2>&1 || echo "note: could not save a snapshot of the draft of $DRAFT_BOT (draft-check save)" >&2
+    "$DC" save "$DRAFT_BOT" --auto >/dev/null 2>&1 || echo "WARNING: could not save a snapshot of the draft of $DRAFT_BOT after this write, so the next publish will see your own change as unexplained. Run draft-check diff and draft-check save." >&2
   elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
     new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
-    [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || true; }
+    [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || echo "WARNING: could not save the first snapshot of bot $new_id (draft-check save $new_id)" >&2; }
   fi
 fi
 

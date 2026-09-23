@@ -99,9 +99,13 @@
         btn.type = 'button';
         btn.className = 'lb-msg-btn' + (real[i].querySelector('svg') ? ' lb-msg-link' : '');
         btn.textContent = label(real[i]);
+        btn.setAttribute('data-lb-msg-idx', String(i));
         btn.addEventListener('click', function (e) {
-          var want = e.currentTarget.textContent;
+          /* forward by position, so two buttons with the same label still open their own branch; only when
+             the real options are no longer the ones this copy was made from, fall back to the label */
+          var idx = parseInt(e.currentTarget.getAttribute('data-lb-msg-idx'), 10), want = e.currentTarget.textContent;
           var now = document.querySelectorAll('[data-lb-part="option-button"]');
+          if ([].map.call(now, label).join('\u0001') === sig && now[idx]) { now[idx].click(); return; }
           for (var k = 0; k < now.length; k++) if (label(now[k]) === want) { now[k].click(); return; }
         });
         row.appendChild(btn); g.appendChild(row);
