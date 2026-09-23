@@ -17,12 +17,18 @@
   --lbm-send-bg: #1DAA61;       /* the round button at the end of the composer */
 }
 
-/* timestamps and day chip, drawn from the attributes the script writes */
+/* timestamps and day chip, drawn from the attributes the script writes. The bubble wraps, so the time
+   sits after the text and the reply buttons take a full row of their own. */
+body.lb-js-messaging [data-lb-part="message-bubble"] {
+  display: inline-flex; flex-wrap: wrap; align-items: flex-end; column-gap: 8px; max-width: 85%;
+}
 body.lb-js-messaging [data-lb-part="message-bubble"] > * { order: 0; }
+body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-msg-has-buttons] > :not(.lb-msg-buttons) { flex: 1 1 auto; min-width: 0; }
 body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-ts]::after {
   content: attr(data-lb-ts); order: 1; margin-left: auto; position: relative; top: 4px;
   font-size: 11px; line-height: 15px; color: var(--lbm-meta); white-space: nowrap;
 }
+body.lb-js-messaging [data-lb-part="message"][data-lb-author="user"] [data-lb-part="message-bubble"][data-lb-ts]::after { color: inherit; opacity: .8; }
 body.lb-js-messaging [data-lb-part="message"][data-lb-daychip]::before {
   content: attr(data-lb-daychip); display: block; width: max-content; margin: 2px auto 10px; padding: 6px 13px;
   border-radius: 8px; background: var(--lbm-chip-bg); color: var(--lbm-chip-text);
@@ -40,7 +46,7 @@ body.lb-js-messaging.lb-msg-typing [data-lb-part="header"] h4::after {
 /* reply buttons inside the bubble; the real ones are hidden only while the script has placed its copy
    [off-catalog: options have no container anchor] */
 body.lb-js-messaging.lb-msg-inline div:has(> [data-lb-part="options-group"]) { display: none !important; }
-body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-msg-has-buttons] { width: 85%; padding-bottom: 0 !important; }
+body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-msg-has-buttons] { display: flex; width: 85%; padding-bottom: 0 !important; }
 .lb-msg-buttons { order: 2; flex: 0 0 calc(100% + 18px); margin: 7px -9px 0; border-top: 1px solid var(--lbm-divider); }
 .lb-msg-buttons .lb-msg-row { padding: 6px 7px; }
 .lb-msg-buttons .lb-msg-row + .lb-msg-row { border-top: 1px solid var(--lbm-divider); }

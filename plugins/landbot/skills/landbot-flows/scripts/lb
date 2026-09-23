@@ -100,6 +100,33 @@ if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && comm
   fi
 fi
 
+# A question keeps its words twice: `text` (the builder) and `richText` (what the visitor's chat shows).
+# A write that carries a `richText` saying something else than its `text` (typically copied from an
+# earlier read) changes the builder and not the chat: 200, no violation, a clean publish, and visitors
+# keep the old words (verified 2026-09-23). Leaving the rich copy out is always safe: the API derives
+# it. So refuse a write whose two copies disagree, before it is sent.
+RICH_CHECK='
+  def plain: gsub("<[^>]*>"; " ") | gsub("&nbsp;"; " ") | gsub("&amp;"; "&") | gsub("&#39;"; "") | gsub("&[a-z]+;"; " ");
+  def alnum: ascii_downcase | gsub("[^a-z0-9]"; "");
+  [ .. | objects | . as $o
+    | (["text","richText"], ["errorText","richErrorText"])
+    | select(($o[.[0]] | type) == "string" and ($o[.[1]] | type) == "string" and $o[.[1]] != "")
+    | select(($o[.[0]] | test("<[a-zA-Z/]")) | not)
+    | select(($o[.[1]] | plain | alnum) != ($o[.[0]] | alnum))
+    | "\(.[1]) says \"\($o[.[1]] | plain | .[0:50])\" but \(.[0]) says \"\($o[.[0]] | .[0:50])\""
+  ] | first // empty'
+if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && command -v jq >/dev/null 2>&1; then
+  case "$BODY" in
+  @*) rich_bad="$(jq -r "$RICH_CHECK" < "${BODY#@}" 2>/dev/null)" ;;
+  *)  rich_bad="$(printf '%s' "$BODY" | jq -r "$RICH_CHECK" 2>/dev/null)" ;;
+  esac
+  if [ -n "${rich_bad:-}" ]; then
+    echo "refusing: $rich_bad." >&2
+    echo "Visitors would keep seeing the rich copy. Leave richText/rawText (and richErrorText/rawErrorText) out of the write: the API derives them from the plain text. Nothing was sent." >&2
+    exit 65
+  fi
+fi
+
 TOKEN="${LANDBOT_API_TOKEN:-}"
 if [ -z "$TOKEN" ] && command -v security >/dev/null 2>&1; then
   TOKEN="$(security find-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null || true)"
@@ -165,6 +192,17 @@ RESPONSE="$(printf 'header = "Authorization: Token %s"\n' "$TOKEN" | curl "${ARG
 CODE="${RESPONSE##*$'\n'}"
 PAYLOAD="${RESPONSE%$'\n'*}"
 
+# Remember what this plugin wrote: after a draft write, and right after a bot is created. This runs
+# before anything is printed, so a caller that stops reading early (`| head`) cannot skip it.
+if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
+  if [ -n "$DRAFT_BOT" ]; then
+    "$DC" save "$DRAFT_BOT" >/dev/null 2>&1 || echo "note: could not save a snapshot of the draft of $DRAFT_BOT (draft-check save)" >&2
+  elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
+    new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
+    [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || true; }
+  fi
+fi
+
 echo "HTTP $CODE" >&2
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$PAYLOAD" | jq . 2>/dev/null || printf '%s\n' "$PAYLOAD"
@@ -173,13 +211,3 @@ else
 fi
 
 [ "$CODE" -lt 400 ] 2>/dev/null || exit 1
-
-# Remember what this plugin wrote: after a draft write, and right after a bot is created.
-if [ -x "$DC" ]; then
-  if [ -n "$DRAFT_BOT" ]; then
-    "$DC" save "$DRAFT_BOT" >/dev/null 2>&1 || echo "note: could not save a snapshot of the draft of $DRAFT_BOT (draft-check save)" >&2
-  elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
-    new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
-    [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || true; }
-  fi
-fi

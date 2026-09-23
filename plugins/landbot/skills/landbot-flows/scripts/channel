@@ -184,7 +184,7 @@ if [ "$OP" = "css" ] || [ "$OP" = "js" ]; then
   key="style"; ext="css"; UPOP="CSS"; [ "$OP" = "js" ] && { key="foot"; ext="html"; UPOP="JS"; }
   mkdir -p "$BACKUP_DIR" 2>/dev/null
   bk="$BACKUP_DIR/channel-$ID-$key-$(date -u +%Y%m%dT%H%M%SZ).$ext"
-  if printf '%s' "$body" | jq -r --arg k "$key" '.[$k] // ""' > "$bk" 2>/dev/null; then
+  if printf '%s' "$body" | jq -j --arg k "$key" '.[$k] // ""' > "$bk" 2>/dev/null; then
     if [ -s "$bk" ]; then echo "backup: the channel's previous Custom $UPOP is saved in $bk (put it back with: channel $OP $bk --bot $BOT)"
     else echo "backup: the channel had no Custom $UPOP before this write (undo with: channel ${OP} $( [ "$OP" = js ] && echo "--clear" || echo "<empty file>") --bot $BOT)"; fi
   else

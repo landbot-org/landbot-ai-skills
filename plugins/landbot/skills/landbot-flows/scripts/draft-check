@@ -114,7 +114,7 @@ gate)
           | ($p[$pair[1]] | plain) as $shown | ($p[$pair[0]]) as $word
           | if ($shown | ascii_downcase) == "ask anything" and ($word | alnum) != "askanything" then
               "BLOCK: block \(lbl($id)) shows visitors \"Ask anything\" instead of its \($pair[0]) \"\($word | .[0:60])\". Send the wording again with \($pair[1]) left out (the API derives it) and check"
-            elif ($shown | alnum) != ($word | alnum) then
+            elif ($word | test("<[a-zA-Z/]") | not) and ($shown | alnum) != ($word | alnum) then
               "WARN: block \(lbl($id)): visitors see \"\($shown | .[0:60])\" while the builder shows \"\($word | .[0:60])\" (\($pair[1]) and \($pair[0]) disagree)"
             else empty end ),
       ( ($ids - $reach - ["hidden"])[] | select(($n[.].template // "") | startswith("note") | not) | "WARN: block \(lbl(.)) is not reached from the start, so it never runs" ),

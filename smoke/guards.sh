@@ -144,6 +144,19 @@ t "date mismatch in PUT diagram" 65:0 "$L" PUT /bots/x/draft "$dfd"
 printf '%s' "$dfb" > "$T/d.json"
 t "date mismatch in @file"     65:0 "$L" POST /bots/x/draft/blocks "@$T/d.json"
 t "GET with date body ignored"  1:0 "$L" GET /bots/x/draft/blocks "$dfb"
+# display copy: a write whose richText disagrees with its text is refused; left out, or agreeing, it is sent
+rtb='{"params":{"text":"Which email should we use?","richText":"<p>What is the best email to reach you?</p>","destination":"email"}}'
+rtg='{"params":{"text":"What'"'"'s your *name*?","richText":"<p>What&#39;s your <strong>name</strong>?</p>"}}'
+rtn='{"params":{"text":"Which email should we use?","destination":"email"}}'
+rte='{"params":{"text":"Hi","errorText":"Try again","richErrorText":"<p>I am afraid I did not understand</p>"}}'
+rth='{"params":{"text":"<iframe src=\"https://player.example/v\"></iframe>","richText":"<p> </p>"}}'
+t "stale richText refused"      65:0 "$L" PATCH /bots/x/draft/blocks/q "$rtb"
+t "matching richText sent"       1:0 "$L" PATCH /bots/x/draft/blocks/q "$rtg"
+t "no richText sent"             1:0 "$L" PATCH /bots/x/draft/blocks/q "$rtn"
+t "stale richErrorText refused" 65:0 "$L" PATCH /bots/x/draft/blocks/q "$rte"
+t "HTML text not compared"       1:0 "$L" PATCH /bots/x/draft/blocks/q "$rth"
+printf '%s' "$rtb" | jq '{diagram:{nodes:{q:.}}}' > "$T/rt.json"
+t "stale richText in PUT diagram" 65:0 "$L" PUT /bots/x/draft "@$T/rt.json"
 
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]
