@@ -157,8 +157,12 @@ POST_CMP='
     ( (($bc | keys) - ($ac | keys))[] | . as $k | ($bc[$k] + {id: $k}) as $c | select([ $eadd[] | select(conn_match($c; .)) ] | length == 0) | "connection \($k) was added" ),
     ( (($ac | keys) - ($bc | keys))[] | . as $k | ($ac[$k] + {id: $k}) as $c | select([ $edel[] | select(conn_match($c; .)) ] | length == 0)
         | select((($di | index($c.sourcePath)) != null or ($di | index($c.targetPath)) != null) | not) | "connection \($k) was removed" ),
+    # a kept connection that now goes somewhere else is a replacement: only explained when this write both
+    # deleted the old route and added the new one; otherwise report it, even when the new route is its own
     ( (($bc | keys) - (($bc | keys) - ($ac | keys)))[] | . as $k | select(($ac[$k] | {sourcePath, targetPath, type}) != ($bc[$k] | {sourcePath, targetPath, type}))
-        | ($bc[$k] + {id: $k}) as $c | select([ $eadd[] | select(conn_match($c; .)) ] | length == 0) | "connection \($k) was changed" )
+        | ($ac[$k] + {id: $k}) as $old | ($bc[$k] + {id: $k}) as $new
+        | select(([ $edel[] | select(conn_match($old; .)) ] | length > 0) and ([ $eadd[] | select(conn_match($new; .)) ] | length > 0) | not)
+        | "connection \($k) now goes \($new.sourcePath) → \($new.targetPath) instead of \($old.targetPath)" )
   ] | .[] end'
 
 case "$OP" in

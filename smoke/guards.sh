@@ -191,6 +191,15 @@ MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
 jq '.put.nodes.welcome.params = {}' "$T/exp-put.json" > "$T/exp-put-empty.json"
 MOCK_DRAFT="$T/good.json" "$DK" post BOTU "@$T/exp-put-empty.json" >/dev/null 2>&1
 g "a PUT does not adopt settings it did not send" 65 good.json
+# an addition that reuses an existing connection id replaces a route: reported unless the write also deleted the old one
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/retarget.json" "$DK" post BOTU '{"nodes":{"d":{"params":{"messages":[{"text":"D"}],"buttons":[]},"added":true}},"conns":[{"kind":"add","id":"welcome.$success--bye","sourcePath":"welcome","targetPath":"d","type":"$success"}]}' >/dev/null 2>&1
+g "a replaced route without a delete is reported" 65 retarget.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/retarget.json" "$DK" post BOTU '{"nodes":{"d":{"params":{"messages":[{"text":"D"}],"buttons":[]},"added":true}},"conns":[{"kind":"delete","sourcePath":"welcome","type":"$success"},{"kind":"add","id":"welcome.$success--bye","sourcePath":"welcome","targetPath":"d","type":"$success"}]}' >/dev/null 2>&1
+g "an explicit replacement is not pending"       0 retarget.json
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
