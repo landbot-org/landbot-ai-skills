@@ -93,8 +93,18 @@ changes() {  # prints one line per change; empty when the draft matches the snap
 # becomes the snapshot. A pending record is cleared only by a manual `save`.
 POST_CMP='
   def plainp: with_entries(select(.key | test("^(rich|raw)") | not));
+  # Known limit: a setting a write did not send may fall back to the default Landbot sets, which this check does not
+  # know per block; it accepts an empty-like value instead. A concurrent edit that empties a setting in the
+  # second of a write is therefore not caught here (the walk after the publish is the backstop).
   def defaultish: . == null or . == "" or . == false or . == 0 or . == [] or . == {};
-  def conn_match($c; $e): ($e.id != null and $c.id == $e.id) or ($e.sourcePath != null and $c.sourcePath == $e.sourcePath and ($e.targetPath == null or $c.targetPath == $e.targetPath) and ($e.type == null or $c.type == $e.type));
+  # a connection matches an expectation only when every end and output the expectation names agree; an id alone
+  # (a delete by key) matches only when the expectation names nothing else
+  def conn_match($c; $e):
+    ($e.id == null or $c.id == $e.id)
+    and ($e.sourcePath == null or $c.sourcePath == $e.sourcePath)
+    and ($e.targetPath == null or $c.targetPath == $e.targetPath)
+    and ($e.type == null or $c.type == $e.type)
+    and ($e.id != null or $e.sourcePath != null);
   def cset: [ to_entries[] | {id: .key, sourcePath: .value.sourcePath, targetPath: .value.targetPath, type: .value.type} ];
   ($pre.nodes // {}) as $an | ($cur.nodes // {}) as $bn | ($pre.connections // {}) as $ac | ($cur.connections // {}) as $bc |
   if $exp.put then
@@ -104,7 +114,10 @@ POST_CMP='
       ( (($pn | keys) - ($bn | keys))[] | "block \(.) is missing although this plugin sent it" ),
       ( ($pn | keys) - (($pn | keys) - ($bn | keys)) | .[] | . as $id
         | ( ($pn[$id].params | plainp | to_entries[] | select($bn[$id].params[.key] != .value) | "block \($id): \(.key) is not what this plugin sent" ),
-            ( if $pn[$id].name != null and $bn[$id].name != $pn[$id].name then "block \($id): its name is not what this plugin sent" else empty end ) ) ),
+            ( (($bn[$id].params // {}) | plainp | keys) - ($pn[$id].params | keys) | .[] | . as $k
+              | select($bn[$id].params[$k] | defaultish | not) | "block \($id): \($k) holds a value this plugin did not send" ),
+            ( if $pn[$id].name != null and $bn[$id].name != $pn[$id].name then "block \($id): its name is not what this plugin sent" else empty end ),
+            ( if $pn[$id].template != null and $bn[$id].template != $pn[$id].template then "block \($id): its type is not what this plugin sent" else empty end ) ) ),
       ( ($bc | cset)[] | . as $c | select([ $exp.put.conns[] | select(conn_match($c; .)) ] | length == 0) | "connection \($c.id) is there although this plugin did not send it" ),
       ( $exp.put.conns[] | . as $e | select([ ($bc | cset)[] | select(conn_match(.; $e)) ] | length == 0) | "a connection this plugin sent (\($e.sourcePath) → \($e.targetPath)) is missing" )
     ] | .[]

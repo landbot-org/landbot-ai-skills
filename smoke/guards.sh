@@ -179,6 +179,19 @@ MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
 jq '.data.diagram.nodes.d = {id:"d",template:"chat",params:{messages:[{text:"D"}],buttons:[]}} | del(.data.diagram.connections["welcome.$success--bye"]) | .data.diagram.connections["welcome.$success--d"] = {sourcePath:"welcome",targetPath:"d",type:"$success"}' "$T/good.json" > "$T/del-add.json"
 MOCK_DRAFT="$T/del-add.json" "$DK" post BOTU '{"conns":[{"kind":"delete","sourcePath":"welcome","type":"$success"}]}' >/dev/null 2>&1
 g "a delete does not authorise an addition"   65 del-add.json
+# an id-matching addition does not hide a retarget of that connection
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+jq '.data.diagram.nodes.d = {id:"d",template:"chat",params:{messages:[{text:"D"}],buttons:[]}} | .data.diagram.connections["welcome.$success--bye"].targetPath = "d"' "$T/good.json" > "$T/retarget.json"
+MOCK_DRAFT="$T/retarget.json" "$DK" post BOTU '{"nodes":{"d":{"params":{"messages":[{"text":"D"}],"buttons":[]},"added":true}},"conns":[{"kind":"add","id":"welcome.$success--bye","sourcePath":"welcome","targetPath":"bye","type":"$success"}]}' >/dev/null 2>&1
+g "an id match does not hide a retarget"      65 retarget.json
+# a PUT that sent a block with no settings does not adopt settings someone else wrote meanwhile
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+jq '.put.nodes.welcome.params = {}' "$T/exp-put.json" > "$T/exp-put-empty.json"
+MOCK_DRAFT="$T/good.json" "$DK" post BOTU "@$T/exp-put-empty.json" >/dev/null 2>&1
+g "a PUT does not adopt settings it did not send" 65 good.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
