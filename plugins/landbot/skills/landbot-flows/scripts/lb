@@ -105,24 +105,21 @@ fi
 # earlier read) changes the builder and not the chat: 200, no violation, a clean publish, and visitors
 # keep the old words (verified 2026-09-23). Leaving the rich copy out is safe on every write: add-blocks
 # and PATCH derive it, and after a PUT /draft it is stored empty and the chat shows `text` (both verified
-# 2026-09-23). So refuse a write whose two copies disagree, before it is sent. The comparison keeps
-# every character but formatting marks and spacing, so "$1.00" and "$100" differ; text carrying HTML or
-# a link, or an entity it cannot decode, is not compared.
-RICH_CHECK='
-  def plain: gsub("<br\\s*/?>"; "\n") | gsub("</p>\\s*<p[^>]*>"; "\n") | gsub("<[^>]*>"; "") | gsub("&nbsp;"; " ") | gsub("&amp;"; "&") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&quot;"; "\"") | gsub("&#39;|&#x27;|&apos;"; "'"'"'");
-  def norm: gsub("[*_~`]"; "") | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ");
-  def undecidable($t; $r): ($t | test("<[a-zA-Z/]") or test("\\]\\(")) or ($r | plain | test("&#?[a-zA-Z0-9]+;"));
+# 2026-09-23). So refuse a write whose two copies disagree, before it is sent. The comparison is in
+# richtext.jq: every character counts but tags, entities, markdown and spacing, so "$1.00" and "$100"
+# differ; only wording that itself carries HTML is not compared.
+RICH_CHECK='include "richtext";
   [ .. | objects | . as $o
     | (["text","richText"], ["errorText","richErrorText"])
     | select(($o[.[0]] | type) == "string" and ($o[.[1]] | type) == "string" and $o[.[1]] != "")
-    | select(undecidable($o[.[0]]; $o[.[1]]) | not)
-    | select(($o[.[1]] | plain | norm) != ($o[.[0]] | norm))
-    | "\(.[1]) says \"\($o[.[1]] | plain | norm | .[0:50])\" but \(.[0]) says \"\($o[.[0]] | norm | .[0:50])\""
+    | select(comparable($o[.[0]]))
+    | select(rich_differs($o[.[0]]; $o[.[1]]))
+    | "\(.[1]) says \"\($o[.[1]] | rich_plain | .[0:50])\" but \(.[0]) says \"\($o[.[0]] | text_plain | .[0:50])\""
   ] | first // empty'
 if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && command -v jq >/dev/null 2>&1; then
   case "$BODY" in
-  @*) rich_bad="$(jq -r "$RICH_CHECK" < "${BODY#@}" 2>/dev/null)" ;;
-  *)  rich_bad="$(printf '%s' "$BODY" | jq -r "$RICH_CHECK" 2>/dev/null)" ;;
+  @*) rich_bad="$(jq -L "$HERE" -r "$RICH_CHECK" < "${BODY#@}" 2>/dev/null)" || rich_bad="the display-copy check could not run (jq -L $HERE richtext.jq)" ;;
+  *)  rich_bad="$(printf '%s' "$BODY" | jq -L "$HERE" -r "$RICH_CHECK" 2>/dev/null)" || rich_bad="the display-copy check could not run (jq -L $HERE richtext.jq)" ;;
   esac
   if [ -n "${rich_bad:-}" ]; then
     echo "refusing: $rich_bad." >&2
@@ -180,10 +177,23 @@ if [ "$METHOD" != "GET" ] && [[ "$BARE_PATH" =~ ^/+bots/+([A-Za-z0-9-]+)/+versio
     exit 65
   fi
 fi
-if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ] && [ -f "${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts/$DRAFT_BOT.json" ]; then
-  pre="$("$DC" diff "$DRAFT_BOT" --record 2>/dev/null)"
-  if [ $? -eq 1 ]; then
-    { echo "WARNING: before this write, the draft had changed since this plugin last wrote it:"; printf '%s\n' "$pre" | sed -n 's/^  - /  - /p'
+# Around a draft write: note the draft before it, and what the write itself is expected to touch, so a
+# change someone else makes meanwhile is recorded as pending instead of being absorbed into the snapshot.
+EXPECT=""
+if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ]; then
+  case "$BODY" in @*) body_json="$(cat "${BODY#@}" 2>/dev/null)" ;; *) body_json="$BODY" ;; esac
+  path_id=""; [[ "$BARE_PATH" =~ ^/bots/[A-Za-z0-9-]+/draft/blocks/([A-Za-z0-9_$-]+)/*$ ]] && path_id="${BASH_REMATCH[1]}"
+  EXPECT="$(printf '%s' "${body_json:-null}" | jq -c --arg pid "$path_id" --arg m "$METHOD" --arg p "$BARE_PATH" '
+    { ids: ( [ .. | objects | (.id?, .sourcePath?, .targetPath?, .block_id?) | strings ]
+             + [ .. | objects | .delete? | arrays | .[] | if type == "string" then . else (.id? // empty) end ]
+             + (if $pid != "" then [$pid] else [] end) | unique ),
+      allow_added: (($m == "POST" and ($p | test("/draft/blocks/*$"))) or ((.blocks.add? // []) | length > 0)),
+      all: ($m == "PUT") }' 2>/dev/null)" || EXPECT=""
+  [ -n "$EXPECT" ] || EXPECT='{"ids":[],"allow_added":false,"all":false}'
+  pre="$("$DC" pre "$DRAFT_BOT" 2>/dev/null)"
+  if [ -n "$pre" ]; then
+    { echo "WARNING: before this write, the draft had changes this plugin did not make, or it has never been checked on this machine:"
+      printf '%s\n' "$pre" | sed 's/^/  - /'
       echo "Tell the person. Their edits stay in the draft; anything of yours that is gone, offer to put back. Publishing stays blocked until you run draft-check save."; } >&2
   fi
 fi
@@ -205,7 +215,12 @@ PAYLOAD="${RESPONSE%$'\n'*}"
 # before anything is printed, so a caller that stops reading early (`| head`) cannot skip it.
 if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
   if [ -n "$DRAFT_BOT" ]; then
-    "$DC" save "$DRAFT_BOT" --auto >/dev/null 2>&1 || echo "WARNING: could not save a snapshot of the draft of $DRAFT_BOT after this write, so the next publish will see your own change as unexplained. Run draft-check diff and draft-check save." >&2
+    if ! "$DC" post "$DRAFT_BOT" "$EXPECT" >/dev/null 2>&1; then
+      pend="${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts/$DRAFT_BOT.pending"
+      { mkdir -p "$(dirname "$pend")" && echo "after a write, the draft could not be re-read and saved, so what it holds now was never checked" >> "$pend"; } 2>/dev/null \
+        || echo "ERROR: could not record that the draft of $DRAFT_BOT was not checked after this write. Do not publish before draft-check diff and save." >&2
+      echo "WARNING: could not save a snapshot of the draft of $DRAFT_BOT after this write; publishing stays blocked until draft-check save." >&2
+    fi
   elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
     new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
     [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || echo "WARNING: could not save the first snapshot of bot $new_id (draft-check save $new_id)" >&2; }

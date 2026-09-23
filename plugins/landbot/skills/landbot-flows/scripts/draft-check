@@ -38,14 +38,19 @@ LB="$HERE/lb"
 STATE="${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts"
 
 OP="${1:-}"; BOT="${2:-}"; MODE="${3:-}"
-case "$OP" in save|diff|gate) ;; *) echo "usage: draft-check save|diff|gate <bot_uuid>" >&2; exit 64 ;; esac
+case "$OP" in save|diff|gate|pre|post) ;; *) echo "usage: draft-check save|diff|gate <bot_uuid>" >&2; exit 64 ;; esac
 [ -n "$BOT" ] || { echo "usage: draft-check $OP <bot_uuid>" >&2; exit 64; }
 case "$BOT" in *[!A-Za-z0-9-]*) echo "refusing: '$BOT' is not a bot uuid" >&2; exit 65 ;; esac
 SNAP="$STATE/$BOT.json"
 PENDING="$STATE/$BOT.pending"   # changes lb saw before one of its writes; cleared only by a manual save
+PRE="$STATE/$BOT.pre.json"      # the draft just before lb's current write (pre → post)
 
 draft="$("$LB" GET "/bots/$BOT/draft" 2>/dev/null)" || { echo "could not read the draft of $BOT" >&2; exit 1; }
 printf '%s' "$draft" | jq -e '.data.diagram.nodes' >/dev/null 2>&1 || { echo "the draft of $BOT came back without a diagram" >&2; exit 1; }
+# Drafts can pass 1 MB, more than a command line holds, so every comparison reads them from files.
+TMPD="$(mktemp -d)" || { echo "cannot create a temporary folder" >&2; exit 1; }
+trap 'rm -rf "$TMPD"' EXIT
+CUR="$TMPD/cur.json"; printf '%s' "$draft" | jq '.data.diagram' > "$CUR" || { echo "cannot read the diagram of $BOT" >&2; exit 1; }
 
 # The part of a draft that decides what visitors get. Positions are compared separately: a moved
 # block changes nothing for a visitor, but it does mean a builder tab saved.
@@ -75,12 +80,58 @@ save() {
 changes() {  # prints one line per change; empty when the draft matches the snapshot.
   # Fails closed: if the comparison itself fails, that is reported as a change, never as "the same".
   local out
-  out="$(jq -rn --argjson cur "$(printf '%s' "$draft" | jq '.data.diagram')" --argjson snap "$(jq '.diagram' "$SNAP")" "$COMPARE" 2>/dev/null)" \
+  jq '.diagram' "$SNAP" > "$TMPD/snap.json" 2>/dev/null || { echo "the snapshot could not be read, so the draft cannot be shown to be unchanged"; return 0; }
+  out="$(jq -rn --slurpfile c "$CUR" --slurpfile s "$TMPD/snap.json" '$c[0] as $cur | $s[0] as $snap | '"$COMPARE" 2>/dev/null)" \
     || { echo "the comparison with the snapshot failed, so the draft cannot be shown to be unchanged"; return 0; }
   printf '%s' "$out"
 }
 
+# pre: before lb writes. Keep the draft as it is now; record as pending any change since the snapshot,
+# or, with no snapshot, that this bot was never checked on this machine. Prints what it recorded.
+# post <expect-json>: after lb's write. Anything that changed between pre and now that the write itself
+# does not explain (by the block ids and connections it names) is recorded as pending; then the new draft
+# becomes the snapshot. A pending record is cleared only by a manual `save`.
+POST_CMP='
+  def body: {nodes: ((.nodes // {}) | with_entries(.value |= {template, name, params})),
+             connections: ((.connections // {}) | with_entries(.value |= {sourcePath, targetPath, type}))};
+  ($pre | body) as $a | ($cur | body) as $b |
+  ($a.nodes | keys) as $ak | ($b.nodes | keys) as $bk | ($bk - $ak) as $added |
+  def ok_node($id): $exp.all or ($exp.ids | index($id)) != null or ($exp.allow_added and ($added | index($id)) != null);
+  def ok_conn($c): $exp.all or ok_node($c.sourcePath // "") or ok_node($c.targetPath // "");
+  [ ($added[] | select(ok_node(.) | not) | "block \(.) was added"),
+    (($ak - $bk)[] | select(ok_node(.) | not) | "block \(.) was removed"),
+    (($ak - ($ak - $bk))[] | select($a.nodes[.] != $b.nodes[.]) | select(ok_node(.) | not) | "block \(.) was changed"),
+    ((($b.connections | keys) - ($a.connections | keys))[] | . as $k | select(ok_conn($b.connections[$k]) | not) | "connection \($k) was added"),
+    ((($a.connections | keys) - ($b.connections | keys))[] | . as $k | select(ok_conn($a.connections[$k]) | not) | "connection \($k) was removed"),
+    ((($b.connections | keys) - (($b.connections | keys) - ($a.connections | keys)))[] | . as $k
+       | select($a.connections[$k] != $b.connections[$k]) | select((ok_conn($a.connections[$k]) or ok_conn($b.connections[$k])) | not)
+       | "connection \($k) was changed") ] | .[]'
+
 case "$OP" in
+pre)
+  mkdir -p "$STATE" 2>/dev/null
+  printf '%s' "$draft" | jq '.data.diagram' > "$PRE.tmp" 2>/dev/null && mv "$PRE.tmp" "$PRE" || rm -f "$PRE"
+  if [ ! -f "$SNAP" ]; then
+    msg="this plugin had never checked this bot on this machine before writing it"
+    printf '%s\n' "$msg" >> "$PENDING"; echo "$msg"
+  else
+    out="$(changes)"
+    if [ -n "$out" ]; then printf '%s\n' "$out" >> "$PENDING"; printf '%s\n' "$out"; fi
+  fi
+  ;;
+post)
+  EXP="${3:-}"; [ -n "$EXP" ] || EXP='{"ids":[],"allow_added":false,"all":false}'
+  if [ -f "$PRE" ]; then
+    printf '%s' "$EXP" > "$TMPD/exp.json"
+    un="$(jq -rn --slurpfile p "$PRE" --slurpfile c "$CUR" --slurpfile e "$TMPD/exp.json" '$p[0] as $pre | $c[0] as $cur | $e[0] as $exp | '"$POST_CMP" 2>/dev/null)" \
+      || un="the comparison around this write failed, so what changed meanwhile is unknown"
+    rm -f "$PRE"
+  else
+    un="the draft before this write was not kept, so what changed meanwhile is unknown"
+  fi
+  if [ -n "$un" ]; then printf '%s\n' "$un" | sed 's/^/changed while this plugin was writing: /' >> "$PENDING"; fi
+  save || exit $?
+  ;;
 save)
   save || exit $?
   if [ "$MODE" = "--auto" ]; then exit 0; fi   # lb after its own write: a pending change stays pending
@@ -104,11 +155,9 @@ diff)
 
 gate)
   family="$("$LB" GET "/bots/$BOT" 2>/dev/null | jq -r '.data.channel_family // "landbot"')"
-  snapjson='null'; [ -f "$SNAP" ] && snapjson="$(jq '.diagram' "$SNAP")"
-  report="$(printf '%s' "$draft" | jq -r --arg fam "$family" --argjson snap "$snapjson" '
-    def plain: gsub("<br\\s*/?>"; "\n") | gsub("</p>\\s*<p[^>]*>"; "\n") | gsub("<[^>]*>"; "") | gsub("&nbsp;"; " ") | gsub("&amp;"; "&") | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&quot;"; "\"") | gsub("&#39;|&#x27;|&apos;"; "'"'"'");
-    def norm: gsub("[*_~`]"; "") | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ");
-    def undecidable($t; $r): ($t | test("<[a-zA-Z/]") or test("\\]\\(")) or ($r | plain | test("&#?[a-zA-Z0-9]+;"));
+  if [ -f "$SNAP" ]; then jq '.diagram' "$SNAP" > "$TMPD/gsnap.json" 2>/dev/null || echo null > "$TMPD/gsnap.json"; else echo null > "$TMPD/gsnap.json"; fi
+  snapjson="$(head -c 4 "$TMPD/gsnap.json")"
+  report="$(printf '%s' "$draft" | jq -L "$HERE" -r --arg fam "$family" --slurpfile gs "$TMPD/gsnap.json" 'include "richtext"; $gs[0] as $snap |
     .data as $d | ($d.diagram.nodes // {}) as $n | ($d.diagram.connections // {}) as $cn |
     ($n | keys) as $ids |
     [ $cn[] | {s: .sourcePath, t: .targetPath} ] as $edges |
@@ -127,11 +176,11 @@ gate)
           | "BLOCK: connection \(.key) points at a block that does not exist" ),
       ( $n | to_entries[] | .key as $id | (.value.params // {}) as $p
           | ([["text","richText"],["errorText","richErrorText"]][] | select(($p[.[0]] | type) == "string" and ($p[.[1]] | type) == "string" and ($p[.[0]] != "") and ($p[.[1]] != "")) ) as $pair
-          | ($p[$pair[1]] | plain | norm) as $shown | ($p[$pair[0]]) as $word
-          | if ($shown | ascii_downcase) == "ask anything" and ($word | norm | ascii_downcase) != "ask anything" then
-              "BLOCK: block \(lbl($id)) shows visitors \"Ask anything\" instead of its \($pair[0]) \"\($word | .[0:60])\". Send the wording again with \($pair[1]) left out (the API derives it) and check"
-            elif (undecidable($word; $p[$pair[1]]) | not) and $shown != ($word | norm) then
-              "WARN: block \(lbl($id)): visitors see \"\($shown | .[0:60])\" while the builder shows \"\($word | .[0:60])\" (\($pair[1]) and \($pair[0]) disagree)"
+          | ($p[$pair[1]] | rich_plain) as $shown | ($p[$pair[0]]) as $word
+          | if ($shown | ascii_downcase) == "ask anything" and ($word | text_plain | ascii_downcase) != "ask anything" then
+              "BLOCK: block \(lbl($id)) shows visitors \"Ask anything\" instead of its \($pair[0]) \"\($word | .[0:60])\". Send the wording again with \($pair[1]) left out and check"
+            elif comparable($word) and rich_differs($word; $p[$pair[1]]) then
+              "WARN: block \(lbl($id)): visitors see \"\($shown | .[0:60])\" while the builder shows \"\($word | text_plain | .[0:60])\" (\($pair[1]) and \($pair[0]) disagree)"
             else empty end ),
       ( ($ids - $reach - ["hidden"])[] | select(($n[.].template // "") | startswith("note") | not) | "WARN: block \(lbl(.)) is not reached from the start, so it never runs" ),
       ( $n | to_entries[] | select(.key != "hidden") | .key as $id | (.value.template // "") as $tpl | (.value.params // {}) as $p

@@ -90,17 +90,20 @@ esac
 # person's yes and the walk are what stand behind a custom script.
 MODULES_DIR="$HERE/../../landbot-style/modules"
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -d' ' -f1; else shasum -a 256 | cut -d' ' -f1; fi; }
-strip_config() { awk 'BEGIN{c=0} /var[[:space:]]+CONFIG[[:space:]]*=[[:space:]]*\{/ {c=1; print "/*CONFIG*/"; next} c==1 && /^[[:space:]]*\};/ {c=0; next} c==0 {print}' "$1"; }
+# The CONFIG block is recognised only by an opening line that is exactly `var CONFIG = {` and a closing
+# line that is exactly `};` (spaces aside). Anything else on those lines is not stripped, so it changes
+# the hash, or fails the plain-value check: code cannot ride along on a boundary line.
+strip_config() { awk 'BEGIN{c=0; n=0} c==0 && n==0 && /^[[:space:]]*var[[:space:]]+CONFIG[[:space:]]*=[[:space:]]*\{[[:space:]]*$/ {c=1; n=1; print "/*CONFIG*/"; next} c==1 && /^[[:space:]]*\};[[:space:]]*$/ {c=0; next} c==0 {print}' "$1"; }
 config_ok() {  # every line inside CONFIG is a plain key: value, a comment or blank
-  awk 'BEGIN{c=0; bad=0}
-    /var[[:space:]]+CONFIG[[:space:]]*=[[:space:]]*\{/ {c=1; next}
-    c==1 && /^[[:space:]]*\};/ {c=0; next}
+  awk 'BEGIN{c=0; bad=0; n=0}
+    c==0 && n==0 && /^[[:space:]]*var[[:space:]]+CONFIG[[:space:]]*=[[:space:]]*\{[[:space:]]*$/ {c=1; n=1; next}
+    c==1 && /^[[:space:]]*\};[[:space:]]*$/ {c=0; next}
     c==1 {
       line=$0; sub(/[[:space:]]*\/\/.*$/, "", line)
       if (line ~ /^[[:space:]]*$/) next
       if (line !~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:[[:space:]]*("[^"\\]*"|'"'"'[^'"'"'\\]*'"'"'|-?[0-9]+(\.[0-9]+)?|true|false)[[:space:]]*,?[[:space:]]*$/) { bad=1; print "  " NR ": " $0 }
     }
-    END{exit bad}' "$1"
+    END{if (c==1) {bad=1; print "  the CONFIG block is not closed by a line that is exactly };"} exit bad}' "$1"
 }
 check_module() {  # 0 = the plugin's own module with plain CONFIG values; 2 = not a module; 65 = refused
   local f="$1" name ref
@@ -134,9 +137,9 @@ check_custom_js() {
 }
 if [ "$OP" = "js" ] && [ -z "$CLEAR" ]; then
   [ -n "$BOT" ] || { echo "--bot <bot_uuid> is required for a write: the channel written is the one that bot owns" >&2; exit 64; }
-  check_module "$FILE"; mrc=$?
+  if [ -n "$CUSTOM" ]; then mrc=2; else check_module "$FILE"; mrc=$?; fi
   case "$mrc" in
-  0) [ -z "$CUSTOM" ] || echo "note: --custom is not needed for a ready-made module." ;;
+  0) ;;
   2) if [ -z "$CUSTOM" ]; then
        echo "refusing: $FILE is not one of the plugin's ready-made modules ($(ls "$MODULES_DIR" 2>/dev/null | sed -n 's/\.js$//p' | tr '\n' ' ')). A custom script needs --custom and the person's explicit yes to a custom script. Nothing was sent." >&2
        exit 65
@@ -232,8 +235,8 @@ esac
 if [ "$OP" = "css" ] || [ "$OP" = "js" ]; then
   key="style"; ext="css"; UPOP="CSS"; [ "$OP" = "js" ] && { key="foot"; ext="html"; UPOP="JS"; }
   mkdir -p "$BACKUP_DIR" 2>/dev/null
-  bk="$BACKUP_DIR/channel-$ID-$key-$(date -u +%Y%m%dT%H%M%SZ)-$$.$ext"; n=1
-  while [ -e "$bk" ]; do bk="$BACKUP_DIR/channel-$ID-$key-$(date -u +%Y%m%dT%H%M%SZ)-$$-$n.$ext"; n=$((n+1)); done
+  bk="$(mktemp "$BACKUP_DIR/channel-$ID-$key-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX" 2>/dev/null)" || bk=""   # atomic: never reuses a name
+  [ -n "$bk" ] || { echo "refusing: could not create a backup file in $BACKUP_DIR. Nothing was written." >&2; exit 73; }
   if printf '%s' "$body" | jq -j --arg k "$key" '.[$k] // ""' > "$bk" 2>/dev/null; then
     if [ -s "$bk" ]; then echo "backup: the channel's previous Custom $UPOP is saved in $bk (put it back with: channel $OP $bk --bot $BOT)"
     else echo "backup: the channel had no Custom $UPOP before this write (undo with: channel ${OP} $( [ "$OP" = js ] && echo "--clear" || echo "<empty file>") --bot $BOT)"; fi

