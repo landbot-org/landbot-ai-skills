@@ -185,22 +185,24 @@ if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ]; then
   path_id=""; [[ "$BARE_PATH" =~ ^/bots/[A-Za-z0-9-]+/draft/blocks/([A-Za-z0-9_$-]+)/*$ ]] && path_id="${BASH_REMATCH[1]}"
   EXPECT="$(printf '%s' "${body_json:-null}" | jq -c --arg pid "$path_id" --arg m "$METHOD" --arg p "$BARE_PATH" '
     def node_of: {params: (.params // null), name: (.name // null)};
-    def conn_of: if type == "object" then {sourcePath: (.sourcePath // .source_path), targetPath: (.targetPath // .target_path), type, id} else {id: .} end;
+    def conn_of($kind): if type == "object" then {kind: $kind, sourcePath: (.sourcePath // .source_path), targetPath: (.targetPath // .target_path), type, id} else {kind: $kind, id: .} end;
     (. // {}) as $b |
-    if $m == "PUT" then {all: true}
+    if $m == "PUT" then
+      { put: { nodes: (($b.diagram.nodes // {}) | with_entries(.value |= {params: (.params // {}), name: (.name // null), template: (.template // null)})),
+               conns: [ ($b.diagram.connections // {}) | (if type == "object" then to_entries[] | (.value + {id: .key}) else .[] end) | conn_of("add") ] } }
     elif ($p | test("/draft/blocks/[^/]+/*$")) and $m == "DELETE" then {nodes: {($pid): {delete: true}}, delete_incident: [$pid]}
     elif ($p | test("/draft/blocks/[^/]+/*$")) then {nodes: {($pid): ($b | node_of)}}
     elif ($p | test("/draft/blocks/*$")) and $m == "POST" then
       { nodes: ([ ($b.blocks // [])[] | select(.id) | {key: .id, value: (node_of + {added: true})} ] | from_entries),
         auto_added: ([ ($b.blocks // [])[] | select(.id | not) ] | length),
-        conns: [ ($b.connections // [])[] | conn_of ] }
+        conns: [ ($b.connections // [])[] | conn_of("add") ] }
     elif ($p | test("/draft/*$")) and $m == "PATCH" then
       { nodes: ([ ($b.blocks.add // [])[] | select(.id) | {key: .id, value: (node_of + {added: true})} ]
                 + [ ($b.blocks.update // [])[] | select(.id) | {key: .id, value: node_of} ]
                 + [ ($b.blocks.delete // [])[] | (if type == "string" then . else .id end) | select(.) | {key: ., value: {delete: true}} ] | from_entries),
         auto_added: ([ ($b.blocks.add // [])[] | select(.id | not) ] | length),
         delete_incident: [ ($b.blocks.delete // [])[] | (if type == "string" then . else .id end) | select(.) ],
-        conns: [ (($b.connections.add // []) + ($b.connections.delete // []))[] | conn_of ] }
+        conns: ([ ($b.connections.add // [])[] | conn_of("add") ] + [ ($b.connections.delete // [])[] | conn_of("delete") ]) }
     else {loose: ([ $b | .. | objects | (.id?, .sourcePath?, .targetPath?) | strings ] + (if $pid != "" then [$pid] else [] end))}
     end' 2>/dev/null)" || EXPECT=""
   [ -n "$EXPECT" ] || EXPECT='{}'
@@ -229,12 +231,14 @@ PAYLOAD="${RESPONSE%$'\n'*}"
 # before anything is printed, so a caller that stops reading early (`| head`) cannot skip it.
 if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
   if [ -n "$DRAFT_BOT" ]; then
-    if ! "$DC" post "$DRAFT_BOT" "$EXPECT" >/dev/null 2>&1; then
+    expf="$(mktemp 2>/dev/null)" && printf '%s' "$EXPECT" > "$expf" || expf=""
+    if [ -z "$expf" ] || ! "$DC" post "$DRAFT_BOT" "@$expf" >/dev/null 2>&1; then
       pend="${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts/$DRAFT_BOT.pending"
       { mkdir -p "$(dirname "$pend")" && echo "after a write, the draft could not be re-read and saved, so what it holds now was never checked" >> "$pend"; } 2>/dev/null \
         || echo "ERROR: could not record that the draft of $DRAFT_BOT was not checked after this write. Do not publish before draft-check diff and save." >&2
       echo "WARNING: could not save a snapshot of the draft of $DRAFT_BOT after this write; publishing stays blocked until draft-check save." >&2
     fi
+    [ -n "$expf" ] && rm -f "$expf"
   elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
     new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
     [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || echo "WARNING: could not save the first snapshot of bot $new_id (draft-check save $new_id)" >&2; }

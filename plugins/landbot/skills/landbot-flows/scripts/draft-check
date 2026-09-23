@@ -93,24 +93,42 @@ changes() {  # prints one line per change; empty when the draft matches the snap
 # becomes the snapshot. A pending record is cleared only by a manual `save`.
 POST_CMP='
   def plainp: with_entries(select(.key | test("^(rich|raw)") | not));
+  def defaultish: . == null or . == "" or . == false or . == 0 or . == [] or . == {};
   def conn_match($c; $e): ($e.id != null and $c.id == $e.id) or ($e.sourcePath != null and $c.sourcePath == $e.sourcePath and ($e.targetPath == null or $c.targetPath == $e.targetPath) and ($e.type == null or $c.type == $e.type));
+  def cset: [ to_entries[] | {id: .key, sourcePath: .value.sourcePath, targetPath: .value.targetPath, type: .value.type} ];
   ($pre.nodes // {}) as $an | ($cur.nodes // {}) as $bn | ($pre.connections // {}) as $ac | ($cur.connections // {}) as $bc |
-  ($exp.nodes // {}) as $en | ($exp.conns // []) as $ec | ($exp.delete_incident // []) as $di |
-  ($an | keys) as $ak | ($bn | keys) as $bk | (($bk - $ak) - ($en | keys)) as $unnamed_added |
-  if $exp.all then empty
+  if $exp.put then
+    # a whole-diagram write: the draft must now be what was sent, block by block and connection by connection
+    ($exp.put.nodes) as $pn |
+    [ ( (($bn | keys) - ($pn | keys))[] | "block \(.) is there although the diagram this plugin sent does not have it" ),
+      ( (($pn | keys) - ($bn | keys))[] | "block \(.) is missing although this plugin sent it" ),
+      ( ($pn | keys) - (($pn | keys) - ($bn | keys)) | .[] | . as $id
+        | ( ($pn[$id].params | plainp | to_entries[] | select($bn[$id].params[.key] != .value) | "block \($id): \(.key) is not what this plugin sent" ),
+            ( if $pn[$id].name != null and $bn[$id].name != $pn[$id].name then "block \($id): its name is not what this plugin sent" else empty end ) ) ),
+      ( ($bc | cset)[] | . as $c | select([ $exp.put.conns[] | select(conn_match($c; .)) ] | length == 0) | "connection \($c.id) is there although this plugin did not send it" ),
+      ( $exp.put.conns[] | . as $e | select([ ($bc | cset)[] | select(conn_match(.; $e)) ] | length == 0) | "a connection this plugin sent (\($e.sourcePath) → \($e.targetPath)) is missing" )
+    ] | .[]
   elif $exp.loose then
-    ( ($exp.loose) as $ids | def ok($x): ($ids | index($x)) != null;
+    ( ($exp.loose) as $ids | def ok($x): ($ids | index($x)) != null; ($an | keys) as $ak | ($bn | keys) as $bk |
       [ (($bk - $ak)[] | select(ok(.) | not) | "block \(.) was added"), (($ak - $bk)[] | select(ok(.) | not) | "block \(.) was removed"),
         (($ak - ($ak - $bk))[] | select(($an[.] | {template, name, params}) != ($bn[.] | {template, name, params})) | select(ok(.) | not) | "block \(.) was changed") ] | .[] )
   else
+  ($exp.nodes // {}) as $en | ($exp.conns // []) as $ec | ($exp.delete_incident // []) as $di |
+  [ $ec[] | select(.kind == "add") ] as $eadd | [ $ec[] | select(.kind == "delete") ] as $edel |
+  ($an | keys) as $ak | ($bn | keys) as $bk | (($bk - $ak) - ($en | keys)) as $unnamed_added |
   [
-    # the blocks this write named hold exactly what it sent
+    # the blocks this write named hold exactly what it sent; a setting it did not send may only fall back to empty
     ( $en | to_entries[] | .key as $id | .value as $e |
       if $e.delete then (if $bn[$id] then "block \($id) was to be removed and is still there" else empty end)
       elif ($bn[$id] | not) then "block \($id) is missing after this plugin wrote it"
       else
         ( if $e.params != null then
-            ($e.params | plainp | to_entries[] | select($bn[$id].params[.key] != .value) | "block \($id): \(.key) holds something other than what this plugin sent")
+            ( ($e.params | plainp | to_entries[] | select($bn[$id].params[.key] != .value) | "block \($id): \(.key) holds something other than what this plugin sent"),
+              ( if ($e.added | not) then
+                  ( (($bn[$id].params // {}) | plainp | keys) - ($e.params | keys) | .[] | . as $k
+                    | select(($bn[$id].params[$k]) != (($an[$id].params // {})[$k])) | select($bn[$id].params[$k] | defaultish | not)
+                    | "block \($id): \($k) changed although this plugin did not send it" )
+                else empty end ) )
           elif ($e.added | not) and (($bn[$id].params | plainp) != ($an[$id].params // {} | plainp)) then "block \($id): its settings changed although this plugin only renamed or moved it"
           else empty end ),
         ( if $e.name != null and $bn[$id].name != $e.name then "block \($id): its name is not what this plugin sent"
@@ -122,15 +140,12 @@ POST_CMP='
     ( if ($unnamed_added | length) > ($exp.auto_added // 0) then "\(($unnamed_added | length) - ($exp.auto_added // 0)) block(s) appeared that this write did not add: \($unnamed_added | join(", "))" else empty end ),
     ( ($ak - $bk)[] | select(($en[.] // {}).delete | not) | "block \(.) was removed" ),
     ( ($ak - ($ak - $bk))[] | select($en[.] | not) | select((($an[.] | {template, name, params}) != ($bn[.] | {template, name, params}))) | "block \(.) was changed" ),
-    # connections: only the ones this write named, or those of a block it removed
-    ( (($bc | keys) - ($ac | keys))[] | . as $k | $bc[$k] as $c | select([ $ec[] | select(conn_match($c + {id: $k}; .)) ] | length == 0)
-        | select(((($unnamed_added | index($c.sourcePath)) != null) or (($unnamed_added | index($c.targetPath)) != null)) and (($exp.auto_added // 0) > 0) | not)
-        | "connection \($k) was added" ),
-    ( (($ac | keys) - ($bc | keys))[] | . as $k | $ac[$k] as $c | select([ $ec[] | select(conn_match($c + {id: $k}; .)) ] | length == 0)
+    # connections: an added one must be one this write added; a removed one, one it deleted or of a block it removed
+    ( (($bc | keys) - ($ac | keys))[] | . as $k | ($bc[$k] + {id: $k}) as $c | select([ $eadd[] | select(conn_match($c; .)) ] | length == 0) | "connection \($k) was added" ),
+    ( (($ac | keys) - ($bc | keys))[] | . as $k | ($ac[$k] + {id: $k}) as $c | select([ $edel[] | select(conn_match($c; .)) ] | length == 0)
         | select((($di | index($c.sourcePath)) != null or ($di | index($c.targetPath)) != null) | not) | "connection \($k) was removed" ),
-    ( (($bc | keys) - (($bc | keys) - ($ac | keys)))[] | . as $k | select(($ac[$k] | {sourcePath, targetPath, type}) != ($bc[$k] | {sourcePath, targetPath, type})) | "connection \($k) was changed" ),
-    # an older write shape this check does not model: fall back to the ids it names
-    ( if $exp.loose then empty else empty end )
+    ( (($bc | keys) - (($bc | keys) - ($ac | keys)))[] | . as $k | select(($ac[$k] | {sourcePath, targetPath, type}) != ($bc[$k] | {sourcePath, targetPath, type}))
+        | ($bc[$k] + {id: $k}) as $c | select([ $eadd[] | select(conn_match($c; .)) ] | length == 0) | "connection \($k) was changed" )
   ] | .[] end'
 
 case "$OP" in
@@ -146,7 +161,7 @@ pre)
   fi
   ;;
 post)
-  EXP="${3:-}"; [ -n "$EXP" ] || EXP='{"loose":[]}'
+  EXP="${3:-}"; case "$EXP" in @*) EXP="$(cat "${EXP#@}" 2>/dev/null)" ;; esac; [ -n "$EXP" ] || EXP='{"loose":[]}'
   if [ -f "$PRE" ]; then
     printf '%s' "$EXP" > "$TMPD/exp.json"
     un="$(jq -rn --slurpfile p "$PRE" --slurpfile c "$CUR" --slurpfile e "$TMPD/exp.json" '$p[0] as $pre | $c[0] as $cur | $e[0] as $exp | '"$POST_CMP" 2>/dev/null)" \

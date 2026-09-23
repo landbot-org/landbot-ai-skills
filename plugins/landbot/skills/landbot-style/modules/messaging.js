@@ -100,18 +100,16 @@
         btn.className = 'lb-msg-btn' + (real[i].querySelector('svg') ? ' lb-msg-link' : '');
         btn.textContent = label(real[i]);
         btn.setAttribute('data-lb-msg-idx', String(i));
-        (function (realBtn, idx, groupSigAtBuild) {
-          btn.addEventListener('click', function (e) {
-            /* 1. the very button this copy was made from, while it is still on the page;
-               2. after a re-render, the button at the same position, only if the options read exactly as before;
-               3. otherwise do nothing and rebuild the copies: the visitor taps again on current ones. */
+        (function (realBtn) {
+          btn.addEventListener('click', function () {
+            /* only ever the very button this copy was made from; if Landbot has replaced it (the options
+               stay the same elements while a question is on screen, verified 2026-09-23), rebuild the copies
+               and let the visitor tap again, rather than guess by position or label */
             if (realBtn.isConnected) { realBtn.click(); return; }
-            var now = document.querySelectorAll('[data-lb-part="option-button"]');
-            if ([].map.call(now, label).join('\u0001') === groupSigAtBuild && now[idx] && label(now[idx]) === e.currentTarget.textContent) { now[idx].click(); return; }
             if (group) { group.remove(); group = null; groupBubble = null; groupSig = ''; }
             syncButtons();
           });
-        })(real[i], i, sig);
+        })(real[i]);
         row.appendChild(btn); g.appendChild(row);
       }
       bubble.appendChild(g);

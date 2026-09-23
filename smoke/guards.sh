@@ -161,6 +161,27 @@ MOCK_DRAFT="$T/renamed-and-edited.json" "$DK" post BOTU '{"nodes":{"welcome":{"p
 g "a rename does not absorb someone else's text edit" 65 renamed-and-edited.json
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/renamed-and-edited.json" "$DK" post BOTU '{"nodes":{"welcome":{"params":{},"name":"Hello"}}}' >/dev/null 2>&1
+g "empty params do not absorb a text edit"  65 renamed-and-edited.json
+# a PUT: the draft must now be the diagram sent
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+jq -c '{put: {nodes: (.data.diagram.nodes | with_entries(.value |= {params: (.params // {}), name: (.name // null)})), conns: [.data.diagram.connections | to_entries[] | .value + {id: .key, kind: "add"}]}}' "$T/good.json" > "$T/exp-put.json"
+MOCK_DRAFT="$T/edited.json" "$DK" post BOTU "@$T/exp-put.json" >/dev/null 2>&1
+g "a PUT does not absorb an edit made meanwhile" 65 edited.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" post BOTU "@$T/exp-put.json" >/dev/null 2>&1
+g "a PUT that landed as sent is not pending"     0 good.json
+# a connection delete does not authorise a new connection from the same output
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+jq '.data.diagram.nodes.d = {id:"d",template:"chat",params:{messages:[{text:"D"}],buttons:[]}} | del(.data.diagram.connections["welcome.$success--bye"]) | .data.diagram.connections["welcome.$success--d"] = {sourcePath:"welcome",targetPath:"d",type:"$success"}' "$T/good.json" > "$T/del-add.json"
+MOCK_DRAFT="$T/del-add.json" "$DK" post BOTU '{"conns":[{"kind":"delete","sourcePath":"welcome","type":"$success"}]}' >/dev/null 2>&1
+g "a delete does not authorise an addition"   65 del-add.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/edited.json" "$DK" post BOTU "$(jq -c '{nodes: {bye: {params: .data.diagram.nodes.bye.params}}}' "$T/good.json")" >/dev/null 2>&1
 g "someone else's change during a write is pending" 65 edited.json
 rm -rf "$T/state"
