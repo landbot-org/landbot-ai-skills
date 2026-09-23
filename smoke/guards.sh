@@ -84,6 +84,8 @@ printf '/* lb-js: t */\nlocation.href = "https://x.example/";\n' > "$T/loc.js"
 t "custom js: new Image beacon"  65:0 "$C" js "$T/img.js" --bot BOT --custom
 t "custom js: document[cookie]"  65:0 "$C" js "$T/cookie2.js" --bot BOT --custom
 t "custom js: navigation"        65:0 "$C" js "$T/loc.js" --bot BOT --custom
+awk 'NR==1{print} /var CONFIG = \{/ && !d {print; printf "    //\342\200\250leak: (function(){ return 1; })(),\n"; d=1; next} NR>1{print}' "$TROOT/landbot-style/modules/steps.js" > "$T/steps-ls.js"
+t "module with a U+2028 comment trick refused" 65:0 "$C" js "$T/steps-ls.js" --bot BOT
 M="$TROOT/landbot-style/modules"
 sed 's/total: 5, /total: 3, /' "$M/steps.js" > "$T/steps-cfg.js"
 sed 's/total: 5, /total: (function(){ return 3; })(), /' "$M/steps.js" > "$T/steps-fn.js"
@@ -150,15 +152,20 @@ g "manual save clears the pending change"     0 edited.json
 # around a write: a change the write does not explain becomes pending; the write's own change does not
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
-MOCK_DRAFT="$T/edited.json" "$DK" post BOTU '{"ids":["welcome"],"allow_added":false,"all":false}' >/dev/null 2>&1
+MOCK_DRAFT="$T/edited.json" "$DK" post BOTU "$(jq -c '{nodes: {welcome: {params: .data.diagram.nodes.welcome.params}}}' "$T/edited.json")" >/dev/null 2>&1
 g "own change around a write is not pending"  0 edited.json
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
-MOCK_DRAFT="$T/edited.json" "$DK" post BOTU '{"ids":["bye"],"allow_added":false,"all":false}' >/dev/null 2>&1
+jq '.data.diagram.nodes.welcome.name = "Hello"' "$T/edited.json" > "$T/renamed-and-edited.json"
+MOCK_DRAFT="$T/renamed-and-edited.json" "$DK" post BOTU '{"nodes":{"welcome":{"params":null,"name":"Hello"}}}' >/dev/null 2>&1
+g "a rename does not absorb someone else's text edit" 65 renamed-and-edited.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/edited.json" "$DK" post BOTU "$(jq -c '{nodes: {bye: {params: .data.diagram.nodes.bye.params}}}' "$T/good.json")" >/dev/null 2>&1
 g "someone else's change during a write is pending" 65 edited.json
 rm -rf "$T/state"
 MOCK_DRAFT="$T/good.json" "$DK" pre BOTU >/dev/null 2>&1
-MOCK_DRAFT="$T/good.json" "$DK" post BOTU '{"ids":["welcome"],"allow_added":false,"all":false}' >/dev/null 2>&1
+MOCK_DRAFT="$T/good.json" "$DK" post BOTU "$(jq -c '{nodes: {welcome: {params: .data.diagram.nodes.welcome.params}}}' "$T/good.json")" >/dev/null 2>&1
 g "first write on this machine stays pending"  65 good.json
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
@@ -227,6 +234,8 @@ t "Chinese richText matching sent"                  1:0 "$L" PATCH /bots/x/draft
 t "multi-line richText matching sent"               1:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Line one\nLine two","richText":"<p>Line one</p><p>Line two</p>"}}'
 t "numeric entity hiding a change refused"         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Pay $1.00","richText":"<p>Pay &#36;100</p>"}}'
 t "markdown link matching sent"                     1:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"See [our site](https://x.example)","richText":"<p>See <a href=\"https://x.example\">our site</a></p>"}}'
+t "HTML wording with a different price refused"   65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"<b>Pay $1.00</b>","richText":"<p>Pay $100</p>"}}'
+t "markdown-looking display copy refused"         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Pay $100","richText":"<p>[Pay $100](plus $900)</p>"}}'
 t "unknown entity refused"                         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Hi","richText":"<p>Hi &hellip;</p>"}}'
 
 echo "guards: $pass passed, $fail failed"

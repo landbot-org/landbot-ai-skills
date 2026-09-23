@@ -92,20 +92,46 @@ changes() {  # prints one line per change; empty when the draft matches the snap
 # does not explain (by the block ids and connections it names) is recorded as pending; then the new draft
 # becomes the snapshot. A pending record is cleared only by a manual `save`.
 POST_CMP='
-  def body: {nodes: ((.nodes // {}) | with_entries(.value |= {template, name, params})),
-             connections: ((.connections // {}) | with_entries(.value |= {sourcePath, targetPath, type}))};
-  ($pre | body) as $a | ($cur | body) as $b |
-  ($a.nodes | keys) as $ak | ($b.nodes | keys) as $bk | ($bk - $ak) as $added |
-  def ok_node($id): $exp.all or ($exp.ids | index($id)) != null or ($exp.allow_added and ($added | index($id)) != null);
-  def ok_conn($c): $exp.all or ok_node($c.sourcePath // "") or ok_node($c.targetPath // "");
-  [ ($added[] | select(ok_node(.) | not) | "block \(.) was added"),
-    (($ak - $bk)[] | select(ok_node(.) | not) | "block \(.) was removed"),
-    (($ak - ($ak - $bk))[] | select($a.nodes[.] != $b.nodes[.]) | select(ok_node(.) | not) | "block \(.) was changed"),
-    ((($b.connections | keys) - ($a.connections | keys))[] | . as $k | select(ok_conn($b.connections[$k]) | not) | "connection \($k) was added"),
-    ((($a.connections | keys) - ($b.connections | keys))[] | . as $k | select(ok_conn($a.connections[$k]) | not) | "connection \($k) was removed"),
-    ((($b.connections | keys) - (($b.connections | keys) - ($a.connections | keys)))[] | . as $k
-       | select($a.connections[$k] != $b.connections[$k]) | select((ok_conn($a.connections[$k]) or ok_conn($b.connections[$k])) | not)
-       | "connection \($k) was changed") ] | .[]'
+  def plainp: with_entries(select(.key | test("^(rich|raw)") | not));
+  def conn_match($c; $e): ($e.id != null and $c.id == $e.id) or ($e.sourcePath != null and $c.sourcePath == $e.sourcePath and ($e.targetPath == null or $c.targetPath == $e.targetPath) and ($e.type == null or $c.type == $e.type));
+  ($pre.nodes // {}) as $an | ($cur.nodes // {}) as $bn | ($pre.connections // {}) as $ac | ($cur.connections // {}) as $bc |
+  ($exp.nodes // {}) as $en | ($exp.conns // []) as $ec | ($exp.delete_incident // []) as $di |
+  ($an | keys) as $ak | ($bn | keys) as $bk | (($bk - $ak) - ($en | keys)) as $unnamed_added |
+  if $exp.all then empty
+  elif $exp.loose then
+    ( ($exp.loose) as $ids | def ok($x): ($ids | index($x)) != null;
+      [ (($bk - $ak)[] | select(ok(.) | not) | "block \(.) was added"), (($ak - $bk)[] | select(ok(.) | not) | "block \(.) was removed"),
+        (($ak - ($ak - $bk))[] | select(($an[.] | {template, name, params}) != ($bn[.] | {template, name, params})) | select(ok(.) | not) | "block \(.) was changed") ] | .[] )
+  else
+  [
+    # the blocks this write named hold exactly what it sent
+    ( $en | to_entries[] | .key as $id | .value as $e |
+      if $e.delete then (if $bn[$id] then "block \($id) was to be removed and is still there" else empty end)
+      elif ($bn[$id] | not) then "block \($id) is missing after this plugin wrote it"
+      else
+        ( if $e.params != null then
+            ($e.params | plainp | to_entries[] | select($bn[$id].params[.key] != .value) | "block \($id): \(.key) holds something other than what this plugin sent")
+          elif ($e.added | not) and (($bn[$id].params | plainp) != ($an[$id].params // {} | plainp)) then "block \($id): its settings changed although this plugin only renamed or moved it"
+          else empty end ),
+        ( if $e.name != null and $bn[$id].name != $e.name then "block \($id): its name is not what this plugin sent"
+          elif $e.name == null and ($e.added | not) and $bn[$id].name != $an[$id].name then "block \($id): its name changed although this plugin did not rename it"
+          else empty end ),
+        ( if ($e.added | not) and $an[$id] and $bn[$id].template != $an[$id].template then "block \($id) changed type" else empty end )
+      end ),
+    # nothing else changed, except blocks the API numbered for this write
+    ( if ($unnamed_added | length) > ($exp.auto_added // 0) then "\(($unnamed_added | length) - ($exp.auto_added // 0)) block(s) appeared that this write did not add: \($unnamed_added | join(", "))" else empty end ),
+    ( ($ak - $bk)[] | select(($en[.] // {}).delete | not) | "block \(.) was removed" ),
+    ( ($ak - ($ak - $bk))[] | select($en[.] | not) | select((($an[.] | {template, name, params}) != ($bn[.] | {template, name, params}))) | "block \(.) was changed" ),
+    # connections: only the ones this write named, or those of a block it removed
+    ( (($bc | keys) - ($ac | keys))[] | . as $k | $bc[$k] as $c | select([ $ec[] | select(conn_match($c + {id: $k}; .)) ] | length == 0)
+        | select(((($unnamed_added | index($c.sourcePath)) != null) or (($unnamed_added | index($c.targetPath)) != null)) and (($exp.auto_added // 0) > 0) | not)
+        | "connection \($k) was added" ),
+    ( (($ac | keys) - ($bc | keys))[] | . as $k | $ac[$k] as $c | select([ $ec[] | select(conn_match($c + {id: $k}; .)) ] | length == 0)
+        | select((($di | index($c.sourcePath)) != null or ($di | index($c.targetPath)) != null) | not) | "connection \($k) was removed" ),
+    ( (($bc | keys) - (($bc | keys) - ($ac | keys)))[] | . as $k | select(($ac[$k] | {sourcePath, targetPath, type}) != ($bc[$k] | {sourcePath, targetPath, type})) | "connection \($k) was changed" ),
+    # an older write shape this check does not model: fall back to the ids it names
+    ( if $exp.loose then empty else empty end )
+  ] | .[] end'
 
 case "$OP" in
 pre)
@@ -113,14 +139,14 @@ pre)
   printf '%s' "$draft" | jq '.data.diagram' > "$PRE.tmp" 2>/dev/null && mv "$PRE.tmp" "$PRE" || rm -f "$PRE"
   if [ ! -f "$SNAP" ]; then
     msg="this plugin had never checked this bot on this machine before writing it"
-    printf '%s\n' "$msg" >> "$PENDING"; echo "$msg"
+    printf '%s\n' "$msg" >> "$PENDING" || { echo "cannot record a pending change in $PENDING" >&2; exit 1; }; echo "$msg"
   else
     out="$(changes)"
-    if [ -n "$out" ]; then printf '%s\n' "$out" >> "$PENDING"; printf '%s\n' "$out"; fi
+    if [ -n "$out" ]; then printf '%s\n' "$out" >> "$PENDING" || { echo "cannot record a pending change in $PENDING" >&2; exit 1; }; printf '%s\n' "$out"; fi
   fi
   ;;
 post)
-  EXP="${3:-}"; [ -n "$EXP" ] || EXP='{"ids":[],"allow_added":false,"all":false}'
+  EXP="${3:-}"; [ -n "$EXP" ] || EXP='{"loose":[]}'
   if [ -f "$PRE" ]; then
     printf '%s' "$EXP" > "$TMPD/exp.json"
     un="$(jq -rn --slurpfile p "$PRE" --slurpfile c "$CUR" --slurpfile e "$TMPD/exp.json" '$p[0] as $pre | $c[0] as $cur | $e[0] as $exp | '"$POST_CMP" 2>/dev/null)" \
@@ -129,7 +155,10 @@ post)
   else
     un="the draft before this write was not kept, so what changed meanwhile is unknown"
   fi
-  if [ -n "$un" ]; then printf '%s\n' "$un" | sed 's/^/changed while this plugin was writing: /' >> "$PENDING"; fi
+  if [ -n "$un" ]; then
+    printf '%s\n' "$un" | sed 's/^/changed while this plugin was writing: /' >> "$PENDING" \
+      || { echo "cannot record a pending change in $PENDING; the snapshot is left as it was" >&2; exit 1; }
+  fi
   save || exit $?
   ;;
 save)

@@ -100,14 +100,18 @@
         btn.className = 'lb-msg-btn' + (real[i].querySelector('svg') ? ' lb-msg-link' : '');
         btn.textContent = label(real[i]);
         btn.setAttribute('data-lb-msg-idx', String(i));
-        btn.addEventListener('click', function (e) {
-          /* forward by position, so two buttons with the same label still open their own branch; only when
-             the real options are no longer the ones this copy was made from, fall back to the label */
-          var idx = parseInt(e.currentTarget.getAttribute('data-lb-msg-idx'), 10), want = e.currentTarget.textContent;
-          var now = document.querySelectorAll('[data-lb-part="option-button"]');
-          if ([].map.call(now, label).join('\u0001') === sig && now[idx]) { now[idx].click(); return; }
-          for (var k = 0; k < now.length; k++) if (label(now[k]) === want) { now[k].click(); return; }
-        });
+        (function (realBtn, idx, groupSigAtBuild) {
+          btn.addEventListener('click', function (e) {
+            /* 1. the very button this copy was made from, while it is still on the page;
+               2. after a re-render, the button at the same position, only if the options read exactly as before;
+               3. otherwise do nothing and rebuild the copies: the visitor taps again on current ones. */
+            if (realBtn.isConnected) { realBtn.click(); return; }
+            var now = document.querySelectorAll('[data-lb-part="option-button"]');
+            if ([].map.call(now, label).join('\u0001') === groupSigAtBuild && now[idx] && label(now[idx]) === e.currentTarget.textContent) { now[idx].click(); return; }
+            if (group) { group.remove(); group = null; groupBubble = null; groupSig = ''; }
+            syncButtons();
+          });
+        })(real[i], i, sig);
         row.appendChild(btn); g.appendChild(row);
       }
       bubble.appendChild(g);

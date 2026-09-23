@@ -184,12 +184,26 @@ if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ]; then
   case "$BODY" in @*) body_json="$(cat "${BODY#@}" 2>/dev/null)" ;; *) body_json="$BODY" ;; esac
   path_id=""; [[ "$BARE_PATH" =~ ^/bots/[A-Za-z0-9-]+/draft/blocks/([A-Za-z0-9_$-]+)/*$ ]] && path_id="${BASH_REMATCH[1]}"
   EXPECT="$(printf '%s' "${body_json:-null}" | jq -c --arg pid "$path_id" --arg m "$METHOD" --arg p "$BARE_PATH" '
-    { ids: ( [ .. | objects | (.id?, .sourcePath?, .targetPath?, .block_id?) | strings ]
-             + [ .. | objects | .delete? | arrays | .[] | if type == "string" then . else (.id? // empty) end ]
-             + (if $pid != "" then [$pid] else [] end) | unique ),
-      allow_added: (($m == "POST" and ($p | test("/draft/blocks/*$"))) or ((.blocks.add? // []) | length > 0)),
-      all: ($m == "PUT") }' 2>/dev/null)" || EXPECT=""
-  [ -n "$EXPECT" ] || EXPECT='{"ids":[],"allow_added":false,"all":false}'
+    def node_of: {params: (.params // null), name: (.name // null)};
+    def conn_of: if type == "object" then {sourcePath: (.sourcePath // .source_path), targetPath: (.targetPath // .target_path), type, id} else {id: .} end;
+    (. // {}) as $b |
+    if $m == "PUT" then {all: true}
+    elif ($p | test("/draft/blocks/[^/]+/*$")) and $m == "DELETE" then {nodes: {($pid): {delete: true}}, delete_incident: [$pid]}
+    elif ($p | test("/draft/blocks/[^/]+/*$")) then {nodes: {($pid): ($b | node_of)}}
+    elif ($p | test("/draft/blocks/*$")) and $m == "POST" then
+      { nodes: ([ ($b.blocks // [])[] | select(.id) | {key: .id, value: (node_of + {added: true})} ] | from_entries),
+        auto_added: ([ ($b.blocks // [])[] | select(.id | not) ] | length),
+        conns: [ ($b.connections // [])[] | conn_of ] }
+    elif ($p | test("/draft/*$")) and $m == "PATCH" then
+      { nodes: ([ ($b.blocks.add // [])[] | select(.id) | {key: .id, value: (node_of + {added: true})} ]
+                + [ ($b.blocks.update // [])[] | select(.id) | {key: .id, value: node_of} ]
+                + [ ($b.blocks.delete // [])[] | (if type == "string" then . else .id end) | select(.) | {key: ., value: {delete: true}} ] | from_entries),
+        auto_added: ([ ($b.blocks.add // [])[] | select(.id | not) ] | length),
+        delete_incident: [ ($b.blocks.delete // [])[] | (if type == "string" then . else .id end) | select(.) ],
+        conns: [ (($b.connections.add // []) + ($b.connections.delete // []))[] | conn_of ] }
+    else {loose: ([ $b | .. | objects | (.id?, .sourcePath?, .targetPath?) | strings ] + (if $pid != "" then [$pid] else [] end))}
+    end' 2>/dev/null)" || EXPECT=""
+  [ -n "$EXPECT" ] || EXPECT='{}'
   pre="$("$DC" pre "$DRAFT_BOT" 2>/dev/null)"
   if [ -n "$pre" ]; then
     { echo "WARNING: before this write, the draft had changes this plugin did not make, or it has never been checked on this machine:"
