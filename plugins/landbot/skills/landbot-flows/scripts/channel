@@ -5,6 +5,14 @@
 #   channel get <channel_id>                     same, by numeric channel id
 #   channel v4  --bot <bot_uuid>                 set version 3.1.0 (the v4 web chat) — a WRITE
 #   channel css <file.css> --bot <bot_uuid>      set Custom CSS from a file          — a WRITE
+#   channel js  <file.js>  --bot <bot_uuid>      set Custom JS from a file           — a WRITE
+#   channel js  --clear    --bot <bot_uuid>      remove the channel's Custom JS      — a WRITE
+#
+# Every css/js write first saves what the channel held to a backup file and prints its path, so
+# `channel css|js <backup> --bot <uuid>` puts it back. Custom JS is checked before anything is
+# sent (see check_js below), and after the write the published config is read to tell "live for
+# visitors" from "stored but not served": Landbot serves Custom JS only on plans with the Custom
+# Code add-on (Starter, Professional, Business), not on Sandbox and not during the free trial.
 #
 # The channel is found from the bot; you never type its id. A numeric id may still be given
 # (`channel v4 <channel_id> --bot <uuid>`, `channel css <channel_id> <file.css> --bot <uuid>`, or
@@ -27,17 +35,20 @@ V1="${LANDBOT_API_V1_URL:-https://api.landbot.io/v1}"
 readonly MAX_AGE_H=24
 
 usage() {
-  echo "usage: channel get --bot <uuid> | channel get <channel_id> | channel v4 --bot <uuid> | channel css <file.css> --bot <uuid>" >&2
+  echo "usage: channel get --bot <uuid> | channel get <channel_id> | channel v4 --bot <uuid> | channel css <file.css> --bot <uuid> | channel js <file.js> --bot <uuid> | channel js --clear --bot <uuid>" >&2
   exit 64
 }
+BACKUP_DIR="${LANDBOT_STATE_DIR:-$HOME/.landbot}/backups"
+MAX_JS=60000
 is_num() { case "${1:-}" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
 OP="${1:-}"; [ -n "$OP" ] || usage; shift
-BOT=""; ID=""; FILE=""; POS=()
+BOT=""; ID=""; FILE=""; POS=(); CLEAR=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
   --bot) BOT="${2:-}"; [ -n "$BOT" ] || usage; shift 2 ;;
   --id)  ID="${2:-}";  [ -n "$ID" ]  || usage; shift 2 ;;
+  --clear) CLEAR=1; shift ;;
   -*)    usage ;;
   *)     POS+=("$1"); shift ;;
   esac
@@ -55,8 +66,36 @@ css)
   *) usage ;;
   esac
   [ -r "$FILE" ] || { echo "cannot read $FILE" >&2; exit 66; } ;;
+js)
+  if [ -n "$CLEAR" ]; then [ "${#POS[@]}" -eq 0 ] || usage
+  else [ "${#POS[@]}" -eq 1 ] || usage; FILE="${POS[0]}"; [ -r "$FILE" ] || { echo "cannot read $FILE" >&2; exit 66; }; fi ;;
 *) usage ;;
 esac
+[ -z "$CLEAR" ] || [ "$OP" = "js" ] || usage
+
+# Custom JS runs in every visitor's page, so it is checked here, before the network is touched:
+#   - a marker comment `lb-js: <name>` so a published script can always be recognised;
+#   - no `#{` anywhere (Landbot's firewall answers such a body with a 403, verified 2026-09-22);
+#   - at most MAX_JS characters: this is page behaviour, not an application;
+#   - nothing that sends data, reads cookies, loads code from elsewhere or evaluates strings.
+#     Custom JS from this plugin changes how the chat looks and behaves on the page, never where
+#     the visitor's data goes. Integrations belong in the flow (webhook blocks), where they are
+#     visible in the builder.
+check_js() {
+  local f="$1" n bad
+  n="$(wc -c < "$f" | tr -d ' ')"
+  if [ "$n" -gt "$MAX_JS" ]; then echo "refusing: $f is $n characters; the limit is $MAX_JS. Custom JS here is page behaviour, not an application. Nothing was sent." >&2; return 65; fi
+  if ! grep -q 'lb-js:' "$f"; then echo "refusing: $f has no 'lb-js: <name>' marker comment. Add one on the first line (for example /* lb-js: steps 0.3.4 */). Nothing was sent." >&2; return 65; fi
+  if grep -qF '#{' "$f"; then echo "refusing: $f contains '#{', which Landbot's firewall rejects with a 403. Write it differently (for example '#' + '{'). Nothing was sent." >&2; return 65; fi
+  bad="$(grep -noE 'fetch[[:space:]]*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|document\.cookie|(^|[^A-Za-z0-9_$])eval[[:space:]]*\(|new[[:space:]]+Function|import[[:space:]]*\(|createElement\([[:space:]]*.script|<script[^>]*[[:space:]]src[[:space:]]*=|<iframe' "$f" | head -3 | tr '\n' ' ')"
+  if [ -n "$bad" ]; then
+    echo "refusing: $f uses something Custom JS from this plugin never does (line:match): $bad" >&2
+    echo "It may change how the chat looks and behaves on the page; it never sends data, reads cookies, loads code from elsewhere or evaluates strings. Put integrations in the flow (a webhook block). Nothing was sent." >&2
+    return 65
+  fi
+  return 0
+}
+if [ "$OP" = "js" ] && [ -z "$CLEAR" ]; then check_js "$FILE" || exit $?; fi
 
 if [ -n "$ID" ] && ! is_num "$ID"; then
   echo "refusing: '$ID' is not a channel id. Pass --bot <bot_uuid> and the channel is found for you." >&2
@@ -133,7 +172,25 @@ v4)
 css)
   payload="$(jq -Rs '{style: .}' < "$FILE")"
   ;;
+js)
+  if [ -n "$CLEAR" ]; then payload='{"foot":""}'
+  elif grep -qi '<script' "$FILE"; then payload="$(jq -Rs '{foot: .}' < "$FILE")"
+  else payload="$( { printf '<script>\n'; cat "$FILE"; printf '\n</script>\n'; } | jq -Rs '{foot: .}')"; fi
+  ;;
 esac
+
+# Keep what the channel holds now, so the write can be undone with the same command.
+if [ "$OP" = "css" ] || [ "$OP" = "js" ]; then
+  key="style"; ext="css"; UPOP="CSS"; [ "$OP" = "js" ] && { key="foot"; ext="html"; UPOP="JS"; }
+  mkdir -p "$BACKUP_DIR" 2>/dev/null
+  bk="$BACKUP_DIR/channel-$ID-$key-$(date -u +%Y%m%dT%H%M%SZ).$ext"
+  if printf '%s' "$body" | jq -r --arg k "$key" '.[$k] // ""' > "$bk" 2>/dev/null; then
+    if [ -s "$bk" ]; then echo "backup: the channel's previous Custom $UPOP is saved in $bk (put it back with: channel $OP $bk --bot $BOT)"
+    else echo "backup: the channel had no Custom $UPOP before this write (undo with: channel ${OP} $( [ "$OP" = js ] && echo "--clear" || echo "<empty file>") --bot $BOT)"; fi
+  else
+    echo "refusing: could not save a backup of the current Custom $UPOP to $BACKUP_DIR. Nothing was written." >&2; exit 73
+  fi
+fi
 
 LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/" "$payload" >/dev/null 2>&1 || { echo "the write was refused; nothing changed" >&2; exit 1; }
 after="$(read_channel)" || exit 1
@@ -148,5 +205,24 @@ css) # Landbot trims trailing whitespace from the stored CSS, so compare the two
      same="$(jq -n --rawfile f "$FILE" --argjson a "$after" '(($a.style // "") | sub("\\s+$"; "")) == ($f | sub("\\s+$"; ""))')"
      [ "$same" = "true" ] || { echo "PATCH answered but the channel holds $len characters of CSS that differ from the file's $want" >&2; exit 1; }
      echo "channel $ID (bot $BOT): Custom CSS set, $len characters." ;;
+js)  same="$(jq -n --argjson a "$after" --argjson p "$payload" '(($a.foot // "") | sub("\\s+$"; "")) == (($p.foot // "") | sub("\\s+$"; ""))')"
+     [ "$same" = "true" ] || { echo "PATCH answered but the channel holds Custom JS that differs from what was sent" >&2; exit 1; }
+     len="$(printf '%s' "$after" | jq -r '(.foot // "") | length')"
+     if [ -n "$CLEAR" ]; then echo "channel $ID (bot $BOT): Custom JS removed."; else echo "channel $ID (bot $BOT): Custom JS set, $len characters."; fi
+     # Stored is not served: the published config carries `foot` only on plans with the Custom Code add-on.
+     cfg="$(printf '%s' "$after" | jq -r '.config_url // empty')"
+     if [ -n "$cfg" ] && [ -z "$CLEAR" ]; then
+       served=""; for _ in 1 2 3; do
+         served="$(curl -sS -f "$cfg" 2>/dev/null | jq -r '(.foot // "") | length' 2>/dev/null)"; [ "${served:-0}" -gt 0 ] 2>/dev/null && break; sleep 2; done
+       if [ "${served:-0}" -gt 0 ] 2>/dev/null; then
+         echo "served: the published config carries it ($served characters): live for visitors now."
+       else
+         echo "NOT SERVED: the Custom JS is stored on the channel, but the published config does not carry it." >&2
+         echo "Landbot serves Custom JS only on plans with the Custom Code add-on (Starter, Professional, Business); not on Sandbox and not during the free trial. Visitors get the chat without it, which is why a behaviour module must never be needed for the chat to work." >&2
+         exit 3
+       fi
+     fi
+     echo "Walk the chat in a browser before calling it done: a script can break the page for every visitor, and only a walk shows it." ;;
 esac
+[ "$OP" = "js" ] && exit 0
 echo "This is live for visitors now (the published config is regenerated by the channels API). Run verify-share on the share URL to confirm."

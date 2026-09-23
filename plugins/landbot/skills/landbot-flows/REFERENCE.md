@@ -37,9 +37,20 @@ So, before every `PUT /draft` or `DELETE /draft/blocks/{id}`:
 - Five or more `buttons` options render as a boxed list with a search field, not a row of buttons (seen 2026-09-22).
 - Enter submits short text inputs. A native Back button exists and returns to an editable earlier input on the paths tested; branch-changing rollback was not tested.
 - Test each screen and input type, each branch, validation and the final values. `violations: []` means no API rule fired; it does not mean the visitor experience works.
+- A question keeps its words twice: `text` for the builder and `richText` (HTML, `<p>line</p>` per line) for the visitor's chat. The v4 web chat shows `richText` (since about 2026-09-21). A write that carries an old `richText` with a new `text` changes the builder and not the chat (found 2026-09-22 on a published bot). Bots written through this API before 2026-09-18 can show "Ask anything" in place of a question: three TourTlee demos and a YB Host demo did on 2026-09-23. Copying a whole flow with `PUT /draft` carries the old value along.
+- URL parameters on the share link reach later messages as fields, but not the greeting; on the first turn a Set-a-field of the same name can lose to the URL value. Copy URL values into fields of your own before using them.
+
+## Formulas (`formulas` block): traps found on production, 2026-09-22
+
+- `IsGreater(@a, @b)` on two fields compares them as **text**. For numbers, `IsLess(ToFloat(@x), 10)`.
+- `If(...)` returns floats: wrap with `ToInteger(...)` when an integer is shown. Sums drift: `Round(..., 2)`.
+- `RegexTest(pattern, value)` takes the **pattern first**; the other order returns False, silently.
+- The function is `Concat`, not `Concatenate` (refused when written).
+- An empty `set_a_field` value is refused (`param_non_empty`); `UNSET` takes `variables: [{"value": {"name": "field"}}]`.
+- The vocabulary has no signatures in the catalog. Try an unknown function on a throwaway bot, never on the person's.
 
 ## What this skill does not do
 
 - It does not style. Presentation is the `landbot-style` skill, which consumes the `LANDBOT_HANDOFF` line this skill prints.
-- It does not write channel settings. The Bots API has no channel-style operation, and channel writes can be live immediately.
+- It writes three channel settings, and only through `scripts/channel`, only on a channel of a bot created in this session: the web chat version (v4), Custom CSS and Custom JS. Each is live at once. Other channel settings (typing indicator, hidden fields, header text, system messages, page head) are not written by this plugin.
 - It does not enforce the plan. `required_tier` is recorded, not checked. Name the tier when you place `formulas` (professional) or `ai_agent`, `conditions`, `webhook` (starter).

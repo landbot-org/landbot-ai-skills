@@ -30,7 +30,9 @@ Avatars are images from the bot configuration, not colours. Multi-select `option
 - On `3.1.0`, `ask_yes_no` never renders and `code` blocks are skipped silently. Build Yes/No as `buttons`. This belongs to the flow, but a styling request is often where it is first noticed.
 - Enter submits short text inputs on `3.1.0`.
 - Input-row trap: the submit wrapper inside `input-field` is full width. Any rule that turns the row into a flex container lets it swallow the width and the `<input>` collapses to about 23 px. Pair it with `> input { flex:1 1 0%; width:auto; min-width:0 }` and `> div { flex:0 0 auto; width:auto }`, then type real text and measure `input.getBoundingClientRect().width`.
-- Channel Custom JS (Design › Custom code › Add JS) runs on the share page on `3.1.0` when the brand has that add-on. It is a separate surface from flow `code` blocks. Use it for behaviour only when asked and authorised; never for data.
+- Channel Custom JS (Design › Custom code › Add JS, the channel's `foot`) runs on the share page on `3.1.0`. It is a separate surface from flow `code` blocks. Landbot serves it only on plans with the Custom Code add-on: Starter, Professional and Business carry it; Sandbox and the free trial do not (read in Landbot's code 2026-09-23: the trial's feature groups leave the add-on out). On those, the script is stored and not served, so a look must never need its script to work.
+- Use it for behaviour only, when asked and authorised, and never for data: `scripts/channel js` refuses a script that sends data, reads cookies, loads code from elsewhere or evaluates strings. Start from `modules/` (messaging, steps).
+- A dark look also needs the channel's `design` colours, or the page shows a white loader before the chat draws. This plugin does not write `design`; say so when a dark look is asked for.
 
 ## 5. Welcome screens on form-style replicas
 

@@ -1,0 +1,81 @@
+/* lb-js companion: messaging 0.3.4 — append after the look's own CSS, in the same Custom CSS block.
+   Every rule here styles something messaging.js adds (body.lb-js-messaging and its classes, data-lb-ts,
+   data-lb-daychip, #lb-msg-composer, .lb-msg-*). Without the script (a plan without the Custom Code
+   add-on, a script error) none of it applies and the chat keeps Landbot's own buttons and input.
+   Set the colours in the look's :root; the defaults are a neutral messaging palette. */
+:root {
+  --lbm-meta: #667781;          /* timestamps, "typing…", icons */
+  --lbm-divider: #E9EDEF;       /* lines between reply buttons */
+  --lbm-chip-bg: #FFFFFF;       /* day chip */
+  --lbm-chip-text: #111B21;
+  --lbm-btn-bg: #EBEBEB;        /* reply buttons inside the bubble */
+  --lbm-btn-bg-hover: #E1E1E1;
+  --lbm-btn-text: #111B21;
+  --lbm-btn-done: #54656F;      /* answered buttons */
+  --lbm-field-bg: #FFFFFF;      /* decorative composer */
+  --lbm-field-text: #8696A0;
+  --lbm-send-bg: #1DAA61;       /* the round button at the end of the composer */
+}
+
+/* timestamps and day chip, drawn from the attributes the script writes */
+body.lb-js-messaging [data-lb-part="message-bubble"] > * { order: 0; }
+body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-ts]::after {
+  content: attr(data-lb-ts); order: 1; margin-left: auto; position: relative; top: 4px;
+  font-size: 11px; line-height: 15px; color: var(--lbm-meta); white-space: nowrap;
+}
+body.lb-js-messaging [data-lb-part="message"][data-lb-daychip]::before {
+  content: attr(data-lb-daychip); display: block; width: max-content; margin: 2px auto 10px; padding: 6px 13px;
+  border-radius: 8px; background: var(--lbm-chip-bg); color: var(--lbm-chip-text);
+  font-size: 12.5px; font-weight: 500; line-height: 16px; box-shadow: 0 1px .5px rgba(11, 20, 26, .13);
+}
+
+/* "typing…" under the header name instead of the bubble of dots [off-catalog: the indicator has no anchor] */
+body.lb-js-messaging [aria-label="Conversation messages"] > span { display: none !important; }
+body.lb-js-messaging.lb-msg-typing [data-lb-part="header"] h4 { position: relative; }
+body.lb-js-messaging.lb-msg-typing [data-lb-part="header"] h4::after {
+  content: "typing…"; position: absolute; left: 0; top: 100%; font-size: 12px; font-weight: 400;
+  line-height: 14px; color: var(--lbm-meta); white-space: nowrap;
+}
+
+/* reply buttons inside the bubble; the real ones are hidden only while the script has placed its copy
+   [off-catalog: options have no container anchor] */
+body.lb-js-messaging.lb-msg-inline div:has(> [data-lb-part="options-group"]) { display: none !important; }
+body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-msg-has-buttons] { width: 85%; padding-bottom: 0 !important; }
+.lb-msg-buttons { order: 2; flex: 0 0 calc(100% + 18px); margin: 7px -9px 0; border-top: 1px solid var(--lbm-divider); }
+.lb-msg-buttons .lb-msg-row { padding: 6px 7px; }
+.lb-msg-buttons .lb-msg-row + .lb-msg-row { border-top: 1px solid var(--lbm-divider); }
+.lb-msg-btn {
+  position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 34px;
+  padding: 6px 30px; border: none; border-radius: 8px; background: var(--lbm-btn-bg); color: var(--lbm-btn-text);
+  cursor: pointer; text-align: center; font: inherit; font-size: 14px; line-height: 18px;
+}
+.lb-msg-btn::before {
+  content: ""; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667781' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M9 14L4 9l5-5'/><path d='M4 9h8a8 8 0 018 8v2'/></svg>") no-repeat center / 16px 16px;
+}
+.lb-msg-btn.lb-msg-link::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667781' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M14 4h6v6'/><path d='M20 4l-9 9'/><path d='M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5'/></svg>");
+}
+.lb-msg-btn:hover { background: var(--lbm-btn-bg-hover); }
+.lb-msg-btn:focus-visible { outline: 2px solid var(--lbm-send-bg); outline-offset: 2px; }
+.lb-msg-buttons[data-state="answered"] .lb-msg-btn { cursor: default; color: var(--lbm-btn-done); }
+
+/* decorative composer while the native input is gone (button turns) */
+#lb-msg-composer { display: none; }
+body.lb-js-messaging.lb-msg-nocomposer #lb-msg-composer {
+  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; background: transparent;
+}
+body.lb-js-messaging.lb-msg-nocomposer #lb-msg-composer .lb-msg-plus {
+  flex: 0 0 44px; height: 44px; border-radius: 50%; box-shadow: 0 1px .5px rgba(11, 20, 26, .13);
+  background: var(--lbm-field-bg) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667781' stroke-width='2' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>") no-repeat center / 20px 20px;
+}
+body.lb-js-messaging.lb-msg-nocomposer #lb-msg-composer .lb-msg-pill {
+  flex: 1 1 auto; min-height: 44px; display: flex; align-items: center; padding: 0 16px; border-radius: 22px;
+  color: var(--lbm-field-text); font-size: 15px; cursor: text; background: var(--lbm-field-bg);
+  box-shadow: 0 1px .5px rgba(11, 20, 26, .13);
+}
+body.lb-js-messaging.lb-msg-nocomposer #lb-msg-composer .lb-msg-mic {
+  flex: 0 0 44px; height: 44px; border-radius: 50%;
+  background: var(--lbm-send-bg) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='9' y='3' width='6' height='11' rx='3'/><path d='M5 11a7 7 0 0014 0M12 18v3'/></svg>") no-repeat center / 22px 22px;
+}
+body.lb-js-messaging.lb-msg-nocomposer [data-lb-part="window"] > .responsive-container:last-child { padding: 6px 8px 4px !important; }

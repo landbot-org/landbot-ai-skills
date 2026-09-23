@@ -7,7 +7,7 @@
       "name": "landbot",
       "description": "Build, style and publish Landbot bots from your coding agent. Includes the landbot-flows and landbot-style skills. Writes to real bots with your own API token.",
       "source": "./plugins/landbot",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "category": "productivity"
     }
   ]

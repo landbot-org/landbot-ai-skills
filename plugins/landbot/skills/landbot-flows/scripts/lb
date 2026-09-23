@@ -15,14 +15,24 @@
 #
 # Writes `HTTP <code>` to stderr and the body to stdout, and exits non-zero from 400 up,
 # so a failure is never read as a success. The token is never printed.
+#
+# Three draft safeguards run on their own (scripts/draft-check), because a person forgets and so
+# does an agent:
+#   - after every successful write to /bots/<id>/draft…, the draft is saved as "what this plugin
+#     last wrote";
+#   - before such a write, if the draft no longer matches that snapshot, a WARNING says what changed
+#     (an edit in the builder, or a builder tab saving an old copy over this plugin's work);
+#   - before POST /bots/<id>/versions (publish), `draft-check gate` runs, and a BLOCK refuses the
+#     publish: nothing is sent.
 set -uo pipefail
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 BASE="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"
 BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-VERSION="0.3.3"
+VERSION="0.3.4"
 if [ "${1:-}" = "--version" ]; then echo "landbot-flows $VERSION"; exit 0; fi
 
 # Every request says it comes from this plugin, its version and which agent ran it, so Landbot can
@@ -123,6 +133,25 @@ if [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]
   fi
 fi
 
+DC="$HERE/draft-check"
+DRAFT_BOT=""
+if [ "$METHOD" != "GET" ] && [[ "$PATH_" =~ ^/bots/([A-Za-z0-9-]+)/draft ]]; then DRAFT_BOT="${BASH_REMATCH[1]}"; fi
+if [ "$METHOD" = "POST" ] && [[ "$PATH_" =~ ^/bots/([A-Za-z0-9-]+)/versions/?$ ]] && [ -x "$DC" ]; then
+  gate_out="$("$DC" gate "${BASH_REMATCH[1]}" 2>&1)"; gate_rc=$?
+  printf '%s\n' "$gate_out" >&2
+  if [ "$gate_rc" -ne 0 ]; then
+    echo "refusing to publish: the draft did not pass the checks above (draft-check gate exit $gate_rc). Nothing was published." >&2
+    exit 65
+  fi
+fi
+if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ] && [ -f "${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts/$DRAFT_BOT.json" ]; then
+  pre="$("$DC" diff "$DRAFT_BOT" 2>/dev/null)"
+  if [ $? -eq 1 ]; then
+    { echo "WARNING: before this write, the draft had changed since this plugin last wrote it:"; printf '%s\n' "$pre" | sed -n 's/^  - /  - /p'
+      echo "Tell the person. Their edits stay in the draft; anything of yours that is gone, offer to put back."; } >&2
+  fi
+fi
+
 ARGS=(-sS -X "$METHOD" "$BASE$PATH_" -A "$USER_AGENT" -w '\n%{http_code}' --config -)
 if [ -n "$BODY" ]; then
   ARGS+=(-H 'Content-Type: application/json' --data-binary "$BODY")
@@ -144,3 +173,13 @@ else
 fi
 
 [ "$CODE" -lt 400 ] 2>/dev/null || exit 1
+
+# Remember what this plugin wrote: after a draft write, and right after a bot is created.
+if [ -x "$DC" ]; then
+  if [ -n "$DRAFT_BOT" ]; then
+    "$DC" save "$DRAFT_BOT" >/dev/null 2>&1 || echo "note: could not save a snapshot of the draft of $DRAFT_BOT (draft-check save)" >&2
+  elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
+    new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
+    [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || true; }
+  fi
+fi

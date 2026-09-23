@@ -5,27 +5,30 @@ set -u
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$HERE/plugins/landbot/skills/landbot-flows/scripts"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-cp "$SRC/channel" "$T/"; cp "$SRC/lb" "$T/lb.real"
+cp "$SRC/channel" "$SRC/draft-check" "$T/"; cp "$SRC/lb" "$T/lb.real"
+export LANDBOT_STATE_DIR="$T/state"
 cat > "$T/lb" <<'E'
 #!/usr/bin/env bash
 M="$1"; P="$2"; B="${3:-}"; D="$(dirname "$0")"
 cr=$(( $(date +%s) - ${MOCK_AGE_H:-1}*3600 ))
 case "$M $P" in
-"GET /bots/"*) echo "{\"data\":{\"id\":\"BOT\",\"channels\":${MOCK_CHANNELS:-[\"cu-1\"]}}}";;
+"GET /bots/"*"/draft") cat "${MOCK_DRAFT:-$D/draft.json}";;
+"GET /bots/"*) echo "{\"data\":{\"id\":\"BOT\",\"channel_family\":\"landbot\",\"channels\":${MOCK_CHANNELS:-[\"cu-1\"]}}}";;
 "GET /channels/"*) id="${P#/channels/}"; id="${id%/}"; [ "$id" = "777" ] || exit 1
-   ver=$(cat "$D/ver" 2>/dev/null || echo 3.0.0); sty=$(cat "$D/style" 2>/dev/null || true)
+   ver=$(cat "$D/ver" 2>/dev/null || echo 3.0.0); sty=$(cat "$D/style" 2>/dev/null || true); ft=$(cat "$D/foot" 2>/dev/null || true)
    c="$cr"; [ -n "${MOCK_NOCREATED:-}" ] && c=null
-   jq -n --arg v "$ver" --arg s "$sty" --argjson c "$c" '{success:true,channel:{id:777,uuid:"cu-1",version:$v,style:$s,created_at:$c}}';;
+   jq -n --arg v "$ver" --arg s "$sty" --arg f "$ft" --arg cfg "${MOCK_CFG:-}" --argjson c "$c" '{success:true,channel:({id:777,uuid:"cu-1",version:$v,style:$s,foot:$f,created_at:$c} + (if $cfg != "" then {config_url:$cfg} else {} end))}';;
 "PATCH /channels/777/") printf '%s' "$B" | jq -c . >> "$D/patches"
    v=$(printf '%s' "$B" | jq -r '.version // empty'); [ -n "$v" ] && echo "$v" > "$D/ver"
-   printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j '.style | sub("\\s+$"; "")' > "$D/style"; echo '{}';;
+   printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j '.style | sub("\\s+$"; "")' > "$D/style"
+   printf '%s' "$B" | jq -e 'has("foot")' >/dev/null && printf '%s' "$B" | jq -j '.foot | sub("\\s+$"; "")' > "$D/foot"; echo '{}';;
 *) exit 1;;
 esac
 E
 printf '#!/usr/bin/env bash\necho "LANDBOT_HANDOFF bot=$1 builder=4069913 share=x channel=${MOCK_RESOLVED:-777} version=3.0.0"\n' > "$T/handoff"
 chmod +x "$T/lb" "$T/handoff" "$T/channel"; printf 'a{color:red}' > "$T/s.css"
 pass=0; fail=0
-t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/ver" "$T/style"; "$@" >/dev/null 2>&1; local rc=$?
+t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot"; "$@" >/dev/null 2>&1; local rc=$?
   local np=0; [ -f "$T/patches" ] && np=$(wc -l < "$T/patches" | tr -d ' ')
   if [ "$rc:$np" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $name: rc=$rc writes=$np, want $want"; fi; }
 C="$T/channel"
@@ -50,7 +53,67 @@ t "get --bot"                  0:0 "$C" get --bot BOT
 t "get <id>"                   0:0 "$C" get 777
 t "get unknown id"             1:0 "$C" get 555
 t "css unreadable file"       66:0 "$C" css /nonexistent.css --bot BOT
+# Custom JS: checked before anything is sent; backed up; "stored, not served" is exit 3
+printf '/* lb-js: test 1 */\ndocument.body.classList.add("x");\n' > "$T/ok.js"
+printf 'document.body.classList.add("x");\n' > "$T/nomark.js"
+printf '/* lb-js: t */\nvar a = "#{x}";\n' > "$T/hash.js"
+printf '/* lb-js: t */\nfetch("https://example.com/c", {method:"POST"});\n' > "$T/fetch.js"
+printf '/* lb-js: t */\nvar c = document.cookie;\n' > "$T/cookie.js"
+printf '/* lb-js: t */\nwindow.eval("1");\n' > "$T/eval.js"
+printf '<script src="https://cdn.example.com/x.js"></script>\n/* lb-js: t */\n' > "$T/src.js"
+{ printf '/* lb-js: big */\n'; head -c 61000 /dev/zero | tr '\0' 'a'; } > "$T/big.js"
+t "js ok"                      0:1 "$C" js "$T/ok.js" --bot BOT
+t "js without marker"         65:0 "$C" js "$T/nomark.js" --bot BOT
+t "js with #{"                65:0 "$C" js "$T/hash.js" --bot BOT
+t "js with fetch"             65:0 "$C" js "$T/fetch.js" --bot BOT
+t "js reading cookies"        65:0 "$C" js "$T/cookie.js" --bot BOT
+t "js with eval"              65:0 "$C" js "$T/eval.js" --bot BOT
+t "js loading a script"       65:0 "$C" js "$T/src.js" --bot BOT
+t "js over 60k"               65:0 "$C" js "$T/big.js" --bot BOT
+t "js without --bot"          64:0 "$C" js "$T/ok.js"
+t "js old channel"            70:0 env MOCK_AGE_H=48 "$C" js "$T/ok.js" --bot BOT
+t "js --clear"                 0:1 "$C" js --clear --bot BOT
+t "js --clear with a file"    64:0 "$C" js --clear "$T/ok.js" --bot BOT
+t "--clear on css"            64:0 "$C" css --clear "$T/s.css" --bot BOT
+printf '{"foot":null,"version":"3.1.0"}' > "$T/cfg-nofoot.json"
+t "js stored, not served"      3:1 env MOCK_CFG="file://$T/cfg-nofoot.json" "$C" js "$T/ok.js" --bot BOT
+printf '{"foot":"<script>x</script>","version":"3.1.0"}' > "$T/cfg-foot.json"
+t "js served"                  0:1 env MOCK_CFG="file://$T/cfg-foot.json" "$C" js "$T/ok.js" --bot BOT
+rm -rf "$T/state"; "$C" css "$T/s.css" --bot BOT >/dev/null 2>&1
+nb=$(ls "$T/state/backups" 2>/dev/null | wc -l | tr -d ' '); [ "$nb" -ge 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL css write left no backup"; }
+grep -q 'OP^^' "$C" && { fail=$((fail+1)); echo "FAIL bash-4-only expansion in channel (macOS runs bash 3.2)"; } || pass=$((pass+1))
+
+# draft-check: the gate before a publish, on drafts built by hand
+DK="$T/draft-check"
+mk() { jq -n "$1" > "$T/$2"; }
+mk '{data:{save_state:"IS_PRESAVED",violations:[],diagram:{nodes:{hidden:{id:"hidden",template:"hidden",params:{}},welcome:{id:"welcome",template:"var_text",name:"Greeting",params:{text:"Hi! Name?",richText:"<p>Hi! Name?</p>",destination:"name"}},bye:{id:"bye",template:"chat",params:{messages:[{text:"Thanks"}],buttons:[]}}},connections:{"welcome.$success--bye":{sourcePath:"welcome",targetPath:"bye",type:"$success"}}}}}' good.json
+mk '{data:{save_state:"IS_PRESAVED",violations:[],diagram:{nodes:{hidden:{id:"hidden",template:"hidden",params:{}}},connections:{}}}}' empty.json
+mk '{data:{save_state:"IS_PRESAVED",violations:[],diagram:{nodes:{hidden:{id:"hidden",template:"hidden",params:{}},n0:{id:"n0",template:"chat",params:{messages:[{text:"x"}]}}},connections:{}}}}' nogreet.json
+mk '{data:{save_state:"IS_PRESAVED",violations:[],diagram:{nodes:{hidden:{id:"hidden",template:"hidden",params:{}},welcome:{id:"welcome",template:"var_text",params:{text:"Hi! Name?",richText:"<p>Ask anything</p>",destination:"name"}},bye:{id:"bye",template:"chat",params:{}}},connections:{"welcome.$success--bye":{sourcePath:"welcome",targetPath:"bye",type:"$success"}}}}}' askany.json
+mk '{data:{save_state:"IS_PRESAVED",violations:[],diagram:{nodes:{hidden:{id:"hidden",template:"hidden",params:{}},welcome:{id:"welcome",template:"var_text",params:{text:"Hi",richText:"<p>Hi</p>",destination:"name"}}},connections:{"welcome.$success--gone":{sourcePath:"welcome",targetPath:"gone",type:"$success"}}}}}' dangling.json
+mk '{data:{save_state:"IS_NOT_VALID",violations:[{code:"param_required",block_id:"welcome",param:"text"}],diagram:{nodes:{hidden:{id:"hidden",template:"hidden",params:{}},welcome:{id:"welcome",template:"var_text",params:{}}},connections:{}}}}' viol.json
+g() { local name="$1" want="$2" file="$3"; MOCK_DRAFT="$T/$file" "$DK" gate BOTU >/dev/null 2>&1; local rc=$?
+  [ "$rc" = "$want" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL gate $name: rc=$rc, want $want"; }; }
+rm -rf "$T/state"
+g "clean draft passes"          0 good.json
+g "empty draft blocked"        65 empty.json
+g "no greeting blocked"        65 nogreet.json
+g "Ask anything blocked"       65 askany.json
+g "dangling connection blocked" 65 dangling.json
+g "violations blocked"         65 viol.json
+MOCK_DRAFT="$T/good.json" "$DK" save BOTU >/dev/null 2>&1
+g "unchanged since save passes" 0 good.json
+jq '.data.diagram.nodes.welcome.params.text = "Changed in the builder" | .data.diagram.nodes.welcome.params.richText = "<p>Changed in the builder</p>"' "$T/good.json" > "$T/edited.json"
+g "changed since save blocked" 65 edited.json
+jq '.data.diagram.nodes.bye.top = 999' "$T/good.json" > "$T/moved.json"
+g "moved-only passes"           0 moved.json
+MOCK_DRAFT="$T/edited.json" "$DK" diff BOTU >/dev/null 2>&1; [ $? = 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL diff should report the edit"; }
+
 L="$T/lb.real"; export LANDBOT_API_TOKEN=dummy LANDBOT_API_URL=http://127.0.0.1:9
+# publish goes through the gate: a blocked draft is refused before anything is sent (65), a clean one reaches the network (1)
+rm -rf "$T/state"
+t "publish of a blocked draft refused" 65:0 env MOCK_DRAFT="$T/askany.json" "$L" POST /bots/BOTU/versions
+t "publish of a clean draft is sent"    1:0 env MOCK_DRAFT="$T/good.json" "$L" POST /bots/BOTU/versions
 n50=$(printf 'x%.0s' $(seq 50)); n51=$(printf 'x%.0s' $(seq 51))
 t "name 50 reaches the network" 1:0 "$L" POST /bots "{\"name\":\"$n50\"}"
 t "name 51 refused locally"    65:0 "$L" POST /bots "{\"name\":\"$n51\"}"
