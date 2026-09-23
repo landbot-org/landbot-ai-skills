@@ -9,7 +9,7 @@
         CSS can show it under the header name.
    It only adds attributes, classes and its own elements; it never re-parents Landbot's nodes, never
    reads or sends answers, and on any error the plain chat keeps working (the CSS only styles what
-   this script adds). Extracted from the verified Nortis demo (channel 3514728, 2026-09-17/19). */
+   this script adds). Extracted from a verified messaging-look demo (2026-09-17/19) and re-checked on 2026-09-23. */
 (function () {
   var CONFIG = {
     placeholder: 'Type a message', // the composer's placeholder, also used on question turns

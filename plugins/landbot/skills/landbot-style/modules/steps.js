@@ -4,8 +4,8 @@
      1. a thin bar at the top that fills as the visitor answers, with an optional "n of N" label;
      2. A, B, C… press the matching button when the visitor is not typing in a field.
    It counts the visitor's own answers on the page; it never reads their content or sends anything.
-   On any error the plain chat keeps working. Extracted from the verified Typeform-style demo
-   (channel 3512809, 2026-09-16). */
+   On any error the plain chat keeps working. Extracted from a verified form-style demo
+   (2026-09-16) and re-checked on 2026-09-23. */
 (function () {
   var CONFIG = {
     total: 5,                  // questions on the longest path, greeting included
