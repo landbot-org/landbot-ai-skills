@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+# Know what is in a bot's draft before you build on it or publish it.
+#
+#   draft-check save <bot_uuid>   accept the draft as it is now as "what this plugin last wrote" (run it only after
+#                                 the person agreed the draft is right; it also clears a pending change, see below)
+#   draft-check diff <bot_uuid>   what changed since then: run it at the start of every new request
+#   draft-check gate <bot_uuid>   the checks before a publish (lb runs it before POST /bots/<id>/versions)
+#
+# Why: publishing makes live whatever the draft holds, and Landbot only checks the draft for rule
+# violations. It does not check that the draft is what you meant to build. Two real ways it is not:
+#   - a builder tab opened before your last write saves its old copy over yours, with no error and no
+#     change to edited_at (verified 2026-09-22);
+#   - a write fails, the work goes on, and a nearly empty draft is published (seen 2026-09-22).
+# Landbot's API has no "changed since I read it" check, so the only defence is to re-read and compare.
+#
+# gate BLOCKS (exit 65, nothing may be published) when:
+#   - the draft reports violations;
+#   - a web bot has no greeting (the `welcome` slot), or the draft has no blocks at all;
+#   - a connection points at a block that does not exist;
+#   - a question still shows Landbot's placeholder "Ask anything" instead of its wording;
+#   - the draft changed since this plugin last wrote it (someone edited it in the builder, or a builder
+#     tab saved an old copy), including a connection pointed somewhere else. Look with `diff`, tell the
+#     person, and once they agree the draft is right, `save` it and publish;
+#   - `lb` saw such a change before one of its own writes (a pending change, kept in <bot>.pending):
+#     the write went ahead, so the snapshot alone no longer shows it. Only `save` clears it;
+#   - there is no snapshot of this bot on this machine: nothing proves the draft is the one you meant.
+#     Read it with the person, then `save`.
+# gate WARNS (exit 0, say it in the hand-back) about blocks nothing reaches, questions with no next
+# step and a display copy that differs from the wording.
+# Landbot's API has no "changed since I read it" lock, so a change landing between the check and the
+# publish cannot be ruled out; the check narrows that window, it does not close it.
+#
+# Snapshots live in $LANDBOT_STATE_DIR/drafts (default ~/.landbot/drafts), one file per bot.
+# Reads only, except the snapshot file. The token is never printed; `lb` handles it.
+set -uo pipefail
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+LB="$HERE/lb"
+STATE="${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts"
+
+OP="${1:-}"; BOT="${2:-}"; MODE="${3:-}"
+case "$OP" in save|diff|gate|pre|post) ;; *) echo "usage: draft-check save|diff|gate <bot_uuid>" >&2; exit 64 ;; esac
+[ -n "$BOT" ] || { echo "usage: draft-check $OP <bot_uuid>" >&2; exit 64; }
+case "$BOT" in *[!A-Za-z0-9-]*) echo "refusing: '$BOT' is not a bot uuid" >&2; exit 65 ;; esac
+SNAP="$STATE/$BOT.json"
+PENDING="$STATE/$BOT.pending"   # changes lb saw before one of its writes; cleared only by a manual save
+PRE="$STATE/$BOT.pre.json"      # the draft just before lb's current write (pre → post)
+
+draft="$("$LB" GET "/bots/$BOT/draft" 2>/dev/null)" || { echo "could not read the draft of $BOT" >&2; exit 1; }
+printf '%s' "$draft" | jq -e '.data.diagram.nodes' >/dev/null 2>&1 || { echo "the draft of $BOT came back without a diagram" >&2; exit 1; }
+# Drafts can pass 1 MB, more than a command line holds, so every comparison reads them from files.
+TMPD="$(mktemp -d)" || { echo "cannot create a temporary folder" >&2; exit 1; }
+trap 'rm -rf "$TMPD"' EXIT
+CUR="$TMPD/cur.json"; printf '%s' "$draft" | jq '.data.diagram' > "$CUR" || { echo "cannot read the diagram of $BOT" >&2; exit 1; }
+
+# The part of a draft that decides what visitors get. Positions are compared separately: a moved
+# block changes nothing for a visitor, but it does mean a builder tab saved.
+COMPARE='
+  def body: {nodes: ((.nodes // {}) | with_entries(.value |= {template, name, params})),
+             connections: ((.connections // {}) | with_entries(.value |= {sourcePath, targetPath, type}))};
+  def pos: (.nodes // {}) | with_entries(.value |= {top, left});
+  def lab($n; $id): if ($n[$id].name // "") != "" then "\($id) (\($n[$id].name))" else $id end;
+  ($cur | body) as $c | ($snap | body) as $s |
+  ($c.nodes | keys) as $ck | ($s.nodes | keys) as $sk |
+  [ ($ck - $sk)[] | "added block \(lab($cur.nodes; .))" ],
+  [ ($sk - $ck)[] | "removed block \(lab($snap.nodes; .))" ],
+  [ ($ck - ($ck - $sk))[] | select($c.nodes[.] != $s.nodes[.]) | "changed block \(lab($cur.nodes; .))" ],
+  [ (($c.connections | keys) - ($s.connections | keys))[] | "added connection \(.)" ],
+  [ (($s.connections | keys) - ($c.connections | keys))[] | "removed connection \(.)" ],
+  [ (($c.connections | keys) - (($c.connections | keys) - ($s.connections | keys)))[] | select($c.connections[.] != $s.connections[.])
+      | "changed connection \(.) (now \($c.connections[.].sourcePath) → \($c.connections[.].targetPath) on \($c.connections[.].type))" ],
+  [ ($ck - ($ck - $sk))[] | select(($c.nodes[.] == $s.nodes[.]) and (($cur | pos)[.] != ($snap | pos)[.])) | "moved block \(lab($cur.nodes; .))" ]
+  | .[]'
+
+save() {
+  mkdir -p "$STATE" 2>/dev/null || { echo "cannot write $STATE" >&2; return 73; }
+  printf '%s' "$draft" | jq '{saved_at: (now | todate), edited_at: .data.edited_at, diagram: {nodes: .data.diagram.nodes, connections: .data.diagram.connections}}' > "$SNAP.tmp" \
+    && mv "$SNAP.tmp" "$SNAP" || { echo "could not save the snapshot" >&2; return 1; }
+}
+
+changes() {  # prints one line per change; empty when the draft matches the snapshot.
+  # Fails closed: if the comparison itself fails, that is reported as a change, never as "the same".
+  local out
+  jq '.diagram' "$SNAP" > "$TMPD/snap.json" 2>/dev/null || { echo "the snapshot could not be read, so the draft cannot be shown to be unchanged"; return 0; }
+  out="$(jq -rn --slurpfile c "$CUR" --slurpfile s "$TMPD/snap.json" '$c[0] as $cur | $s[0] as $snap | '"$COMPARE" 2>/dev/null)" \
+    || { echo "the comparison with the snapshot failed, so the draft cannot be shown to be unchanged"; return 0; }
+  printf '%s' "$out"
+}
+
+# pre: before lb writes. Keep the draft as it is now; record as pending any change since the snapshot,
+# or, with no snapshot, that this bot was never checked on this machine. Prints what it recorded.
+# post <expect-json>: after lb's write. Anything that changed between pre and now that the write itself
+# does not explain (by the block ids and connections it names) is recorded as pending; then the new draft
+# becomes the snapshot. A pending record is cleared only by a manual `save`.
+POST_CMP='
+  def plainp: with_entries(select(.key | test("^(rich|raw)") | not));
+  # Known limit: a setting a write did not send may fall back to the default Landbot sets, which this check does not
+  # know per block; it accepts an empty-like value instead. A concurrent edit that empties a setting in the
+  # second of a write is therefore not caught here (the walk after the publish is the backstop).
+  def defaultish: . == null or . == "" or . == false or . == 0 or . == [] or . == {};
+  # a connection matches an expectation only when every end and output the expectation names agree; an id alone
+  # (a delete by key) matches only when the expectation names nothing else
+  def conn_match($c; $e):
+    ($e.id == null or $c.id == $e.id)
+    and ($e.sourcePath == null or $c.sourcePath == $e.sourcePath)
+    and ($e.targetPath == null or $c.targetPath == $e.targetPath)
+    and ($e.type == null or $c.type == $e.type)
+    and ($e.id != null or $e.sourcePath != null);
+  def cset: [ to_entries[] | {id: .key, sourcePath: .value.sourcePath, targetPath: .value.targetPath, type: .value.type} ];
+  ($pre.nodes // {}) as $an | ($cur.nodes // {}) as $bn | ($pre.connections // {}) as $ac | ($cur.connections // {}) as $bc |
+  if $exp.put then
+    # a whole-diagram write: the draft must now be what was sent, block by block and connection by connection
+    ($exp.put.nodes) as $pn |
+    [ ( (($bn | keys) - ($pn | keys))[] | "block \(.) is there although the diagram this plugin sent does not have it" ),
+      ( (($pn | keys) - ($bn | keys))[] | "block \(.) is missing although this plugin sent it" ),
+      ( ($pn | keys) - (($pn | keys) - ($bn | keys)) | .[] | . as $id
+        | ( ($pn[$id].params | plainp | to_entries[] | select($bn[$id].params[.key] != .value) | "block \($id): \(.key) is not what this plugin sent" ),
+            ( (($bn[$id].params // {}) | plainp | keys) - ($pn[$id].params | keys) | .[] | . as $k
+              | select($bn[$id].params[$k] | defaultish | not) | "block \($id): \($k) holds a value this plugin did not send" ),
+            ( if $pn[$id].name != null and $bn[$id].name != $pn[$id].name then "block \($id): its name is not what this plugin sent" else empty end ),
+            ( if $pn[$id].template != null and $bn[$id].template != $pn[$id].template then "block \($id): its type is not what this plugin sent" else empty end ) ) ),
+      ( ($bc | cset)[] | . as $c | select([ $exp.put.conns[] | select(conn_match($c; .)) ] | length == 0) | "connection \($c.id) is there although this plugin did not send it" ),
+      ( $exp.put.conns[] | . as $e | select([ ($bc | cset)[] | select(conn_match(.; $e)) ] | length == 0) | "a connection this plugin sent (\($e.sourcePath) → \($e.targetPath)) is missing" )
+    ] | .[]
+  elif $exp.loose then
+    ( ($exp.loose) as $ids | def ok($x): ($ids | index($x)) != null; ($an | keys) as $ak | ($bn | keys) as $bk |
+      [ (($bk - $ak)[] | select(ok(.) | not) | "block \(.) was added"), (($ak - $bk)[] | select(ok(.) | not) | "block \(.) was removed"),
+        (($ak - ($ak - $bk))[] | select(($an[.] | {template, name, params}) != ($bn[.] | {template, name, params})) | select(ok(.) | not) | "block \(.) was changed") ] | .[] )
+  else
+  ($exp.nodes // {}) as $en | ($exp.conns // []) as $ec | ($exp.delete_incident // []) as $di |
+  [ $ec[] | select(.kind == "add") ] as $eadd | [ $ec[] | select(.kind == "delete") ] as $edel |
+  ($an | keys) as $ak | ($bn | keys) as $bk | (($bk - $ak) - ($en | keys)) as $unnamed_added |
+  [
+    # the blocks this write named hold exactly what it sent; a setting it did not send may only fall back to empty
+    ( $en | to_entries[] | .key as $id | .value as $e |
+      if $e.delete then (if $bn[$id] then "block \($id) was to be removed and is still there" else empty end)
+      elif ($bn[$id] | not) then "block \($id) is missing after this plugin wrote it"
+      else
+        ( if $e.params != null then
+            ( ($e.params | plainp | to_entries[] | select($bn[$id].params[.key] != .value) | "block \($id): \(.key) holds something other than what this plugin sent"),
+              ( if ($e.added | not) then
+                  ( (($bn[$id].params // {}) | plainp | keys) - ($e.params | keys) | .[] | . as $k
+                    | select(($bn[$id].params[$k]) != (($an[$id].params // {})[$k])) | select($bn[$id].params[$k] | defaultish | not)
+                    | "block \($id): \($k) changed although this plugin did not send it" )
+                else empty end ) )
+          elif ($e.added | not) and (($bn[$id].params | plainp) != ($an[$id].params // {} | plainp)) then "block \($id): its settings changed although this plugin only renamed or moved it"
+          else empty end ),
+        ( if $e.name != null and $bn[$id].name != $e.name then "block \($id): its name is not what this plugin sent"
+          elif $e.name == null and ($e.added | not) and $bn[$id].name != $an[$id].name then "block \($id): its name changed although this plugin did not rename it"
+          else empty end ),
+        ( if ($e.added | not) and $an[$id] and $bn[$id].template != $an[$id].template then "block \($id) changed type" else empty end )
+      end ),
+    # nothing else changed, except blocks the API numbered for this write
+    ( if ($unnamed_added | length) > ($exp.auto_added // 0) then "\(($unnamed_added | length) - ($exp.auto_added // 0)) block(s) appeared that this write did not add: \($unnamed_added | join(", "))" else empty end ),
+    ( ($ak - $bk)[] | select(($en[.] // {}).delete | not) | "block \(.) was removed" ),
+    ( ($ak - ($ak - $bk))[] | select($en[.] | not) | select((($an[.] | {template, name, params}) != ($bn[.] | {template, name, params}))) | "block \(.) was changed" ),
+    # connections: an added one must be one this write added; a removed one, one it deleted or of a block it removed
+    ( (($bc | keys) - ($ac | keys))[] | . as $k | ($bc[$k] + {id: $k}) as $c | select([ $eadd[] | select(conn_match($c; .)) ] | length == 0) | "connection \($k) was added" ),
+    ( (($ac | keys) - ($bc | keys))[] | . as $k | ($ac[$k] + {id: $k}) as $c | select([ $edel[] | select(conn_match($c; .)) ] | length == 0)
+        | select((($di | index($c.sourcePath)) != null or ($di | index($c.targetPath)) != null) | not) | "connection \($k) was removed" ),
+    # a kept connection that now goes somewhere else is a replacement: only explained when this write both
+    # deleted the old route and added the new one; otherwise report it, even when the new route is its own
+    ( (($bc | keys) - (($bc | keys) - ($ac | keys)))[] | . as $k | select(($ac[$k] | {sourcePath, targetPath, type}) != ($bc[$k] | {sourcePath, targetPath, type}))
+        | ($ac[$k] + {id: $k}) as $old | ($bc[$k] + {id: $k}) as $new
+        | select(([ $edel[] | select(conn_match($old; .)) ] | length > 0) and ([ $eadd[] | select(conn_match($new; .)) ] | length > 0) | not)
+        | "connection \($k) now goes \($new.sourcePath) → \($new.targetPath) instead of \($old.targetPath)" )
+  ] | .[] end'
+
+case "$OP" in
+pre)
+  mkdir -p "$STATE" 2>/dev/null
+  printf '%s' "$draft" | jq '.data.diagram' > "$PRE.tmp" 2>/dev/null && mv "$PRE.tmp" "$PRE" || rm -f "$PRE"
+  if [ ! -f "$SNAP" ]; then
+    msg="this plugin had never checked this bot on this machine before writing it"
+    printf '%s\n' "$msg" >> "$PENDING" || { echo "cannot record a pending change in $PENDING" >&2; exit 1; }; echo "$msg"
+  else
+    out="$(changes)"
+    if [ -n "$out" ]; then printf '%s\n' "$out" >> "$PENDING" || { echo "cannot record a pending change in $PENDING" >&2; exit 1; }; printf '%s\n' "$out"; fi
+  fi
+  ;;
+post)
+  EXP="${3:-}"; case "$EXP" in @*) EXP="$(cat "${EXP#@}" 2>/dev/null)" ;; esac; [ -n "$EXP" ] || EXP='{"loose":[]}'
+  if [ -f "$PRE" ]; then
+    printf '%s' "$EXP" > "$TMPD/exp.json"
+    un="$(jq -rn --slurpfile p "$PRE" --slurpfile c "$CUR" --slurpfile e "$TMPD/exp.json" '$p[0] as $pre | $c[0] as $cur | $e[0] as $exp | '"$POST_CMP" 2>/dev/null)" \
+      || un="the comparison around this write failed, so what changed meanwhile is unknown"
+    rm -f "$PRE"
+  else
+    un="the draft before this write was not kept, so what changed meanwhile is unknown"
+  fi
+  if [ -n "$un" ]; then
+    printf '%s\n' "$un" | sed 's/^/changed while this plugin was writing: /' >> "$PENDING" \
+      || { echo "cannot record a pending change in $PENDING; the snapshot is left as it was" >&2; exit 1; }
+  fi
+  save || exit $?
+  ;;
+save)
+  save || exit $?
+  if [ "$MODE" = "--auto" ]; then exit 0; fi   # lb after its own write: a pending change stays pending
+  if [ -f "$PENDING" ]; then rm -f "$PENDING"; cleared=" The pending change lb had seen is now accepted."; else cleared=""; fi
+  echo "draft-check: saved the draft of $BOT as the one this plugin last wrote ($(jq -r '.diagram.nodes | length' "$SNAP") blocks, $(jq -r '.diagram.connections | length' "$SNAP") connections).$cleared"
+  ;;
+
+diff)
+  if [ ! -f "$SNAP" ]; then echo "draft-check: no snapshot of $BOT yet (this plugin has not written it on this machine)."; exit 2; fi
+  out="$(changes)"
+  if [ -n "$out" ] && [ "$MODE" = "--record" ]; then
+    mkdir -p "$STATE" 2>/dev/null; printf '%s\n' "$out" >> "$PENDING"
+  fi
+  if [ -z "$out" ]; then echo "draft-check: the draft is exactly as this plugin last wrote it ($(jq -r .saved_at "$SNAP"))."; exit 0; fi
+  echo "draft-check: the draft of $BOT changed since this plugin last wrote it ($(jq -r .saved_at "$SNAP")):"
+  printf '%s\n' "$out" | sed 's/^/  - /'
+  echo "Someone edited it in the builder, or a builder tab opened earlier saved its old copy over this plugin's work."
+  echo "Tell the person what changed. Keep their edits; if something this plugin wrote is gone, say so and offer to put it back. Then 'draft-check save' and carry on."
+  exit 1
+  ;;
+
+gate)
+  family="$("$LB" GET "/bots/$BOT" 2>/dev/null | jq -r '.data.channel_family // "landbot"')"
+  if [ -f "$SNAP" ]; then jq '.diagram' "$SNAP" > "$TMPD/gsnap.json" 2>/dev/null || echo null > "$TMPD/gsnap.json"; else echo null > "$TMPD/gsnap.json"; fi
+  snapjson="$(head -c 4 "$TMPD/gsnap.json")"
+  report="$(printf '%s' "$draft" | jq -L "$HERE" -r --arg fam "$family" --slurpfile gs "$TMPD/gsnap.json" 'include "richtext"; $gs[0] as $snap |
+    .data as $d | ($d.diagram.nodes // {}) as $n | ($d.diagram.connections // {}) as $cn |
+    ($n | keys) as $ids |
+    [ $cn[] | {s: .sourcePath, t: .targetPath} ] as $edges |
+    (if $fam == "landbot" then "welcome" elif ($fam == "facebook" or $fam == "apichat") then "bot_start" else null end) as $slot |
+    (if $slot != null and ($n | has($slot)) then $slot elif ($n | has("welcome")) then "welcome" else "hidden" end) as $head |
+    ([$head, "hidden"] | unique) as $starts |
+    ({seen: $starts, fr: $starts} | until((.fr | length) == 0;
+        (.fr as $f | [ $edges[] | select(.s as $s | $f | index($s)) | .t ] | unique) as $nx
+        | ($nx - .seen) as $new | .seen += $new | .fr = $new) | .seen) as $reach |
+    def lbl($id): if ($n[$id].name // "") != "" then "\($id) (\($n[$id].name))" else $id end;
+    [
+      ( ($d.violations // [])[] | "BLOCK: violation \(.code // "?") on block \(.block_id // "?")\(if .param then " (param \(.param))" else "" end)" ),
+      ( if ($ids - ["hidden"] | length) == 0 then "BLOCK: the draft has no blocks at all" else empty end ),
+      ( if $slot != null and ($n | has($slot) | not) and (($ids - ["hidden"]) | length) > 0 then "BLOCK: no greeting: the \($slot) slot is empty, so this bot cannot be published" else empty end ),
+      ( $cn | to_entries[] | .value as $c | select(($ids | index($c.sourcePath)) == null or ($ids | index($c.targetPath)) == null)
+          | "BLOCK: connection \(.key) points at a block that does not exist" ),
+      ( $n | to_entries[] | .key as $id | (.value.params // {}) as $p
+          | ([["text","richText"],["errorText","richErrorText"]][] | select(($p[.[0]] | type) == "string" and ($p[.[1]] | type) == "string" and ($p[.[0]] != "") and ($p[.[1]] != "")) ) as $pair
+          | ($p[$pair[1]] | rich_plain) as $shown | ($p[$pair[0]]) as $word
+          | if ($shown | ascii_downcase) == "ask anything" and ($word | text_plain | ascii_downcase) != "ask anything" then
+              "BLOCK: block \(lbl($id)) shows visitors \"Ask anything\" instead of its \($pair[0]) \"\($word | .[0:60])\". Send the wording again with \($pair[1]) left out and check"
+            elif comparable($word) and rich_differs($word; $p[$pair[1]]) then
+              "WARN: block \(lbl($id)): visitors see \"\($shown | .[0:60])\" while the builder shows \"\($word | text_plain | .[0:60])\" (\($pair[1]) and \($pair[0]) disagree)"
+            else empty end ),
+      ( ($ids - $reach - ["hidden"])[] | select(($n[.].template // "") | startswith("note") | not) | "WARN: block \(lbl(.)) is not reached from the start, so it never runs" ),
+      ( $n | to_entries[] | select(.key != "hidden") | .key as $id | (.value.template // "") as $tpl | (.value.params // {}) as $p
+          | select((($p.buttons // []) | length > 0) or ($tpl != "chat" and (($p.destination // "") | type) == "string" and ($p.destination // "") != ""))
+          | select([ $edges[] | select(.s == $id) ] | length == 0)
+          | "WARN: block \(lbl($id)) asks something and has no next step: the chat ends after the answer" ),
+      ( if $snap == null then "BLOCK: no snapshot of this bot on this machine, so nothing shows this draft is the one you meant. Go through it with the person, then run draft-check save and publish" else empty end )
+    ] | .[]')" || { echo "draft-check: could not evaluate the draft of $BOT; treat it as not checked" >&2; exit 1; }
+  if [ -f "$PENDING" ]; then
+    report="$(printf '%s\n%s' "$report" "BLOCK: before one of this plugin's writes, the draft already had changes it did not make:")"
+    report="$(printf '%s\n%s' "$report" "$(sed 's/^/  - /' "$PENDING")")"
+    report="$(printf '%s\n%s' "$report" "  Tell the person; once they agree the draft is right, run draft-check save.")"
+  fi
+  if [ "$snapjson" != "null" ]; then
+    ch="$(changes)"
+    if [ -n "$ch" ]; then
+      if printf '%s\n' "$ch" | grep -qv '^moved block'; then
+        report="$(printf '%s\n%s' "$report" "BLOCK: the draft changed since this plugin last wrote it:")"
+        report="$(printf '%s\n%s' "$report" "$(printf '%s\n' "$ch" | sed 's/^/  - /')")"
+      else
+        report="$(printf '%s\n%s' "$report" "WARN: blocks were moved in the builder since this plugin's last write (nothing a visitor sees changed)")"
+      fi
+    fi
+  fi
+  report="$(printf '%s\n' "$report" | sed '/^$/d')"
+  [ -n "$report" ] && printf '%s\n' "$report"
+  echo "save_state: $(printf '%s' "$draft" | jq -r '.data.save_state // "?"')"
+  if printf '%s\n' "$report" | grep -q '^BLOCK'; then
+    echo "draft-check gate: BLOCKED. Do not publish. Fix each BLOCK line, or, for a draft that changed, tell the person what changed and 'draft-check save' once they agree it is right."
+    exit 65
+  fi
+  echo "draft-check gate: PASS$(printf '%s\n' "$report" | grep -c '^WARN' | sed 's/^0$//; s/^[1-9][0-9]*$/ with & warning(s): say each one in the hand-back/')"
+  ;;
+esac

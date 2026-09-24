@@ -21,7 +21,7 @@ BASE="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"
 V2="${LANDBOT_API_V2_URL:-https://api.landbot.io/v2}"
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 UA="landbot-plugin/$("$HERE/lb" --version | awk '{print $2}') (setup-token)"   # same tag as lb, see SECURITY.md
-ACCESS_URL="${LANDBOT_SKILLS_ACCESS_URL:-https://github.com/landbot-org/landbot-ai-skills/issues}"
+ACCESS_URL="${LANDBOT_SKILLS_ACCESS_URL:-https://landbot.io/skills}"
 
 have_keychain() { command -v security >/dev/null 2>&1; }
 
@@ -51,7 +51,7 @@ explain_code() {
     cat >&2 <<EOM
 the API refused it ($1). The answer does not say why; the three causes, most likely first:
   1. Your Landbot account is not enabled for the Bots API yet. Landbot switches it on per
-     account; no token fixes it. Ask at $ACCESS_URL with your account email (never the token)
+     account; no token fixes it. Ask the assistant or book the setup call at $ACCESS_URL and give your account email there (never in a public issue, never the token)
      and say you are using the coding-agent skills.
   2. It is not the whole token: copy the read-only "API token" field again.
   3. Your user lacks the "view chatbot" permission in the workspace.

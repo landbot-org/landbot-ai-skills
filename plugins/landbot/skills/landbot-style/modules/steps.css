@@ -1,0 +1,17 @@
+/* lb-js companion: steps 0.3.4 — append after the look's own CSS, in the same Custom CSS block.
+   It styles only #lb-steps, which steps.js creates; without the script nothing here applies.
+   Set the colours in the look's :root. */
+:root {
+  --lbs-fill: #1B2A4A;      /* the bar */
+  --lbs-track: transparent; /* behind the bar */
+  --lbs-label: #667781;     /* "2 of 5" */
+  --lbs-height: 4px;
+}
+#lb-steps { position: fixed; top: 0; left: 0; right: 0; height: var(--lbs-height); background: var(--lbs-track); z-index: 99999; pointer-events: none; }
+#lb-steps .lb-steps-fill { height: 100%; width: 0; background: var(--lbs-fill); transition: width .35s ease; }
+#lb-steps .lb-steps-label {
+  position: fixed; bottom: 12px; left: 16px; font-size: 12px; line-height: 16px; color: var(--lbs-label);
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+#lb-steps .lb-steps-label:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { #lb-steps .lb-steps-fill { transition: none; } }

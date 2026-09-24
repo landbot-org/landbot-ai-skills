@@ -4,16 +4,16 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.3.3
+  version: 0.3.4
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.3.3`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.3.4`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
 ## Where the scripts are
 
-This skill ships `scripts/verify-share` (no token needed). Pushing CSS to a channel uses `scripts/channel` from the sibling `landbot-flows` skill (same plugin, same install), which reads the person's token the same way `lb` does.
+This skill ships `scripts/verify-share` (no token needed) and `modules/` (two ready-made behaviours: `messaging` and `steps`, each a `.js` and a companion `.css`). Pushing CSS or Custom JS to a channel uses `scripts/channel` from the sibling `landbot-flows` skill (same plugin, same install), which reads the person's token the same way `lb` does.
 
 - **Claude Code** replaces `${CLAUDE_SKILL_DIR}` (this folder) and `${CLAUDE_PLUGIN_ROOT}` (the plugin folder; the flows skill is `${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows`) before you read this file.
 - **Codex, Cursor, other agents:** `scripts/install.sh` writes the absolute folders into this file. If the commands here still show placeholders in braces (`CLAUDE_SKILL_DIR`, `CLAUDE_PLUGIN_ROOT`) instead of folders, replace them with the folder this SKILL.md lives in and the folder that holds both skills. Look at where this file is; do not guess.
@@ -68,7 +68,9 @@ Two ways. Use the first for a bot `landbot-flows` created in this session; the s
 "${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" css /path/to/style.css --bot <bot_id>   # WRITE, live at once; the channel is found from the bot
 ```
 
-`channel` finds the channel from the bot (never type a channel id) and refuses any channel older than 24 hours; the limit is fixed. When it refuses for age, give the person path B below. It does not know who created the bot, so the rule "only bots `landbot-flows` created in this session" is yours to keep; a bot the person built in the app today would pass the script. Say before the push that the channel's Custom CSS field is replaced whole.
+`channel` finds the channel from the bot (never type a channel id) and refuses any channel older than 24 hours; the limit is fixed. When it refuses for age, give the person path B below. It does not know who created the bot, so the rule "only bots `landbot-flows` created in this session" is yours to keep; a bot the person built in the app today would pass the script. Say before the push that the channel's Custom CSS field is replaced whole. Every push first saves what the field held and prints the backup's path; `channel css <backup> --bot <bot_id>` puts it back.
+
+**In the live build (the in-app browser is open), push the look in steps** so the person sees it change: first the theme tokens (palette, background, text), then font and shapes, then the anchors and details. Each push is the whole file so far (the field is replaced whole). After each one, reload the pane with a new query string and answer one question so a button and a reply are on screen. Three pushes, not thirty: each one should be a visible step.
 
 **B. The person pastes it in the app (any bot).** Give them exactly this, no more:
 
@@ -77,6 +79,27 @@ Two ways. Use the first for a bot `landbot-flows` created in this session; the s
 3. Click **Apply** (writes the test channel), then **Publish** (writes the live channel and regenerates the published config).
 
 If you are driving their browser yourself (Claude in Chrome, Playwright): the field is a CodeMirror 6 editor. Do not type 150 lines; set the document through the editor view, then click Apply. Never touch session cookies.
+
+## Step 3b — Behaviour (Custom JS), only when asked for
+
+CSS cannot move reply buttons into the bubble that asked, stamp times on messages, draw a progress bar or add letter keys. A short script on the page can. Two ready-made behaviours ship in `${CLAUDE_SKILL_DIR}/modules/`, taken from verified demos:
+
+| Module | What the visitor gets | CONFIG |
+|---|---|---|
+| `messaging` | a messaging-app chat: reply buttons inside the bubble that asked, times on messages, a "Today" chip, "typing…" under the header name, a composer bar on button turns | `placeholder`, `dayLabel` |
+| `steps` | a form: a progress bar that fills as they answer, "2 of 5", letter keys A, B, C for the buttons | `total` (questions on the longest path), `counter`, `counterText`, `keys` |
+
+How to add one, on a bot `landbot-flows` created in this session:
+
+1. **It must be part of the yes.** The one yes before building covers the Custom JS push only when its sentence named the behaviour ("and add the messaging behaviour"). Otherwise say what the script does and get a yes, as for a publish.
+2. Copy the module's `.js` to a working file and **change only the values in its `CONFIG` block** (strings, numbers, true/false). `channel` checks that everything else is exactly the plugin's copy and refuses anything else. Append the module's `.css` to the end of the look's CSS and set its colour variables (`--lbm-*`, `--lbs-*`) from the brief in `:root`. Push the CSS first.
+3. Push the script: `"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" js /path/to/behaviour.js --bot <bot_id>`. It is live at once. It saves the channel's previous Custom JS first and prints the backup's path; `channel js --clear --bot <bot_id>` removes the script.
+4. Read the answer. `served` means the published config carries exactly this script. Exit `5` means it carries a different one (the previous script may still be live: check again, never call it live); exit `4` means it could not be checked. **`NOT SERVED` (exit 3) means this account's published config does not carry Custom JS**: Landbot serves it only to accounts with the Custom Code feature. Do not guess which plans have it; say what the check found. The chat works without it, because every module rule in the CSS styles only what the script adds. Say that plainly; changing the plan is theirs to decide, not something to work around.
+5. **Walk it** in the in-app browser (`landbot-flows` Step 6), then `read_console_messages` with errors only. A script error, a button that does not answer, or a page that stops responding is a failure: `channel js --clear` at once, say what happened, and hand back without the behaviour.
+
+**A custom script, when neither module fits** and the person asked for a behaviour: say in plain words what it will do on their page and get their yes to "a custom script"; then push it with `--custom`. Keep it short and page-only. `channel js --custom` refuses a script over 60,000 characters, one without an `lb-js: <name>` marker, one containing `#{` (Landbot's firewall answers it with a 403), and the common ways a page script sends data out, reads cookies, loads or builds code, adds media or forms that fetch, or navigates. **That check is a lint, not a security boundary**: it catches mistakes, not a script written to get past it, so never describe a custom script as safe because it passed. Also: wrap everything in `try`; add only attributes, classes and your own elements, never move Landbot's nodes; read `textContent`, never `innerText`, inside anything that runs on page changes (it can loop); guard a `MutationObserver` so its own changes do not trigger it again; and write the CSS so the chat looks complete when the script does not run. Walk it exactly as above.
+
+A bot the person already had: never push a script. Give them the file and these steps: open the bot in the builder → **Design** → **Custom code** → **Add JS**, paste, **Apply**, then **Publish**.
 
 ## Step 4 — Verify on the share URL (the only checks that prove anything)
 
@@ -109,6 +132,7 @@ Take a screenshot if you can. Report what you checked and what you did not: a fu
    (c) the brand font is used (`document.fonts.check` is true);
    (d) every button and the input can be reached, and nothing is covered.
 5. If one fails, fix the CSS, push again (same bot, still inside the yes), and repeat from step 1. Stop after three rounds and report what is still wrong.
+6. With a behaviour module on, also check it did its job at both widths (reply buttons inside the bubble, or the bar filling), and that `read_console_messages` shows no error from it.
 
 In the hand-back, say "looked at by me in the in-app browser at desktop and phone width", plus the result of each of the four checks.
 
@@ -117,7 +141,8 @@ In the hand-back, say "looked at by me in the in-app browser at desktop and phon
 ## Step 5 — Hand back
 
 - The CSS block (once, complete).
-- How it was applied: the push, or the three paste steps.
+- How it was applied: the push, or the three paste steps; the backup path of what the push replaced.
+- Any behaviour module, its CONFIG, and whether it is served (a plan without Custom JS stores it and does not serve it).
 - The verify result, with the config URL.
 - What the CSS could not reach (see REFERENCE.md §3) and any selector outside the catalog you used, marked fragile.
 - One question, optional: "Which part or state could you not style?" Pass the answer on with the bot id as an issue on the skills repo (never the token).

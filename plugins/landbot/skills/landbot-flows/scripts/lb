@@ -15,14 +15,24 @@
 #
 # Writes `HTTP <code>` to stderr and the body to stdout, and exits non-zero from 400 up,
 # so a failure is never read as a success. The token is never printed.
+#
+# Three draft safeguards run on their own (scripts/draft-check), because a person forgets and so
+# does an agent:
+#   - after every successful write to /bots/<id>/draft…, the draft is saved as "what this plugin
+#     last wrote";
+#   - before such a write, if the draft no longer matches that snapshot, a WARNING says what changed
+#     (an edit in the builder, or a builder tab saving an old copy over this plugin's work);
+#   - before POST /bots/<id>/versions (publish), `draft-check gate` runs, and a BLOCK refuses the
+#     publish: nothing is sent.
 set -uo pipefail
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 BASE="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"
 BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-VERSION="0.3.3"
+VERSION="0.3.4"
 if [ "${1:-}" = "--version" ]; then echo "landbot-flows $VERSION"; exit 0; fi
 
 # Every request says it comes from this plugin, its version and which agent ran it, so Landbot can
@@ -90,6 +100,34 @@ if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && comm
   fi
 fi
 
+# A question keeps its words twice: `text` (the builder) and `richText` (what the visitor's chat shows).
+# A write that carries a `richText` saying something else than its `text` (typically copied from an
+# earlier read) changes the builder and not the chat: 200, no violation, a clean publish, and visitors
+# keep the old words (verified 2026-09-23). Leaving the rich copy out is safe on every write: add-blocks
+# and PATCH derive it, and after a PUT /draft it is stored empty and the chat shows `text` (both verified
+# 2026-09-23). So refuse a write whose two copies disagree, before it is sent. The comparison is in
+# richtext.jq: every character counts but tags, entities, markdown and spacing, so "$1.00" and "$100"
+# differ; only wording that itself carries HTML is not compared.
+RICH_CHECK='include "richtext";
+  [ .. | objects | . as $o
+    | (["text","richText"], ["errorText","richErrorText"])
+    | select(($o[.[0]] | type) == "string" and ($o[.[1]] | type) == "string" and $o[.[1]] != "")
+    | select(comparable($o[.[0]]))
+    | select(rich_differs($o[.[0]]; $o[.[1]]))
+    | "\(.[1]) says \"\($o[.[1]] | rich_plain | .[0:50])\" but \(.[0]) says \"\($o[.[0]] | text_plain | .[0:50])\""
+  ] | first // empty'
+if [ "$METHOD" != "GET" ] && [ "$METHOD" != "DELETE" ] && [ -n "$BODY" ] && command -v jq >/dev/null 2>&1; then
+  case "$BODY" in
+  @*) rich_bad="$(jq -L "$HERE" -r "$RICH_CHECK" < "${BODY#@}" 2>/dev/null)" || rich_bad="the display-copy check could not run (jq -L $HERE richtext.jq)" ;;
+  *)  rich_bad="$(printf '%s' "$BODY" | jq -L "$HERE" -r "$RICH_CHECK" 2>/dev/null)" || rich_bad="the display-copy check could not run (jq -L $HERE richtext.jq)" ;;
+  esac
+  if [ -n "${rich_bad:-}" ]; then
+    echo "refusing: $rich_bad." >&2
+    echo "Visitors would keep seeing the rich copy. Leave richText/rawText (and richErrorText/rawErrorText) out of the write: the chat then shows the plain text. Nothing was sent." >&2
+    exit 65
+  fi
+fi
+
 TOKEN="${LANDBOT_API_TOKEN:-}"
 if [ -z "$TOKEN" ] && command -v security >/dev/null 2>&1; then
   TOKEN="$(security find-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null || true)"
@@ -123,6 +161,59 @@ if [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]
   fi
 fi
 
+DC="$HERE/draft-check"
+DRAFT_BOT=""
+BARE_PATH="${PATH_%%\?*}"; BARE_PATH="${BARE_PATH%%#*}"
+if [ "$METHOD" != "GET" ] && [[ "$BARE_PATH" =~ ^/bots/([A-Za-z0-9-]+)/draft ]]; then DRAFT_BOT="${BASH_REMATCH[1]}"; fi
+if [ "$METHOD" != "GET" ] && [[ "$BARE_PATH" =~ ^/+bots/+([A-Za-z0-9-]+)/+versions/*$ ]]; then
+  if [ ! -x "$DC" ]; then
+    echo "refusing to publish: the draft check ($DC) is missing or not executable, so the draft cannot be checked. Reinstall the plugin. Nothing was published." >&2
+    exit 65
+  fi
+  gate_out="$("$DC" gate "${BASH_REMATCH[1]}" 2>&1)"; gate_rc=$?
+  printf '%s\n' "$gate_out" >&2
+  if [ "$gate_rc" -ne 0 ]; then
+    echo "refusing to publish: the draft did not pass the checks above (draft-check gate exit $gate_rc). Nothing was published." >&2
+    exit 65
+  fi
+fi
+# Around a draft write: note the draft before it, and what the write itself is expected to touch, so a
+# change someone else makes meanwhile is recorded as pending instead of being absorbed into the snapshot.
+EXPECT=""
+if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ]; then
+  case "$BODY" in @*) body_json="$(cat "${BODY#@}" 2>/dev/null)" ;; *) body_json="$BODY" ;; esac
+  path_id=""; [[ "$BARE_PATH" =~ ^/bots/[A-Za-z0-9-]+/draft/blocks/([A-Za-z0-9_$-]+)/*$ ]] && path_id="${BASH_REMATCH[1]}"
+  EXPECT="$(printf '%s' "${body_json:-null}" | jq -c --arg pid "$path_id" --arg m "$METHOD" --arg p "$BARE_PATH" '
+    def node_of: {params: (.params // null), name: (.name // null)};
+    def conn_of($kind): if type == "object" then {kind: $kind, sourcePath: (.sourcePath // .source_path), targetPath: (.targetPath // .target_path), type, id} else {kind: $kind, id: .} end;
+    (. // {}) as $b |
+    if $m == "PUT" then
+      { put: { nodes: (($b.diagram.nodes // {}) | with_entries(.value |= {params: (.params // {}), name: (.name // null), template: (.template // null)})),
+               conns: [ ($b.diagram.connections // {}) | (if type == "object" then to_entries[] | (.value + {id: .key}) else .[] end) | conn_of("add") ] } }
+    elif ($p | test("/draft/blocks/[^/]+/*$")) and $m == "DELETE" then {nodes: {($pid): {delete: true}}, delete_incident: [$pid]}
+    elif ($p | test("/draft/blocks/[^/]+/*$")) then {nodes: {($pid): ($b | node_of)}}
+    elif ($p | test("/draft/blocks/*$")) and $m == "POST" then
+      { nodes: ([ ($b.blocks // [])[] | select(.id) | {key: .id, value: (node_of + {added: true})} ] | from_entries),
+        auto_added: ([ ($b.blocks // [])[] | select(.id | not) ] | length),
+        conns: [ ($b.connections // [])[] | conn_of("add") ] }
+    elif ($p | test("/draft/*$")) and $m == "PATCH" then
+      { nodes: ([ ($b.blocks.add // [])[] | select(.id) | {key: .id, value: (node_of + {added: true})} ]
+                + [ ($b.blocks.update // [])[] | select(.id) | {key: .id, value: node_of} ]
+                + [ ($b.blocks.delete // [])[] | (if type == "string" then . else .id end) | select(.) | {key: ., value: {delete: true}} ] | from_entries),
+        auto_added: ([ ($b.blocks.add // [])[] | select(.id | not) ] | length),
+        delete_incident: [ ($b.blocks.delete // [])[] | (if type == "string" then . else .id end) | select(.) ],
+        conns: ([ ($b.connections.add // [])[] | conn_of("add") ] + [ ($b.connections.delete // [])[] | conn_of("delete") ]) }
+    else {loose: ([ $b | .. | objects | (.id?, .sourcePath?, .targetPath?) | strings ] + (if $pid != "" then [$pid] else [] end))}
+    end' 2>/dev/null)" || EXPECT=""
+  [ -n "$EXPECT" ] || EXPECT='{}'
+  pre="$("$DC" pre "$DRAFT_BOT" 2>/dev/null)"
+  if [ -n "$pre" ]; then
+    { echo "WARNING: before this write, the draft had changes this plugin did not make, or it has never been checked on this machine:"
+      printf '%s\n' "$pre" | sed 's/^/  - /'
+      echo "Tell the person. Their edits stay in the draft; anything of yours that is gone, offer to put back. Publishing stays blocked until you run draft-check save."; } >&2
+  fi
+fi
+
 ARGS=(-sS -X "$METHOD" "$BASE$PATH_" -A "$USER_AGENT" -w '\n%{http_code}' --config -)
 if [ -n "$BODY" ]; then
   ARGS+=(-H 'Content-Type: application/json' --data-binary "$BODY")
@@ -135,6 +226,24 @@ RESPONSE="$(printf 'header = "Authorization: Token %s"\n' "$TOKEN" | curl "${ARG
 
 CODE="${RESPONSE##*$'\n'}"
 PAYLOAD="${RESPONSE%$'\n'*}"
+
+# Remember what this plugin wrote: after a draft write, and right after a bot is created. This runs
+# before anything is printed, so a caller that stops reading early (`| head`) cannot skip it.
+if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
+  if [ -n "$DRAFT_BOT" ]; then
+    expf="$(mktemp 2>/dev/null)" && printf '%s' "$EXPECT" > "$expf" || expf=""
+    if [ -z "$expf" ] || ! "$DC" post "$DRAFT_BOT" "@$expf" >/dev/null 2>&1; then
+      pend="${LANDBOT_STATE_DIR:-$HOME/.landbot}/drafts/$DRAFT_BOT.pending"
+      { mkdir -p "$(dirname "$pend")" && echo "after a write, the draft could not be re-read and saved, so what it holds now was never checked" >> "$pend"; } 2>/dev/null \
+        || echo "ERROR: could not record that the draft of $DRAFT_BOT was not checked after this write. Do not publish before draft-check diff and save." >&2
+      echo "WARNING: could not save a snapshot of the draft of $DRAFT_BOT after this write; publishing stays blocked until draft-check save." >&2
+    fi
+    [ -n "$expf" ] && rm -f "$expf"
+  elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
+    new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
+    [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || echo "WARNING: could not save the first snapshot of bot $new_id (draft-check save $new_id)" >&2; }
+  fi
+fi
 
 echo "HTTP $CODE" >&2
 if command -v jq >/dev/null 2>&1; then
