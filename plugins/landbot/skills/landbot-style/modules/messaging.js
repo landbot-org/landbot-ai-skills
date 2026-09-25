@@ -1,4 +1,4 @@
-/* lb-js: messaging 0.3.4 — makes a Landbot v4 web chat behave like a messaging app.
+/* lb-js: messaging 0.3.5 — makes a Landbot v4 web chat behave like a messaging app.
    Pairs with messaging.css (append it to the look's CSS). Change only CONFIG below.
    What it does, all on the page and nothing else:
      1. stamps each bubble with the time it first appeared (data-lb-ts) and the first message with a
