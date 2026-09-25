@@ -89,7 +89,7 @@ Do not paste the token into the chat to "check it".
 
 ## Updates
 
-Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live API contract at run time, so a new block type on Landbot's side needs no update here.
+Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. If you installed it from one of Anthropic's marketplaces instead, a new version reaches that marketplace a day or more after it is released here. The skills read the live API contract at run time, so a new block type on Landbot's side needs no update here.
 
 ## What this is not
 

@@ -1,0 +1,80 @@
+name: policy preflight
+
+# Before a new pin lands in Anthropic's catalogs, a Claude review reads the whole tree against
+# Anthropic's public policy prompt and a failing verdict holds or reverts the pin. This runs the same
+# prompt on this tree, so a release is not the first time we hear of a problem. It needs the
+# ANTHROPIC_API_KEY secret and costs one headless Claude run; without the secret it says so and stops.
+# Experimental: read the verdict, do not treat it as the review itself.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'plugins/**'
+      - '.claude-plugin/**'
+
+permissions:
+  contents: read
+
+env:
+  CLAUDE_CODE_VERSION: 2.1.282
+  # anthropics/claude-plugins-official, .github/policy/, at a commit reviewed on 2026-09-25.
+  POLICY_COMMIT: ad30d62cd52ad0d0af1beda1eab7f61c601045d0
+  POLICY_PROMPT_SHA256: e90eecc461c4797a874b8d75205feb4cc9bd3b8ab2da4ad8d5e6978a9bfbf3fb
+  POLICY_SCHEMA_SHA256: cd6d6306ad5b6e091c34c7d4ac10c7cc44004e0e70bed40e0d5dc5e29bde8ede
+
+jobs:
+  review:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Is the key there
+        id: key
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::ANTHROPIC_API_KEY is not set in this repository's secrets; the policy preflight did not run."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.key.outputs.run == 'true'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.key.outputs.run == 'true'
+        with:
+          node-version: '22'
+      - if: steps.key.outputs.run == 'true'
+        run: npm install -g @anthropic-ai/claude-code@${{ env.CLAUDE_CODE_VERSION }}
+
+      - name: Anthropic's policy prompt and verdict schema, at the pinned commit
+        if: steps.key.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          base="https://raw.githubusercontent.com/anthropics/claude-plugins-official/$POLICY_COMMIT/.github/policy"
+          curl -sSf "$base/prompt.md" -o "$RUNNER_TEMP/prompt.md"
+          curl -sSf "$base/schema.json" -o "$RUNNER_TEMP/schema.json"
+          echo "$POLICY_PROMPT_SHA256  $RUNNER_TEMP/prompt.md" | sha256sum -c -
+          echo "$POLICY_SCHEMA_SHA256  $RUNNER_TEMP/schema.json" | sha256sum -c -
+
+      - name: Review this tree as the catalogs would
+        if: steps.key.outputs.run == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          prompt="$(cat "$RUNNER_TEMP/prompt.md")"
+          prompt+=$'\n\nThe plugin under review is plugins/landbot; the whole repository ships with it. Reply with the JSON object only: no prose before or after it, no code fences.'
+          claude -p "$prompt" --output-format json --model claude-sonnet-5 --max-turns 80 \
+            --allowedTools "Read,Glob,Grep" --disallowedTools "Bash,Write,Edit,WebFetch,WebSearch" \
+            > "$RUNNER_TEMP/run.json"
+          jq -r '.result' "$RUNNER_TEMP/run.json" | sed -e '/^```/d' | jq . > "$RUNNER_TEMP/verdict.json"
+          jq -e --slurpfile s "$RUNNER_TEMP/schema.json" '. as $v | all($s[0].required[]; . as $k | $v | has($k))' "$RUNNER_TEMP/verdict.json" >/dev/null \
+            || { echo "::error::the verdict does not have every field the schema requires"; cat "$RUNNER_TEMP/verdict.json"; exit 1; }
+          { echo '## Policy preflight'; echo
+            jq -r '"- passes: **\(.passes)**\n- external network calls: \(.may_make_external_network_calls)\n- downloads software: \(.may_download_additional_software)\n- broad-scope hooks: \(.has_broad_scope_hooks)\n- undisclosed telemetry: \(.has_undisclosed_telemetry)\n- description matches behaviour: \(.description_matches_behavior)\n\n\(.summary)\n\n**Violations:** \(if .violations == "" then "none" else .violations end)"' "$RUNNER_TEMP/verdict.json"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          jq -e '.passes == true' "$RUNNER_TEMP/verdict.json" >/dev/null || { echo "::error::the policy review did not pass; see the summary"; exit 1; }

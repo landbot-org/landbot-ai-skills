@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Where the plugin stands in Anthropic's two catalogs. Each lists a plugin pinned to one commit of
+# its source repo and moves that pin on its own schedule; this says whether the pin is at what this
+# repo last published.
+#
+#   scripts/catalog-status [--json]
+#
+# Exit 0: not listed, or listed and current. Exit 3: listed and behind. Reads public data only;
+# GH_TOKEN, when set, only raises the GitHub API rate limit.
+set -euo pipefail
+REPO="${CATALOG_REPO:-landbot-org/landbot-ai-skills}"
+PLUGIN="${CATALOG_PLUGIN:-landbot}"
+JSON=""; [ "${1:-}" = "--json" ] && JSON=1
+
+auth=()
+[ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ] && auth=(-H "Authorization: Bearer ${GH_TOKEN:-$GITHUB_TOKEN}")
+api() { curl -sSf ${auth[@]+"${auth[@]}"} -H 'Accept: application/vnd.github+json' "https://api.github.com/$1"; }
+raw() { curl -sSf "https://raw.githubusercontent.com/$1"; }
+commit_date() { api "repos/$REPO/commits/$1" 2>/dev/null | jq -r '.commit.committer.date // empty'; }
+days_since() {  # ISO date → whole days until now
+  local t
+  t="$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$1" +%s 2>/dev/null || date -u -d "$1" +%s)"
+  echo $(( ( $(date -u +%s) - t ) / 86400 ))
+}
+
+main_sha="$(git ls-remote "https://github.com/$REPO.git" refs/heads/main | cut -f1)"
+release="$(api "repos/$REPO/releases/latest" 2>/dev/null || echo '{}')"
+rel_tag="$(jq -r '.tag_name // empty' <<<"$release")"
+rel_sha=""
+if [ -n "$rel_tag" ]; then
+  rel_sha="$(git ls-remote "https://github.com/$REPO.git" "refs/tags/$rel_tag" "refs/tags/$rel_tag^{}" | tail -1 | cut -f1)"
+fi
+
+rows='[]'
+check_catalog() {  # label  catalog-repo
+  local label="$1" crepo="$2" mkt entry sha frozen=false releases_only=false target tracking state behind_days=0 d
+  mkt="$(raw "$crepo/main/.claude-plugin/marketplace.json")"
+  entry="$(jq -c --arg n "$PLUGIN" '.plugins[] | select(.name == $n)' <<<"$mkt")"
+  if [ -z "$entry" ]; then
+    rows="$(jq -c --arg l "$label" '. + [{catalog: $l, state: "not listed"}]' <<<"$rows")"
+    return
+  fi
+  sha="$(jq -r '.source.sha // empty' <<<"$entry")"
+  raw "$crepo/main/.github/freeze-shas.txt" 2>/dev/null | grep -qx "$PLUGIN" && frozen=true
+  raw "$crepo/main/.github/bump-tracking.json" 2>/dev/null | jq -e --arg n "$PLUGIN" '."releases-only" | index($n) != null' >/dev/null 2>&1 && releases_only=true
+  if [ "$releases_only" = true ]; then target="$rel_sha"; tracking="latest release (${rel_tag:-none})"; else target="$main_sha"; tracking="main HEAD"; fi
+  if [ -z "$sha" ]; then state="unpinned"
+  elif [ -z "$target" ]; then state="no target"
+  elif [ "$sha" = "$target" ]; then state="current"
+  else
+    state="behind"
+    d="$(commit_date "$target")"; [ -n "$d" ] && behind_days="$(days_since "$d")"
+  fi
+  rows="$(jq -c --arg l "$label" --arg s "$sha" --arg t "$target" --arg tr "$tracking" --arg st "$state" \
+             --argjson f "$frozen" --argjson r "$releases_only" --argjson bd "$behind_days" --argjson e "$entry" \
+             '. + [{catalog: $l, state: $st, pinned: $s, target: $t, tracking: $tr, frozen: $f,
+                    releases_only: $r, behind_days: $bd, source: $e.source, category: $e.category}]' <<<"$rows")"
+}
+
+check_catalog community anthropics/claude-plugins-community
+check_catalog official  anthropics/claude-plugins-official
+
+if [ -n "$JSON" ]; then
+  jq -n --arg repo "$REPO" --arg plugin "$PLUGIN" --arg main "$main_sha" --arg tag "$rel_tag" --arg rel "$rel_sha" --argjson catalogs "$rows" \
+    '{repo: $repo, plugin: $plugin, main_sha: $main, latest_release: {tag: $tag, sha: $rel}, catalogs: $catalogs}'
+else
+  echo "$PLUGIN from $REPO: main ${main_sha:0:8}, latest release ${rel_tag:-none}${rel_sha:+ (${rel_sha:0:8})}"
+  jq -r '.[] | if .state == "not listed" then "  \(.catalog): not listed"
+               else "  \(.catalog): \(.state)\(if .state == "behind" then " by \(.behind_days) day(s)" else "" end); pinned \(.pinned[0:8]) tracking \(.tracking)\(if .frozen then "; FROZEN" else "" end)" end' <<<"$rows"
+fi
+jq -e 'any(.state == "behind")' <<<"$rows" >/dev/null && exit 3
+exit 0

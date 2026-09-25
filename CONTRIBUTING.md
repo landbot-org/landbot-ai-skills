@@ -1,6 +1,6 @@
 # Contributing
 
-One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). How the version is set and bumped is under [Versions](#versions).
+One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). How the version is set and bumped is under [Versions](#versions); how a version is published is in `RELEASING.md`.
 
 Rules:
 
@@ -25,7 +25,7 @@ The same value is repeated, and must match, in:
 - the header comment of each file in `plugins/landbot/skills/landbot-style/modules/`;
 - the version quoted in `README.md`, `skills.md` and `SECURITY.md`.
 
-`smoke/versions.sh` checks all of them.
+`smoke/versions.sh` checks all of them; `scripts/version bump X.Y.Z` rewrites all of them.
 
 The plugin stays on `0.x`. Moving to `1.0` is a decision of its own, not the result of a change type. While on `0.x`:
 
@@ -40,7 +40,7 @@ Changes outside `plugins/`, such as docs or CI, do not bump the version. `smoke/
 
 Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`, with `(<scope>)` and `!` optional. Types: `feat`, `fix`, `docs`, `ci`, `build`, `chore`, `refactor`, `test`. Scopes: `flows` and `style` for a change to one skill, `deps` for dependency updates; no scope when a change touches the whole plugin or the repository. The title becomes the commit on `main`, and `smoke/pr-title.sh` checks it.
 
-A release is tagged `vX.Y.Z` on the commit in `main` where `plugin.json` first carries that version. `vX.Y.Z-rcN` tags are made by hand for testing a candidate; a person can install one by adding the marketplace at that ref (`landbot-org/landbot-ai-skills#v0.3.5-rc1` in Claude Code).
+A release is tagged `vX.Y.Z` on the commit in `main` where `plugin.json` first carries that version. `vX.Y.Z-rcN` tags are made by hand for testing a candidate; a person can install one by adding the marketplace at that ref (`landbot-org/landbot-ai-skills#v0.3.5-rc1` in Claude Code). The `release` workflow publishes the GitHub Release for a `vX.Y.Z` tag, and `RELEASING.md` says what each marketplace does with it afterwards.
 
 Tags matching `v*` cannot be deleted or moved to another commit; the `release tags` ruleset refuses both, for admins too. Anyone with write access can create one. A tag that points at the wrong commit is not fixed by moving it: release the next version instead. To remove a tag created by mistake, a repository admin sets the `release tags` ruleset (Settings › Rulesets) to *Disabled*, deletes the tag, and sets the ruleset back to *Active*.
 

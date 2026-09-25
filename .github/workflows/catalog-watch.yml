@@ -1,0 +1,62 @@
+name: catalog watch
+
+# Anthropic's community and official catalogs pin this plugin to one commit and move that pin with
+# a nightly job of their own (07:23 UTC). This runs after it, compares each pin with what this repo
+# published, and keeps one issue open while a catalog is behind for more than three days or frozen.
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_TITLE: 'Catalog pin needs attention'
+  MAX_BEHIND_DAYS: '3'
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compare the catalog pins with what this repo published
+        id: status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          scripts/catalog-status --json > "$RUNNER_TEMP/status.json" || true
+          { echo '```'; scripts/catalog-status || true; echo '```'; } > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          attention="$(jq -r --argjson max "$MAX_BEHIND_DAYS" \
+            '[.catalogs[] | select((.state == "behind" and .behind_days > $max) or .frozen == true) | .catalog] | join(", ")' \
+            "$RUNNER_TEMP/status.json")"
+          echo "attention=$attention" >> "$GITHUB_OUTPUT"
+
+      - name: Open, update or close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTENTION: ${{ steps.status.outputs.attention }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$REPO" --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title \
+            --jq --arg t "$ISSUE_TITLE" '[.[] | select(.title == $t)][0].number // empty')"
+          if [ -n "$ATTENTION" ]; then
+            { echo "As of $(date -u +%F): **$ATTENTION**."; echo
+              cat "$RUNNER_TEMP/report.md"; echo
+              echo "A catalog behind for more than $MAX_BEHIND_DAYS days after a release, or frozen, needs a look: RELEASING.md says what to check and whom to ask."; } > "$RUNNER_TEMP/body.md"
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$REPO" --body-file "$RUNNER_TEMP/body.md"
+            else
+              gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --body-file "$RUNNER_TEMP/body.md"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --repo "$REPO" --comment "$(printf 'Every catalog is current again as of %s.\n\n' "$(date -u +%F)"; cat "$RUNNER_TEMP/report.md")"
+          else
+            echo "nothing to report"
+          fi

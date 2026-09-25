@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# The plugin version is declared once, in plugins/landbot/.claude-plugin/plugin.json, and repeated
+# where a copy of the plugin has to say which version it is: the first line each skill prints, the
+# user agent, the Custom JS module markers and the docs. smoke/versions.sh checks every copy; this
+# rewrites them.
+#
+#   scripts/version              print it
+#   scripts/version check        the same check CI runs (smoke/versions.sh)
+#   scripts/version bump X.Y.Z   rewrite every copy and check; then commit and open the pull request
+set -euo pipefail
+cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
+MANIFEST=plugins/landbot/.claude-plugin/plugin.json
+V='[0-9]+\.[0-9]+\.[0-9]+'
+
+# Each place: the file, then the text right before the version there (an extended regex).
+places() {
+  printf '%s\t%s\n' \
+    "$MANIFEST"                                                 '"version": "' \
+    plugins/landbot/skills/landbot-flows/SKILL.md               '  version: ' \
+    plugins/landbot/skills/landbot-flows/SKILL.md               '`landbot-flows ' \
+    plugins/landbot/skills/landbot-style/SKILL.md               '  version: ' \
+    plugins/landbot/skills/landbot-style/SKILL.md               '`landbot-style ' \
+    plugins/landbot/skills/landbot-flows/scripts/lb             'VERSION="' \
+    plugins/landbot/skills/landbot-style/modules/messaging.js   'lb-js: messaging ' \
+    plugins/landbot/skills/landbot-style/modules/messaging.css  'lb-js companion: messaging ' \
+    plugins/landbot/skills/landbot-style/modules/steps.js       'lb-js: steps ' \
+    plugins/landbot/skills/landbot-style/modules/steps.css      'lb-js companion: steps ' \
+    README.md                                                   '`landbot-flows ' \
+    skills.md                                                   '`landbot-flows ' \
+    SECURITY.md                                                 'landbot-plugin/'
+}
+
+case "${1:-}" in
+  "") jq -r .version "$MANIFEST" ;;
+  check) exec smoke/versions.sh ;;
+  bump)
+    new="${2:-}"
+    [[ "$new" =~ ^${V}$ ]] || { echo "not a version: '$new' (want X.Y.Z; a release candidate is a git tag, not a version)" >&2; exit 64; }
+    current="$(jq -r .version "$MANIFEST")"
+    [ "$new" != "$current" ] || { echo "already at $current" >&2; exit 65; }
+    [ "$(printf '%s\n%s\n' "$current" "$new" | sort -V | tail -1)" = "$new" ] || { echo "$new is lower than the current $current" >&2; exit 65; }
+    tmp="$(mktemp)"
+    while IFS=$'\t' read -r file pat; do
+      sed -E "s|(${pat})${V}|\1${new}|g" "$file" > "$tmp"
+      cat "$tmp" > "$file"   # written in place, so an executable stays executable
+    done < <(places)
+    rm -f "$tmp"
+    smoke/versions.sh
+    echo "Next: a '## [$new]' section in CHANGELOG.md, then commit and open the pull request."
+    ;;
+  *) echo "usage: scripts/version [check | bump X.Y.Z]" >&2; exit 64 ;;
+esac

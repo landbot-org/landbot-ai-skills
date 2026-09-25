@@ -1,12 +1,18 @@
 name: validate
 
+# The two job names below are required checks on main; keep them. The release workflow reuses this one.
+
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
+
+env:
+  CLAUDE_CODE_VERSION: 2.1.282
 
 jobs:
   manifests:
@@ -17,7 +23,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
-      - run: npm install -g @anthropic-ai/claude-code@2.1.282
+      - run: npm install -g @anthropic-ai/claude-code@${{ env.CLAUDE_CODE_VERSION }}
       - run: claude plugin validate --strict .
       - run: claude plugin validate --strict plugins/landbot
 
@@ -28,3 +34,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: bash smoke/versions.sh
       - run: bash smoke/guards.sh
+      - name: every script parses
+        run: |
+          set -euo pipefail
+          for f in scripts/* plugins/landbot/skills/*/scripts/* smoke/*.sh; do
+            case "$f" in *.jq) continue ;; esac
+            bash -n "$f"
+          done

@@ -1,0 +1,122 @@
+name: release
+
+# A release is a tag vX.Y.Z on a commit of main whose plugin.json says X.Y.Z. Push that tag
+# yourself, or run this workflow by hand and it tags the head of main for you. Either way it runs
+# the pull-request checks again, refuses a tag that does not match plugin.json or is not on main,
+# installs the plugin from the tagged tree as a user would, and publishes a GitHub Release whose
+# notes are that version's section of CHANGELOG.md. A release-candidate tag (vX.Y.Z-rcN) is for
+# installing at a ref, not a release, and is ignored here.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLAUDE_CODE_VERSION: 2.1.282
+
+jobs:
+  checks:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.ref_name, '-') }}
+    uses: ./.github/workflows/validate.yml
+
+  release:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm install -g @anthropic-ai/claude-code@${{ env.CLAUDE_CODE_VERSION }}
+
+      - name: The version, the tag, and that the commit is on main
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(scripts/version)"
+          tag="v$version"
+          if [ "$EVENT" = push ] && [ "$REF_NAME" != "$tag" ]; then
+            echo "::error::the tag is $REF_NAME but plugin.json says $version"; exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$(git rev-parse --short HEAD) is not on main; releases are cut from main"; exit 1
+          fi
+          { echo "version=$version"; echo "tag=$tag"; } >> "$GITHUB_OUTPUT"
+          echo "releasing landbot $version as $tag"
+
+      - name: Release notes are this version's section of CHANGELOG.md
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          awk -v v="$VERSION" '/^## \[/ { on = (index($0, "## [" v "]") == 1); next } on { print }' CHANGELOG.md \
+            | sed -e '/./,$!d' > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section with content"; exit 1
+          fi
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Tag the head of main (manual run only)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            at="$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | tail -1 | cut -f1)"
+            [ "$at" = "$(git rev-parse HEAD)" ] || { echo "::error::$TAG already exists at ${at:0:8}, not at the head of main; bump the version first"; exit 1; }
+            echo "$TAG already points at HEAD"
+          else
+            git tag -a "$TAG" -m "landbot $VERSION"
+            git push origin "refs/tags/$TAG"
+          fi
+
+      - name: Install the plugin from this tree, as a user would
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          claude plugin marketplace add "$GITHUB_WORKSPACE"
+          claude plugin install landbot@landbot-skills
+          claude plugin list --json > "$RUNNER_TEMP/plugins.json"
+          jq -e --arg v "$VERSION" '.[] | select(.id == "landbot@landbot-skills")
+            | select(.version == $v and .enabled == true and ((.errors // []) | length == 0))' "$RUNNER_TEMP/plugins.json" >/dev/null \
+            || { echo "::error::the installed plugin is not landbot $VERSION, enabled, without errors:"; cat "$RUNNER_TEMP/plugins.json"; exit 1; }
+          root="$(jq -r '.[] | select(.id == "landbot@landbot-skills") | .installPath' "$RUNNER_TEMP/plugins.json")"
+          test -x "$root/skills/landbot-flows/scripts/lb"
+          test -x "$root/skills/landbot-style/scripts/verify-share"
+          [ "$("$root/skills/landbot-flows/scripts/lb" --version)" = "landbot-flows $VERSION" ]
+          echo "installed and enabled: landbot $VERSION at $root"
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::release $TAG already exists; leaving it as it is"; exit 0
+          fi
+          gh release create "$TAG" --verify-tag --title "landbot $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+
+      - name: Where the catalogs stand
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '## Catalogs'; echo; echo '```'; scripts/catalog-status || true; echo '```'
+            echo; echo "Anthropic's catalogs move their pin on their own schedule; RELEASING.md says how."; } >> "$GITHUB_STEP_SUMMARY"
