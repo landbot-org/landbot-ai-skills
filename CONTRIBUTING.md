@@ -1,6 +1,6 @@
 # Contributing
 
-One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). Bump the version in three places together: `plugin.json`, `marketplace.json`, and the "First line" of each `SKILL.md`; `smoke/versions.sh` checks they agree.
+One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). How the version is set and bumped is under [Versions](#versions).
 
 Rules:
 
@@ -13,6 +13,35 @@ Rules:
 - `allowed-tools` pre-approves reads only (`lb GET`, `setup-token --whoami|--check`, `handoff`, `channel get`, `verify-share`). Anything that writes to a bot or channel must keep prompting.
 - Test on a brand that is not a customer's before opening a pull request, and say in the PR which environment you tested against.
 - CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
+
+## Versions
+
+The plugin is the unit that Claude Code and Codex install and update, so it carries one version for both skills. `plugins/landbot/.claude-plugin/plugin.json` is the only place that declares it; the entry in `marketplace.json` has no `version`. Both agents give a person who already installed the plugin a new copy only when that version changes, so a change under `plugins/` that people should receive needs a bump.
+
+The same value is repeated, and must match, in:
+
+- each `SKILL.md`: `metadata.version` and the "First line" it tells the agent to print;
+- `VERSION` in `plugins/landbot/skills/landbot-flows/scripts/lb`, sent in the user agent;
+- the header comment of each file in `plugins/landbot/skills/landbot-style/modules/`;
+- the version quoted in `README.md`, `skills.md` and `SECURITY.md`.
+
+`smoke/versions.sh` checks all of them.
+
+The plugin stays on `0.x`. Moving to `1.0` is a decision of its own, not the result of a change type. While on `0.x`:
+
+| Change | Bump | Example |
+|---|---|---|
+| New behaviour (`feat`) | minor | `0.3.4` → `0.4.0` |
+| Fix (`fix`) | patch | `0.3.4` → `0.3.5` |
+| Incompatible change (`!` after the type) | minor | `0.3.4` → `0.4.0` |
+
+Changes outside `plugins/`, such as docs or CI, do not bump the version.
+
+Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`, with `(<scope>)` and `!` optional. Types: `feat`, `fix`, `docs`, `ci`, `build`, `chore`, `refactor`, `test`. Scopes: `flows` and `style` for a change to one skill, `deps` for dependency updates; no scope when a change touches the whole plugin or the repository.
+
+A release is tagged `vX.Y.Z` on the commit in `main` where `plugin.json` first carries that version. `vX.Y.Z-rcN` tags are made by hand for testing a candidate; a person can install one by adding the marketplace at that ref (`landbot-org/landbot-ai-skills#v0.3.5-rc1` in Claude Code).
+
+With a second plugin in this repository, each plugin keeps its own version in its own `plugin.json`, tags become `<plugin>--vX.Y.Z`, and the scope is the plugin name.
 
 ## Changes to `main`
 
