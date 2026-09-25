@@ -34,6 +34,7 @@ The plugin stays on `0.x`. Moving to `1.0` is a decision of its own, not the res
 | New behaviour (`feat`) | minor | `0.3.4` → `0.4.0` |
 | Fix (`fix`) | patch | `0.3.4` → `0.3.5` |
 | Incompatible change (`!` after the type) | minor | `0.3.4` → `0.4.0` |
+| Any other type (`refactor`, `chore`, `build`, `docs`, `test`) that changes a file under `plugins/` | patch | `0.3.4` → `0.3.5` |
 
 Changes outside `plugins/`, such as docs or CI, do not bump the version.
 
