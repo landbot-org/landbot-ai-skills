@@ -17,7 +17,7 @@ cr=$(( $(date +%s) - ${MOCK_AGE_H:-1}*3600 ))
 case "$M $P" in
 "GET /bots/"*"/draft") cat "${MOCK_DRAFT:-$D/draft.json}";;
 "GET /bots/"*) echo "{\"data\":{\"id\":\"BOT\",\"channel_family\":\"landbot\",\"channels\":${MOCK_CHANNELS:-[\"cu-1\"]}}}";;
-"GET /channels/777/test_config/") [ -n "${MOCK_NOTESTCFG:-}" ] && exit 1; jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --arg w "$(cat "$D/dwelcome" 2>/dev/null || echo hi)" --arg tok "$RANDOM$RANDOM" --arg ch "$(cat "$D/dchat" 2>/dev/null || true)" '{test:true,version:$v,style:$s,foot:$f,welcome:$w,chat_placeholder:$ch,customerToken:$tok,landbotToken:$tok,channelToken:$tok,firestore:{api_key:$tok}}';;
+"GET /channels/777/test_config/") [ -n "${MOCK_NOTESTCFG:-}" ] && exit 1; jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --arg w "$(cat "$D/dwelcome" 2>/dev/null || echo hi)" --arg tok "$RANDOM$RANDOM" --arg ch "$(cat "$D/dchat" 2>/dev/null || true)" --argjson dz "$(cat "$D/ddesign" 2>/dev/null || cat "$D/design" 2>/dev/null || echo '{"background_color":"#ffffff","header_title":"Hi"}')" '{test:true,version:$v,style:$s,foot:$f,welcome:$w,chat_placeholder:$ch,design:$dz,customerToken:$tok,landbotToken:$tok,channelToken:$tok,firestore:{api_key:$tok}}';;
 "GET /channels/"*) id="${P#/channels/}"; id="${id%/}"; [ "$id" = "777" ] || exit 1
    ver=$(cat "$D/ver" 2>/dev/null || echo 3.0.0); sty=$(cat "$D/style" 2>/dev/null || true); ft=$(cat "$D/foot" 2>/dev/null || true)
    mg=$(cat "$D/merged" 2>/dev/null || echo "${MOCK_MERGED:-true}")
@@ -347,6 +347,7 @@ t "back on, live"                  0:1 "$C" back on --bot BOT
 jq -e '.design == {"background_color":"#ffffff","header_title":"Hi","back_button_visible":true} and (has("autosave") | not)' "$T/patches" >/dev/null && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL back on did not send the whole design with only back_button_visible added"; }
 t "back off, bot not created here: draft" 0:1 "$C" back off --bot OTHER
 jq -e '.autosave == true and .design.back_button_visible == false and .design.header_title == "Hi"' "$T/patches" >/dev/null && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL back off on another bot was not a whole-design draft write"; }
+t "back off: draft the builder previews must hold it" 1:1 env MOCK_NOTESTCFG=1 "$C" back off --bot OTHER
 t "back over pending changes refused" 75:0 env MOCK_MERGED=false "$C" back on --bot BOT
 t "back when the design moves meanwhile refused" 75:0 env MOCK_FLIP_DESIGN=1 "$C" back on --bot BOT
 t "back with a bad value"          64:0 "$C" back maybe --bot BOT

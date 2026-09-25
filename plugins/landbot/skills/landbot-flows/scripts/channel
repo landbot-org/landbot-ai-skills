@@ -379,7 +379,10 @@ resp="$(LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/" "$payload" 2>/dev/nul
 if [ "$MODE" = draft ]; then
   draft="$(printf '%s' "$resp" | jq '.channel // .' 2>/dev/null)"
   case "$OP" in
-  back) got="$(printf '%s' "$draft" | jq -r '.design.back_button_visible | tostring')"; [ "$got" = "$want_back" ] || { echo "PATCH answered but the draft reports back_button_visible $got" >&2; exit 1; } ;;
+  back) got="$(printf '%s' "$draft" | jq -r '.design.back_button_visible | tostring')"; [ "$got" = "$want_back" ] || { echo "PATCH answered but the draft reports back_button_visible $got" >&2; exit 1; }
+        # the PATCH answer is an echo; the draft the builder's Preview loads is the proof (not `// default`: false is a value)
+        got="$(LANDBOT_API_URL="$V1" "$LB" GET "/channels/$ID/test_config/" 2>/dev/null | jq -r '.design.back_button_visible | tostring' 2>/dev/null)"
+        [ "$got" = "$want_back" ] || { echo "PATCH answered but the draft the builder previews reports back_button_visible '${got:-unreadable}'; check it in the builder" >&2; exit 1; } ;;
   v4)  got="$(printf '%s' "$draft" | jq -r '.version // .landbot.version // "?"')"; [ "$got" = "3.1.0" ] || { echo "PATCH answered but the draft reports version $got" >&2; exit 1; } ;;
   css) same="$(jq -n --rawfile f "$FILE" --argjson a "$draft" '(($a.style // "") | sub("\\s+$"; "")) == ($f | sub("\\s+$"; ""))')"
        [ "$same" = "true" ] || { echo "PATCH answered but the draft holds different CSS than the file" >&2; exit 1; } ;;
@@ -387,7 +390,7 @@ if [ "$MODE" = draft ]; then
        [ "$same" = "true" ] || { echo "PATCH answered but the draft holds different Custom JS than was sent" >&2; exit 1; } ;;
   esac
   after="$(read_channel)" || exit 1
-  moved="$(jq -n --argjson b "$body" --argjson a "$after" '[$b.style, $b.foot, ($b.version // $b.landbot.version)] != [$a.style, $a.foot, ($a.version // $a.landbot.version)]')"
+  moved="$(jq -n --argjson b "$body" --argjson a "$after" '[$b.style, $b.foot, ($b.version // $b.landbot.version), $b.design] != [$a.style, $a.foot, ($a.version // $a.landbot.version), $a.design]')"
   if [ "$moved" = "true" ]; then
     echo "WARNING: the live channel changed during a draft write. That is not expected; check the share URL now and tell the person." >&2
     exit 1
