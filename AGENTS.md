@@ -28,6 +28,7 @@ This repository is a plugin marketplace for Claude Code and Codex. It has one pl
 ## Tags
 
 - Tags matching `v*` cannot be deleted or moved; creating one is allowed. Never try to fix a tag by moving it. Release the next version instead.
+- Do not create `vX.Y.Z` tags or releases by hand. When a new version reaches `main`, the `release` workflow tags it and publishes the release, with notes built from the commit titles. `scripts/release.sh --dry-run` shows those notes beforehand.
 - `vX.Y.Z-rcN` tags are made by hand to test a release candidate.
 
 ## GitHub Actions

@@ -89,7 +89,7 @@ Do not paste the token into the chat to "check it".
 
 ## Updates
 
-Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live API contract at run time, so a new block type on Landbot's side needs no update here.
+Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live API contract at run time, so a new block type on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
 
 ## What this is not
 
