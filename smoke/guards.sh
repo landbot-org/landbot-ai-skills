@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Offline tests for the write guards in scripts/channel and the name guard in scripts/lb.
+# Offline tests for the write guards in scripts/channel, the name, body and firewall handling in scripts/lb,
+# draft-check, and the marker check in landbot-style/scripts/verify-share.
 # No network, no token: channel runs against a fake lb + handoff in a temp dir. Exits 1 on any failure.
 set -u
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -337,6 +338,63 @@ t "markdown link matching sent"                     1:0 "$L" PATCH /bots/x/draft
 t "HTML wording with a different price refused"   65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"<b>Pay $1.00</b>","richText":"<p>Pay $100</p>"}}'
 t "markdown-looking display copy refused"         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Pay $100","richText":"<p>[Pay $100](plus $900)</p>"}}'
 t "unknown entity refused"                         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Hi","richText":"<p>Hi &hellip;</p>"}}'
+
+# formulas: the API re-derives `value` from `formula`, so the plugin's own formula edit is not someone else's change
+jq '.data.diagram.nodes.f = {id:"f",template:"formulas",params:{field:"x",formula:"Sum(1, 1)",value:{"+":{args:[1,1]}},output:"default",version:"1.0"}}' "$T/good.json" > "$T/f1.json"
+jq '.data.diagram.nodes.f.params.formula = "Sum(1, 2)" | .data.diagram.nodes.f.params.value = {"+":{args:[1,2]}}' "$T/f1.json" > "$T/f2.json"
+jq '.data.diagram.nodes.f.params.value = {"+":{args:[9,9]}}' "$T/f1.json" > "$T/f3.json"
+MOCK_DRAFT="$T/f1.json" "$DK" save BOTU >/dev/null 2>&1; MOCK_DRAFT="$T/f1.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/f2.json" "$DK" post BOTU '{"nodes":{"f":{"params":{"field":"x","formula":"Sum(1, 2)","output":"default","version":"1.0"}}}}' >/dev/null 2>&1
+g "own formula edit: re-derived value not pending" 0 f2.json
+MOCK_DRAFT="$T/f1.json" "$DK" save BOTU >/dev/null 2>&1; MOCK_DRAFT="$T/f1.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/f3.json" "$DK" post BOTU '{"nodes":{"f":{"params":{"field":"x","formula":"Sum(1, 1)","output":"default","version":"1.0"}}}}' >/dev/null 2>&1
+g "value changed with the formula unchanged is pending" 65 f3.json
+
+# lb: JSON bodies go out compact (an indented body can be refused by the firewall), and a firewall 403 is named as one
+cat > "$T/fw.py" <<'E'
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_POST(self):
+        b = self.rfile.read(int(self.headers.get('Content-Length', 0))); open(sys.argv[2], 'wb').write(b)
+        if self.path.startswith('/cf'):
+            self.send_response(403); self.send_header('Content-Type', 'text/html; charset=UTF-8'); self.send_header('Server', 'cloudflare'); self.send_header('CF-RAY', 'abc123-MAD'); self.end_headers()
+            self.wfile.write(b'<!DOCTYPE html><title>Attention Required! | Cloudflare</title>')
+        elif self.path.startswith('/api403'):
+            self.send_response(403); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(b'{"detail":"You do not have permission"}')
+        else:
+            self.send_response(400); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(b'{"blocks":["x"]}')
+    do_PATCH = do_POST; do_PUT = do_POST
+http.server.HTTPServer(('127.0.0.1', int(sys.argv[1])), H).serve_forever()
+E
+FP=$(( 20000 + RANDOM % 20000 )); python3 "$T/fw.py" "$FP" "$T/sent" >/dev/null 2>&1 & FSRV=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null -X POST "http://127.0.0.1:$FP/x" && break; sleep 0.3; done
+export LANDBOT_API_URL="http://127.0.0.1:$FP"
+chk() { local name="$1" want="$2"; [ "$(cat "$T/sent" 2>/dev/null)" = "$want" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL $name: sent [$(cat "$T/sent" 2>/dev/null)], want [$want]"; }; }
+rm -f "$T/sent"; "$L" POST /bots/x/draft/blocks "$(printf '{\n  "blocks": [\n    {"id": "a", "top": 200}\n  ]\n}')" >/dev/null 2>&1
+chk "indented inline body sent compact" '{"blocks":[{"id":"a","top":200}]}'
+printf '{\n    "blocks": [ {"id": "b"} ]\n}\n' > "$T/pretty.json"; rm -f "$T/sent"; "$L" POST /bots/x/draft/blocks "@$T/pretty.json" >/dev/null 2>&1
+chk "indented @file body sent compact" '{"blocks":[{"id":"b"}]}'
+rm -f "$T/sent"; "$L" POST /bots/x/draft/blocks '{"text":"a  b\n  c"}' >/dev/null 2>&1
+chk "spaces inside strings kept" '{"text":"a  b\n  c"}'
+rm -f "$T/sent"; "$L" POST /bots/x/draft/blocks 'not json' >/dev/null 2>&1; rc=$?
+{ [ "$rc" = 65 ] && [ ! -e "$T/sent" ]; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a non-JSON write body is no longer refused before sending (rc=$rc)"; }
+"$L" POST /cf/x '{}' >/dev/null 2>"$T/cf.err"; rc=$?
+{ [ "$rc" = 1 ] && grep -F 'FIREWALL' "$T/cf.err" >/dev/null && grep -F 'abc123-MAD' "$T/cf.err" >/dev/null; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a Cloudflare 403 is not named as the firewall (rc=$rc)"; }
+"$L" POST /api403/x '{}' >/dev/null 2>"$T/api.err"; rc=$?
+{ [ "$rc" = 1 ] && ! grep -F 'FIREWALL' "$T/api.err" >/dev/null; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL an API 403 was named as the firewall (rc=$rc)"; }
+kill "$FSRV" 2>/dev/null; wait "$FSRV" 2>/dev/null
+
+# verify-share: a marker that is published must be found every time, however large the style (pipefail + grep -q gave false FAILs)
+V="$HERE/plugins/landbot/skills/landbot-style/scripts/verify-share"
+VW="$T/vwww"; mkdir -p "$VW/H-1-AAA" "$VW/H-2-BBB"
+python3 -c 'import json; s="/* lb-style: guard */\n"+"a{b:c}\n"*30000; json.dump({"version":"3.1.0","use_surrogate_interaction":True,"style":s,"foot":"x"*20000},open("'"$VW"'/H-1-AAA/index.json","w")); json.dump({"version":"3.1.0","use_surrogate_interaction":True,"style":"a{b:c}\n"*30000},open("'"$VW"'/H-2-BBB/index.json","w"))'
+VP=$(( 20000 + RANDOM % 20000 )); (cd "$VW" && python3 -m http.server "$VP" --bind 127.0.0.1 >/dev/null 2>&1) & VSRV=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "http://127.0.0.1:$VP/H-1-AAA/index.json" && break; sleep 0.3; done
+vok=0; for _ in 1 2 3 4 5 6 7 8 9 10; do LANDBOT_CONFIG_BASE="http://127.0.0.1:$VP" "$V" H-1-AAA "lb-style: guard" >/dev/null 2>&1 && vok=$((vok+1)); done
+[ "$vok" = 10 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share found a published marker in only $vok of 10 runs"; }
+LANDBOT_CONFIG_BASE="http://127.0.0.1:$VP" "$V" H-2-BBB "lb-style: guard" >/dev/null 2>&1; [ $? = 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share passed a missing marker"; }
+kill "$VSRV" 2>/dev/null; wait "$VSRV" 2>/dev/null
 
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]

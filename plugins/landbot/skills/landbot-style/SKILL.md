@@ -58,6 +58,19 @@ Rules: only selectors from the catalog (39 parts, listed in the catalog file); n
 
 Say in three or four lines what each layer does and what is left out.
 
+## Step 2b — Keep the visitor's Back button
+
+The v4 web chat has a native **Back** button: it re-asks the previous question, and the new answer replaces the old one (verified on production 2026-09-18 and again on 16 bots on 2026-09-25). Never hide it to make a chat look like a form, a game or a messaging app — a visitor who taps the wrong answer must be able to change it. Three things the CSS has to handle:
+
+- **It is invisible on phones by default.** Its wrapper is hover-only (`opacity-0` until hover), so on a touch screen nobody sees it. Force it: `div:has(> button[data-slot="button"][data-size="sm"][data-variant="ghost"]) { opacity: 1 !important; }` (no `data-lb-part` anchor exists for it; this selector is off-catalog, so say so in the hand-back).
+- **Keep it in the page flow.** `position: fixed` traps it inside the scroll area, clipped and untappable. Place it with `order` or margins and style it to fit the look (a small "‹ Back" link is enough).
+- **It is switched per channel.** `design.back_button_visible: false` removes it from the page entirely; if the channel has it off, CSS cannot bring it back. Its label is the channel's `text.back`.
+
+Tell the person two flow facts that come with Back, because they are the flow's to fix, not the CSS's:
+
+- **Back runs the steps after the previous answer again.** A score, a count or a list that is *added to* as the visitor goes (`Sum(@score, 1)`, appending to a list) counts twice after a Back. Store each answer in its own field and compute totals from the stored answers instead (verified 2026-09-25: a quiz showed 7/6 and a game took an extra life until this was changed).
+- An `email` or `webhook` step placed between two questions can run twice. Put deliveries after the last question.
+
 ## Step 3 — Apply
 
 Two ways. Use the first for any bot; the second when the person prefers to paste it or `channel` refuses.
