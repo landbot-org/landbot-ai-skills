@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.4.0
+  version: 0.4.1
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.4.0`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.4.1`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -64,7 +64,7 @@ The v4 web chat has a native **Back** button: it re-asks the previous question, 
 
 - **It is invisible on phones by default.** Its wrapper is hover-only (`opacity-0` until hover), so on a touch screen nobody sees it. Force it: `div:has(> button[data-slot="button"][data-size="sm"][data-variant="ghost"]) { opacity: 1 !important; }` (no `data-lb-part` anchor exists for it; this selector is off-catalog, so say so in the hand-back).
 - **Keep it in the page flow.** `position: fixed` traps it inside the scroll area, clipped and untappable. Place it with `order` or margins and style it to fit the look (a small "‹ Back" link is enough).
-- **It is switched per channel.** `design.back_button_visible: false` removes it from the page entirely; if the channel has it off, CSS cannot bring it back. Its label is the channel's `text.back`.
+- **It is switched per channel.** `design.back_button_visible: false` removes it from the page entirely, and CSS cannot bring it back: `"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" back on --bot <bot_id>` switches it on (a write, same rules and yes as a CSS push; `channel get` shows its state). Its label is the channel's `text.back`.
 
 Tell the person two flow facts that come with Back, because they are the flow's to fix, not the CSS's:
 

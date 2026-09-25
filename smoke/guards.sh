@@ -23,7 +23,8 @@ case "$M $P" in
    mg=$(cat "$D/merged" 2>/dev/null || echo "${MOCK_MERGED:-true}")
    if [ -n "${MOCK_FLIP_LIVE:-}" ]; then n=$(( $(cat "$D/reads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/reads"; [ "$n" -ge 2 ] && sty="moved"; fi
    if [ -n "${MOCK_FLIP:-}" ]; then n=$(( $(cat "$D/reads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/reads"; [ "$n" -ge 2 ] && mg=false; fi
-   jq -n --arg v "$ver" --arg s "$sty" --arg f "$ft" --arg cfg "${MOCK_CFG:-}" --argjson c "$cr" --arg mg "$mg" '{success:true,channel:({id:777,uuid:"cu-1",version:$v,style:$s,foot:$f,created_at:$c} + (if $mg == "none" then {} else {merged:($mg == "true")} end) + (if $cfg != "" then {config_url:$cfg} else {} end))}';;
+   dz=$(cat "$D/design" 2>/dev/null || echo '{"background_color":"#ffffff","header_title":"Hi"}'); [ -n "${MOCK_FLIP_DESIGN:-}" ] && { n=$(( $(cat "$D/dreads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/dreads"; [ "$n" -ge 3 ] && dz='{"background_color":"#000000","header_title":"Hi"}'; }
+   jq -n --arg v "$ver" --arg s "$sty" --arg f "$ft" --arg cfg "${MOCK_CFG:-}" --argjson c "$cr" --arg mg "$mg" --argjson dz "$dz" '{success:true,channel:({id:777,uuid:"cu-1",version:$v,style:$s,foot:$f,created_at:$c,design:$dz} + (if $mg == "none" then {} else {merged:($mg == "true")} end) + (if $cfg != "" then {config_url:$cfg} else {} end))}';;
 "PATCH /channels/777/discard/") echo discard >> "$D/patches"; echo true > "$D/merged"; rm -f "$D/dver" "$D/dstyle" "$D/dfoot" "$D/dwelcome"
    echo '{"success":true,"channel":{"id":777,"merged":false}}';;
 "PATCH /channels/777/") printf '%s' "$B" | jq -c . >> "$D/patches"
@@ -31,8 +32,9 @@ case "$M $P" in
    v=$(printf '%s' "$B" | jq -r '.version // empty'); [ -n "$v" ] && echo "$v" > "$D/${pre}ver"
    printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j '.style | sub("\\s+$"; "")' > "$D/${pre}style"
    printf '%s' "$B" | jq -e 'has("foot")' >/dev/null && printf '%s' "$B" | jq -j '.foot | sub("\\s+$"; "")' > "$D/${pre}foot"
+   printf '%s' "$B" | jq -e 'has("design")' >/dev/null && printf '%s' "$B" | jq -c '.design' > "$D/${pre}design"
    if [ -n "$pre" ]; then
-     jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" '{success:true,channel:{id:777,version:$v,style:$s,foot:$f}}'
+     jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --argjson dz "$(cat "$D/ddesign" 2>/dev/null || cat "$D/design" 2>/dev/null || echo '{}')" '{success:true,channel:{id:777,version:$v,style:$s,foot:$f,design:$dz}}'
    else echo '{}'; fi;;
 *) exit 1;;
 esac
@@ -40,7 +42,7 @@ E
 printf '#!/usr/bin/env bash\necho "LANDBOT_HANDOFF bot=$1 builder=4069913 share=x channel=${MOCK_RESOLVED:-777} version=3.0.0"\n' > "$T/handoff"
 chmod +x "$T/lb" "$T/handoff" "$T/channel"; printf 'a{color:red}' > "$T/s.css"
 pass=0; fail=0
-t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome" "$T/dchat" "$T/reads"; rm -rf "$T/state/channel-drafts"; "$@" >/dev/null 2>&1; local rc=$?
+t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome" "$T/dchat" "$T/reads" "$T/design" "$T/ddesign" "$T/dreads"; rm -rf "$T/state/channel-drafts"; "$@" >/dev/null 2>&1; local rc=$?
   local np=0; [ -f "$T/patches" ] && np=$(wc -l < "$T/patches" | tr -d ' ')
   if [ "$rc:$np" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $name: rc=$rc writes=$np, want $want"; fi; }
 C="$T/channel"
@@ -338,6 +340,19 @@ t "markdown link matching sent"                     1:0 "$L" PATCH /bots/x/draft
 t "HTML wording with a different price refused"   65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"<b>Pay $1.00</b>","richText":"<p>Pay $100</p>"}}'
 t "markdown-looking display copy refused"         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Pay $100","richText":"<p>[Pay $100](plus $900)</p>"}}'
 t "unknown entity refused"                         65:0 "$L" PATCH /bots/x/draft/blocks/q '{"params":{"text":"Hi","richText":"<p>Hi &hellip;</p>"}}'
+
+# channel back: the whole design goes back with one key changed; never over pending changes; a design that moves meanwhile stops it
+mkdir -p "$T/state/created"; date +%s > "$T/state/created/BOT"   # the draft-check tests above cleared the state
+t "back on, live"                  0:1 "$C" back on --bot BOT
+jq -e '.design == {"background_color":"#ffffff","header_title":"Hi","back_button_visible":true} and (has("autosave") | not)' "$T/patches" >/dev/null && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL back on did not send the whole design with only back_button_visible added"; }
+t "back off, bot not created here: draft" 0:1 "$C" back off --bot OTHER
+jq -e '.autosave == true and .design.back_button_visible == false and .design.header_title == "Hi"' "$T/patches" >/dev/null && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL back off on another bot was not a whole-design draft write"; }
+t "back over pending changes refused" 75:0 env MOCK_MERGED=false "$C" back on --bot BOT
+t "back when the design moves meanwhile refused" 75:0 env MOCK_FLIP_DESIGN=1 "$C" back on --bot BOT
+t "back with a bad value"          64:0 "$C" back maybe --bot BOT
+t "back without --bot"             64:0 "$C" back on
+printf '/* lb-js: esc 1 */\nvar a = "a\\u00b7b";\n' > "$T/esc.js"
+"$C" js "$T/esc.js" --bot BOT --custom >/dev/null 2>"$T/esc.err"; grep -F 'Write the character itself' "$T/esc.err" >/dev/null && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL an escape refusal does not say to write the character itself"; }
 
 # formulas: the API re-derives `value` from `formula`, so the plugin's own formula edit is not someone else's change
 jq '.data.diagram.nodes.f = {id:"f",template:"formulas",params:{field:"x",formula:"Sum(1, 1)",value:{"+":{args:[1,1]}},output:"default",version:"1.0"}}' "$T/good.json" > "$T/f1.json"

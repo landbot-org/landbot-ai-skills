@@ -9,6 +9,7 @@
 #   channel js  <file.js>  --bot <bot_uuid> --custom   set a custom script (see below) — a WRITE
 #   channel js  --clear    --bot <bot_uuid>      remove the channel's Custom JS      — a WRITE
 #   channel discard        --bot <bot_uuid>      drop the draft THIS plugin wrote     — a WRITE
+#   channel back on|off    --bot <bot_uuid>      show or hide the visitor's Back button (design.back_button_visible) — a WRITE
 #
 # Every css/js write first saves what the channel held to a backup file and prints its path, so
 # `channel css|js <backup> --bot <uuid>` puts it back. Custom JS is checked before anything is
@@ -58,7 +59,7 @@ HANDOFF="$HERE/handoff"
 V1="${LANDBOT_API_V1_URL:-https://api.landbot.io/v1}"
 
 usage() {
-  echo "usage: channel get --bot <uuid> | channel get <channel_id> | channel v4 --bot <uuid> | channel css <file.css> --bot <uuid> | channel js <file.js> --bot <uuid> | channel js --clear --bot <uuid> | channel discard --bot <uuid>" >&2
+  echo "usage: channel get --bot <uuid> | channel get <channel_id> | channel v4 --bot <uuid> | channel css <file.css> --bot <uuid> | channel js <file.js> --bot <uuid> | channel js --clear --bot <uuid> | channel discard --bot <uuid> | channel back on|off --bot <uuid>" >&2
   exit 64
 }
 STATE_DIR="${LANDBOT_STATE_DIR:-$HOME/.landbot}"
@@ -81,7 +82,7 @@ MAX_JS=60000
 is_num() { case "${1:-}" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
 OP="${1:-}"; [ -n "$OP" ] || usage; shift
-BOT=""; ID=""; FILE=""; POS=(); CLEAR=""; CUSTOM=""
+BOT=""; ID=""; FILE=""; POS=(); CLEAR=""; CUSTOM=""; BACK=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
   --bot) BOT="${2:-}"; [ -n "$BOT" ] || usage; shift 2 ;;
@@ -105,6 +106,9 @@ css)
   *) usage ;;
   esac
   [ -r "$FILE" ] || { echo "cannot read $FILE" >&2; exit 66; } ;;
+back)
+  [ "${#POS[@]}" -eq 1 ] || usage
+  case "${POS[0]}" in on|off) BACK="${POS[0]}" ;; *) usage ;; esac ;;
 js)
   if [ -n "$CLEAR" ]; then [ "${#POS[@]}" -eq 0 ] || usage
   else [ "${#POS[@]}" -eq 1 ] || usage; FILE="${POS[0]}"; [ -r "$FILE" ] || { echo "cannot read $FILE" >&2; exit 66; }; fi ;;
@@ -174,6 +178,7 @@ check_custom_js() {
   bad="$(grep -noE 'fetch[[:space:]]*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|RTCPeerConnection|document[[:space:]]*\.[[:space:]]*cookie|document[[:space:]]*\[|window[[:space:]]*\[|self[[:space:]]*\[|globalThis|(^|[^A-Za-z0-9_$])eval[[:space:]]*\(|new[[:space:]]+Function|Function[[:space:]]*\(|import[[:space:]]*\(|importScripts|set(Timeout|Interval)[[:space:]]*\([[:space:]]*["'"'"'`]|createElement[[:space:]]*\([[:space:]]*["'"'"'`](script|iframe|img|image|form|link|object|embed|audio|video|source|meta|base)|new[[:space:]]+Image|\.src[[:space:]]*=[^=]|\.srcset[[:space:]]*=|\.href[[:space:]]*=[^=]|\.action[[:space:]]*=[^=]|\.submit[[:space:]]*\(|location[[:space:]]*(\.|\[|=)|window[[:space:]]*\.[[:space:]]*open|postMessage|atob[[:space:]]*\(|fromCharCode|\\x[0-9A-Fa-f]{2}|\\u00[0-9A-Fa-f]{2}|innerHTML[[:space:]]*=[^=]*<(img|script|iframe|form|link|object|embed)|<script[^>]*[[:space:]]src[[:space:]]*=|<iframe|<img|<form' "$f" | head -3 | tr '\n' ' ')"
   if [ -n "$bad" ]; then
     echo "refusing: $f uses something a custom script from this plugin may not (line:match): $bad" >&2
+    case "$bad" in *'\u00'*|*'\x'*) echo "An escape such as \\u00b7 or \\x41 is refused because escapes can hide code. Write the character itself instead (for example · or A)." >&2 ;; esac
     echo "A custom script may change how the chat looks and behaves on the page; it may not send data, read cookies, load or build code, add media or forms that fetch, or navigate. Put integrations in the flow (a webhook block). Nothing was sent." >&2
     return 65
   fi
@@ -233,6 +238,7 @@ version:    \(.version // .landbot.version // "?")   (3.1.0 = v4 web chat, 3.0.0
 uuid:       \(.uuid // "?")
 created:    \(.created_at // "?")
 style:      \((.style // "") | length) characters of Custom CSS on the live channel
+back:       \(if (.design | type) == "object" then (if .design.back_button_visible == false then "hidden (design.back_button_visible false)" else "shown (hover-only on phones unless the CSS forces it)" end) else "?" end)
 pending:    \(if .merged == false then "YES: unpublished changes are waiting in the builder" elif .merged == true then "no unpublished changes" else "unknown" end)
 writes go:  \($mode)
 bots:       \([.bots[]? | if type == "object" then .id else . end] | map(tostring) | join(", "))"'
@@ -314,6 +320,21 @@ false)
 esac
 
 case "$OP" in
+back)
+  # The design object is written whole: a key left out falls back to Landbot's default. So it is read,
+  # this one key changed, and sent back; nothing else in it may differ. Over a pending draft (even our own)
+  # the draft's design is not the one read here, so that case waits for Publish or discard.
+  if [ "$merged" != "true" ]; then
+    echo "refusing: channel $ID holds unpublished changes; the Back setting is written together with the whole design, which would mix with them. Publish or discard them in the builder first (or channel discard for this plugin's own draft). Nothing was written." >&2
+    exit 75
+  fi
+  printf '%s' "$body" | jq -e '(.design | type) == "object"' >/dev/null 2>&1 || { echo "refusing: channel $ID reports no design object to change. Nothing was written." >&2; exit 70; }
+  want_back=true; [ "$BACK" = off ] && want_back=false
+  cur_back="$(printf '%s' "$body" | jq -r 'if .design.back_button_visible == false then "false" else "true" end')"
+  if [ "$cur_back" = "$want_back" ] && [ "$(printf '%s' "$body" | jq -r '.design | has("back_button_visible")')" = "true" ]; then echo "channel $ID: the Back button is already $BACK; nothing to do."; exit 0; fi
+  design_before="$(printf '%s' "$body" | jq -S -c '.design')"
+  payload="$(printf '%s' "$body" | jq -c --argjson b "$want_back" '{design: (.design + {back_button_visible: $b})}')"
+  ;;
 v4)
   if [ "$cur_version" = "3.1.0" ] && [ "$merged" = "true" ]; then echo "channel $ID is already on 3.1.0; nothing to do."; exit 0; fi
   payload='{"version":"3.1.0"}'
@@ -348,12 +369,17 @@ if [ "$OP" = "css" ] || [ "$OP" = "js" ]; then
 fi
 
 last_look
+if [ "$OP" = "back" ]; then
+  again="$(read_channel)" || { echo "could not re-read channel $ID before writing; nothing was written" >&2; exit 1; }
+  [ "$(printf '%s' "$again" | jq -S -c '.design')" = "$design_before" ] || { echo "refusing: the design of channel $ID changed while this write was being prepared. Nothing was written; read it again with channel get." >&2; exit 75; }
+fi
 resp="$(LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/" "$payload" 2>/dev/null)" || { echo "the write was refused; nothing changed" >&2; exit 1; }
 
 # ---- a draft write: check the draft took it, and that the live channel did not move ----------------
 if [ "$MODE" = draft ]; then
   draft="$(printf '%s' "$resp" | jq '.channel // .' 2>/dev/null)"
   case "$OP" in
+  back) got="$(printf '%s' "$draft" | jq -r '.design.back_button_visible | tostring')"; [ "$got" = "$want_back" ] || { echo "PATCH answered but the draft reports back_button_visible $got" >&2; exit 1; } ;;
   v4)  got="$(printf '%s' "$draft" | jq -r '.version // .landbot.version // "?"')"; [ "$got" = "3.1.0" ] || { echo "PATCH answered but the draft reports version $got" >&2; exit 1; } ;;
   css) same="$(jq -n --rawfile f "$FILE" --argjson a "$draft" '(($a.style // "") | sub("\\s+$"; "")) == ($f | sub("\\s+$"; ""))')"
        [ "$same" = "true" ] || { echo "PATCH answered but the draft holds different CSS than the file" >&2; exit 1; } ;;
@@ -371,6 +397,7 @@ if [ "$MODE" = draft ]; then
   else rm -f "$DRAFT_REC"; echo "note: could not read the draft back, so the next write to this bot's design waits until the person publishes or discards it in the builder." >&2; fi
   if [ "$OP" = "css" ] || [ "$OP" = "js" ]; then printf '%s' "$payload" | jq -j --arg k "$key" '.[$k] // ""' > "$DRAFT_REC.$key" 2>/dev/null; fi
   case "$OP" in
+  back) echo "channel $ID (bot $BOT): Back button $BACK, saved to the DRAFT." ;;
   v4)  echo "channel $ID (bot $BOT): version 3.1.0 (v4 web chat) saved to the DRAFT." ;;
   css) echo "channel $ID (bot $BOT): Custom CSS saved to the DRAFT, $(jq -Rs 'sub("\\s+$"; "") | length' < "$FILE") characters." ;;
   js)  if [ -n "$CLEAR" ]; then echo "channel $ID (bot $BOT): Custom JS removed in the DRAFT."; else echo "channel $ID (bot $BOT): Custom JS saved to the DRAFT. Visitors get it after Publish, and only on accounts with the Custom Code feature."; fi ;;
@@ -382,6 +409,9 @@ fi
 # ---- a live write -------------------------------------------------------------------------------
 after="$(read_channel)" || exit 1
 case "$OP" in
+back) same="$(jq -n --argjson a "$after" --argjson d "$design_before" --argjson b "$want_back" '($a.design.back_button_visible == $b) and (($a.design | del(.back_button_visible)) == ($d | del(.back_button_visible)))')"
+     [ "$same" = "true" ] || { echo "PATCH answered but the channel's design is not the one sent (Back setting or another design key differs); check it with channel get" >&2; exit 1; }
+     echo "channel $ID (bot $BOT): Back button $BACK. On phones it stays invisible unless the Custom CSS forces it (landbot-style Step 2b)." ;;
 v4)  new="$(printf '%s' "$after" | jq -r '.version // .landbot.version // "?"')"
      [ "$new" = "3.1.0" ] || { echo "PATCH answered but the channel still reports version $new" >&2; exit 1; }
      echo "channel $ID (bot $BOT): version $cur_version → 3.1.0 (v4 web chat)." ;;
