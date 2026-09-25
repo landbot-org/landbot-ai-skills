@@ -42,6 +42,8 @@ Pull request titles follow [Conventional Commits](https://www.conventionalcommit
 
 A release is tagged `vX.Y.Z` on the commit in `main` where `plugin.json` first carries that version. `vX.Y.Z-rcN` tags are made by hand for testing a candidate; a person can install one by adding the marketplace at that ref (`landbot-org/landbot-ai-skills#v0.3.5-rc1` in Claude Code).
 
+Tags matching `v*` cannot be deleted or moved to another commit; the `release tags` ruleset refuses both, for admins too. Anyone with write access can create one. A tag that points at the wrong commit is not fixed by moving it: release the next version instead. To remove a tag created by mistake, a repository admin sets the `release tags` ruleset (Settings › Rulesets) to *Disabled*, deletes the tag, and sets the ruleset back to *Active*.
+
 With a second plugin in this repository, each plugin keeps its own version in its own `plugin.json`, tags become `<plugin>--vX.Y.Z`, and the scope is the plugin name.
 
 ## Changes to `main`
