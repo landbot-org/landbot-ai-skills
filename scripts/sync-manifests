@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Claude Code reads .claude-plugin/. Codex and Cursor read a root plugin.json in the portable
+# Agent Plugins format, and Cursor lists a multi-plugin repo from .cursor-plugin/marketplace.json.
+# The Claude files are the source; the other two are derived from them and never edited by hand.
+#
+#   scripts/sync-manifests          rewrite plugins/landbot/plugin.json and .cursor-plugin/marketplace.json
+#   scripts/sync-manifests --check  exit 1 when either differs from what the Claude files say (CI runs this)
+set -euo pipefail
+cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
+SRC=plugins/landbot/.claude-plugin/plugin.json
+MKT=.claude-plugin/marketplace.json
+
+portable() {
+  jq '{
+    "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+    name, version, description, author, homepage, repository, license, keywords
+  } | with_entries(select(.value != null))' "$SRC"
+}
+
+cursor_marketplace() {
+  jq '{
+    name,
+    owner: (.owner | {name, email} | with_entries(select(.value != null))),
+    metadata: {description},
+    plugins: [.plugins[] | {name, source: (.source | ltrimstr("./")), description}]
+  }' "$MKT"
+}
+
+write_or_check() {  # generator  target
+  local target="$2" want
+  want="$($1)"
+  if [ "$MODE" = check ]; then
+    if [ ! -f "$target" ] || ! diff -q <(printf '%s\n' "$want") "$target" >/dev/null; then
+      echo "$target is out of date; run scripts/sync-manifests" >&2
+      return 1
+    fi
+  else
+    mkdir -p "$(dirname "$target")"
+    printf '%s\n' "$want" > "$target"
+    echo "wrote $target"
+  fi
+}
+
+MODE=write; [ "${1:-}" = "--check" ] && MODE=check
+rc=0
+write_or_check portable plugins/landbot/plugin.json || rc=1
+write_or_check cursor_marketplace .cursor-plugin/marketplace.json || rc=1
+[ "$MODE" = check ] && [ "$rc" = 0 ] && echo "derived manifests are in sync"
+exit "$rc"

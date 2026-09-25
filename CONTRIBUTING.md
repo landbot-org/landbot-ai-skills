@@ -12,7 +12,7 @@ Rules:
 - Paths in a `SKILL.md` are written as `${CLAUDE_SKILL_DIR}/scripts/…` (and `${CLAUDE_PLUGIN_ROOT}/skills/…` across skills). Claude Code substitutes them; `scripts/install.sh` writes absolute folders for Codex and Cursor. Never hard-code a home folder.
 - `allowed-tools` pre-approves reads only (`lb GET`, `setup-token --whoami|--check`, `handoff`, `channel get`, `verify-share`). Anything that writes to a bot or channel must keep prompting.
 - Test on a brand that is not a customer's before opening a pull request, and say in the PR which environment you tested against.
-- CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
+- CI runs `claude plugin validate --strict` on both manifests and `scripts/sync-manifests --check`, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && scripts/sync-manifests --check && smoke/versions.sh && smoke/guards.sh`.
 
 ## Versions
 
@@ -26,6 +26,8 @@ The same value is repeated, and must match, in:
 - the version quoted in `README.md`, `skills.md` and `SECURITY.md`.
 
 `smoke/versions.sh` checks all of them.
+
+Cursor and Codex read `plugins/landbot/plugin.json`, the portable Agent Plugins manifest, and Cursor lists the repo from `.cursor-plugin/marketplace.json`. `scripts/sync-manifests` derives both from the Claude files, and CI refuses a tree where they are stale; never edit them by hand.
 
 The plugin stays on `0.x`. Moving to `1.0` is a decision of its own, not the result of a change type. While on `0.x`:
 

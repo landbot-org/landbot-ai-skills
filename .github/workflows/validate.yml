@@ -20,6 +20,8 @@ jobs:
       - run: npm install -g @anthropic-ai/claude-code@2.1.282
       - run: claude plugin validate --strict .
       - run: claude plugin validate --strict plugins/landbot
+      - name: the manifests Cursor and Codex read are derived from the Claude ones
+        run: scripts/sync-manifests --check
 
   smoke:
     name: versions and guards
