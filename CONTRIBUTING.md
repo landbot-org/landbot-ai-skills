@@ -12,7 +12,7 @@ Rules:
 - Paths in a `SKILL.md` are written as `${CLAUDE_SKILL_DIR}/scripts/…` (and `${CLAUDE_PLUGIN_ROOT}/skills/…` across skills). Claude Code substitutes them; `scripts/install.sh` writes absolute folders for Codex and Cursor. Never hard-code a home folder.
 - `allowed-tools` pre-approves reads only (`lb GET`, `setup-token --whoami|--check`, `handoff`, `channel get`, `verify-share`). Anything that writes to a bot or channel must keep prompting.
 - Test on a brand that is not a customer's before opening a pull request, and say in the PR which environment you tested against.
-- CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
+- CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
 
 ## Versions
 
@@ -36,9 +36,9 @@ The plugin stays on `0.x`. Moving to `1.0` is a decision of its own, not the res
 | Incompatible change (`!` after the type) | minor | `0.3.4` → `0.4.0` |
 | Any other type (`refactor`, `chore`, `build`, `docs`, `test`) that changes a file under `plugins/` | patch | `0.3.4` → `0.3.5` |
 
-Changes outside `plugins/`, such as docs or CI, do not bump the version.
+Changes outside `plugins/`, such as docs or CI, do not bump the version. `smoke/version-bump.sh` fails a pull request that changes `plugins/` without raising the version.
 
-Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`, with `(<scope>)` and `!` optional. Types: `feat`, `fix`, `docs`, `ci`, `build`, `chore`, `refactor`, `test`. Scopes: `flows` and `style` for a change to one skill, `deps` for dependency updates; no scope when a change touches the whole plugin or the repository.
+Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`, with `(<scope>)` and `!` optional. Types: `feat`, `fix`, `docs`, `ci`, `build`, `chore`, `refactor`, `test`. Scopes: `flows` and `style` for a change to one skill, `deps` for dependency updates; no scope when a change touches the whole plugin or the repository. The title becomes the commit on `main`, and `smoke/pr-title.sh` checks it.
 
 A release is tagged `vX.Y.Z` on the commit in `main` where `plugin.json` first carries that version. `vX.Y.Z-rcN` tags are made by hand for testing a candidate; a person can install one by adding the marketplace at that ref (`landbot-org/landbot-ai-skills#v0.3.5-rc1` in Claude Code).
 
@@ -49,7 +49,7 @@ With a second plugin in this repository, each plugin keeps its own version in it
 `main` only changes through a pull request, for everyone including admins:
 
 - One approval from a code owner (`.github/CODEOWNERS`). A new push dismisses earlier approvals, and every review thread must be resolved.
-- The `manifests` and `versions and guards` checks must pass on a branch that is up to date with `main`.
+- The `manifests`, `versions and guards`, `title` and `version bump` checks must pass on a branch that is up to date with `main`.
 - Squash merge only, linear history, signed commits. No force push and no deleting the branch.
 
 GitHub Actions only runs actions pinned to a full commit SHA, with the version as a comment (`uses: actions/checkout@<sha> # v7.0.1`). Dependabot opens a pull request each week when a newer version is out; review it like any other change.
