@@ -13,3 +13,15 @@ Rules:
 - `allowed-tools` pre-approves reads only (`lb GET`, `setup-token --whoami|--check`, `handoff`, `channel get`, `verify-share`). Anything that writes to a bot or channel must keep prompting.
 - Test on a brand that is not a customer's before opening a pull request, and say in the PR which environment you tested against.
 - CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
+
+## Changes to `main`
+
+`main` only changes through a pull request, for everyone including admins:
+
+- One approval from a code owner (`.github/CODEOWNERS`). A new push dismisses earlier approvals, and every review thread must be resolved.
+- The `manifests` and `versions and guards` checks must pass on a branch that is up to date with `main`.
+- Squash merge only, linear history, signed commits. No force push and no deleting the branch.
+
+GitHub Actions only runs actions pinned to a full commit SHA, with the version as a comment (`uses: actions/checkout@<sha> # v7.0.1`). Dependabot opens a pull request each week when a newer version is out; review it like any other change.
+
+Security problems go through **Security and quality › Report a vulnerability**, never a public issue; see `SECURITY.md`.
