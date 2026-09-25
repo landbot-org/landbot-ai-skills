@@ -1,0 +1,69 @@
+name: Bug report
+description: A skill or script did something wrong, or stopped with an error.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste your Landbot API token, or any part of it, in this issue.** It cannot be rotated. Leave out your account email too; this repository is public.
+
+        A `401` or `403` on the first call has three causes, listed in the README; the first one, an account not yet enabled for the Bots API, is fixed through the assistant on https://landbot.io/skills, not through an issue.
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options:
+        - Claude desktop app (Code tab)
+        - Claude desktop app (Cowork)
+        - Claude Code (terminal)
+        - Codex
+        - Cursor
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: skill
+    attributes:
+      label: Skill
+      options:
+        - landbot-flows
+        - landbot-style
+        - Installation (plugin or install.sh)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The first line the skill printed, for example `landbot-flows 0.3.4`.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows (WSL)
+    validations:
+      required: true
+  - type: input
+    id: bot
+    attributes:
+      label: Bot id
+      description: The `bot=` value in the `LANDBOT_HANDOFF` line, if the skill got that far.
+  - type: textarea
+    id: step
+    attributes:
+      label: What failed
+      description: The step that failed, what you asked for, and what happened instead. Include the `HTTP <code>` line and the error the script printed.
+    validations:
+      required: true
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: Before submitting
+      options:
+        - label: This issue contains no API token, no part of one, and no account email.
+          required: true
