@@ -8,6 +8,7 @@
 #   channel js  <file.js>  --bot <bot_uuid>      set Custom JS: a ready-made module   — a WRITE
 #   channel js  <file.js>  --bot <bot_uuid> --custom   set a custom script (see below) — a WRITE
 #   channel js  --clear    --bot <bot_uuid>      remove the channel's Custom JS      — a WRITE
+#   channel discard        --bot <bot_uuid>      drop the draft THIS plugin wrote     — a WRITE
 #
 # Every css/js write first saves what the channel held to a backup file and prints its path, so
 # `channel css|js <backup> --bot <uuid>` puts it back. Custom JS is checked before anything is
@@ -20,26 +21,62 @@
 # `--id <channel_id>`), and then it must be the bot's own channel or nothing is written. The bot's
 # uuid, its builder number and a channel uuid are all refused as channel ids.
 #
-# Guards on every write, because a channel write is live for visitors as soon as it answers:
+# WHERE a write lands depends on who made the bot and when. No bot is refused for its age.
+#   - LIVE, for a bot this plugin created on this machine less than LIVE_WINDOW_H hours ago (the build):
+#     `lb` records every successful POST /bots in $LANDBOT_STATE_DIR/created/<bot_uuid> (the epoch it was
+#     created). After the window a bot the plugin made is treated like any other bot the person has: its
+#     visitors may be real by then. A live write is LIVE FOR VISITORS AT ONCE: the channels API
+#     regenerates the published config behind the share URL itself (verified 2026-09-19 on production:
+#     version and Custom CSS showed up in index.json without a new publish). Get the yes first.
+#   - DRAFT, for any other bot (one the person already had, one made on another machine, or one past the
+#     window): the write
+#     carries `"autosave": true`, which is what the builder sends, and lands on the channel's draft only.
+#     Verified 2026-09-25 on production: the live channel and the published config did not change, and
+#     the channel reported `merged: false`. The builder's preview reads the draft (test_config); visitors
+#     get it only when the person presses Publish in the builder. Nothing here turns a draft write into a
+#     live one: no flag, no variable. The record is a speed bump, not a security boundary: the skill's
+#     rules and the person's yes are what keep writes off bots they did not ask about.
+# Guards on every write:
 #   - --bot is required, the bot must have exactly one channel, and that is the channel written.
-#   - the channel must be younger than 24 hours: this script is for channels the skill created in
-#     this session, never for a customer's existing bot. The limit is fixed; nothing raises it.
-#   - a write is LIVE FOR VISITORS AT ONCE: the published config behind the share URL is regenerated
-#     by the channels API itself (verified 2026-09-19 on production: version and Custom CSS showed up
-#     in index.json without a new publish). So get the user's yes BEFORE running a write, as for a publish.
+#   - never over someone's unpublished changes. `merged: false` means the channel holds unpublished
+#     changes. A LIVE write copies the live settings over them (verified in the channels API code), so it
+#     is refused. A DRAFT write (and `discard`) is refused too, unless those changes are this plugin's own
+#     earlier draft on this channel: $LANDBOT_STATE_DIR/channel-drafts/<channel_id> holds when we wrote it,
+#     a fingerprint of the LIVE style/foot/version at that moment, and a fingerprint of the WHOLE DRAFT right
+#     after our write (read from /test_config/, the config the builder's Preview loads; tokens left out, only
+#     a hash is kept). It counts only while it is younger than DRAFT_TTL_H, the live fingerprint is unchanged
+#     and the draft is still exactly what we left: any edit the person made since, published or not, fails
+#     closed and nothing is written.
+#   - the channel is read again right before the PATCH; if `merged` or the live fields moved in between,
+#     nothing is written. A builder autosave landing in the second between that read and the PATCH is
+#     still possible: closing it needs a compare-and-set on Landbot's side.
 # Reads only otherwise. Exits non-zero from HTTP 400 up. The token is never printed; `lb` handles it.
 set -uo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LB="$HERE/lb"
 HANDOFF="$HERE/handoff"
 V1="${LANDBOT_API_V1_URL:-https://api.landbot.io/v1}"
-readonly MAX_AGE_H=24
 
 usage() {
-  echo "usage: channel get --bot <uuid> | channel get <channel_id> | channel v4 --bot <uuid> | channel css <file.css> --bot <uuid> | channel js <file.js> --bot <uuid> | channel js --clear --bot <uuid>" >&2
+  echo "usage: channel get --bot <uuid> | channel get <channel_id> | channel v4 --bot <uuid> | channel css <file.css> --bot <uuid> | channel js <file.js> --bot <uuid> | channel js --clear --bot <uuid> | channel discard --bot <uuid>" >&2
   exit 64
 }
-BACKUP_DIR="${LANDBOT_STATE_DIR:-$HOME/.landbot}/backups"
+STATE_DIR="${LANDBOT_STATE_DIR:-$HOME/.landbot}"
+readonly LIVE_WINDOW_H=6 DRAFT_TTL_H=6
+now_s="$(date +%s)"
+# A record file holds the epoch it was written as its first word; anything else is no record.
+rec_age_h() { local e; e="$(awk 'NR == 1 { if ($1 ~ /^[0-9]+$/) print $1; exit }' "$1" 2>/dev/null)"; [ -n "$e" ] || { echo 999999; return; }; echo $(( (now_s - e) / 3600 )); }
+# The draft as the builder's Preview sees it. Reading it makes the builder's own test chat for this user
+# if none exists yet (the same thing pressing Preview does). Exactly four top-level keys are left out of
+# the hash: the test chat's and channel's tokens and the Firestore client config (not draft content, and
+# not to be written to disk). Every other field counts, so any edit to the draft changes the fingerprint.
+# Prints nothing when the draft cannot be read, so a failed read never matches a recorded fingerprint.
+draft_fp() { local j; j="$(LANDBOT_API_URL="$V1" "$LB" GET "/channels/$1/test_config/" 2>/dev/null \
+  | jq -S -c 'select(type == "object" and .test == true) | del(.customerToken, .landbotToken, .channelToken, .firestore)' 2>/dev/null)"
+  [ -n "$j" ] || return 0
+  printf '%s' "$j" | { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; } | cut -c1-16; }
+fingerprint() { jq -c '[.style // "", .foot // "", (.version // .landbot.version // "")]' | { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; } | cut -c1-16; }
+BACKUP_DIR="$STATE_DIR/backups"
 MAX_JS=60000
 is_num() { case "${1:-}" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
@@ -58,7 +95,7 @@ done
 
 # Positional forms: `get <id>`, `v4 <id>`, `css <file>`, `css <id> <file>`.
 case "$OP" in
-get|v4)
+get|v4|discard)
   [ "${#POS[@]}" -le 1 ] || usage
   [ "${#POS[@]}" -eq 1 ] && { [ -z "$ID" ] || usage; ID="${POS[0]}"; } ;;
 css)
@@ -191,17 +228,37 @@ fi
 read_channel() { LANDBOT_API_URL="$V1" "$LB" GET "/channels/$ID/" 2>/dev/null | jq '.channel // .'; }
 
 summarise() {
-  jq -r '"channel:    \(.id)  \(.name // "?")
+  jq -r --arg mode "$1" '"channel:    \(.id)  \(.name // "?")
 version:    \(.version // .landbot.version // "?")   (3.1.0 = v4 web chat, 3.0.0 = legacy renderer)
 uuid:       \(.uuid // "?")
 created:    \(.created_at // "?")
-style:      \((.style // "") | length) characters of Custom CSS on the channel
+style:      \((.style // "") | length) characters of Custom CSS on the live channel
+pending:    \(if .merged == false then "YES: unpublished changes are waiting in the builder" elif .merged == true then "no unpublished changes" else "unknown" end)
+writes go:  \($mode)
 bots:       \([.bots[]? | if type == "object" then .id else . end] | map(tostring) | join(", "))"'
 }
 
 body="$(read_channel)" || { echo "could not read channel $ID on $V1 (404 means this account has no channel with that id)" >&2; exit 1; }
+merged="$(printf '%s' "$body" | jq -r 'if (.merged | type) == "boolean" then (.merged | tostring) else "" end')"
+DRAFT_REC="$STATE_DIR/channel-drafts/$ID"
+# Our draft is gone once the channel is merged again (published or discarded): forget it.
+[ "$merged" = "true" ] && rm -f "$DRAFT_REC" "$DRAFT_REC".* 2>/dev/null
+live_fp="$(printf '%s' "$body" | fingerprint)"
+MODE=draft
+if [ -n "$BOT" ] && [ -f "$STATE_DIR/created/$BOT" ] && [ "$(rec_age_h "$STATE_DIR/created/$BOT")" -lt "$LIVE_WINDOW_H" ]; then MODE=live; fi
+# Our own pending draft counts only while its record is young and the live channel has not moved.
+OURS=""
+if [ "$merged" = "false" ] && [ -f "$DRAFT_REC" ] && [ "$(rec_age_h "$DRAFT_REC")" -lt "$DRAFT_TTL_H" ] \
+   && [ "$(awk 'NR == 1 {print $2}' "$DRAFT_REC")" = "$live_fp" ]; then
+  want_draft="$(awk 'NR == 1 {print $3}' "$DRAFT_REC")"
+  now_draft="$(draft_fp "$ID")"
+  [ -n "$want_draft" ] && [ -n "$now_draft" ] && [ "$now_draft" = "$want_draft" ] && OURS=1
+fi
 if [ "$OP" = "get" ]; then
-  printf '%s' "$body" | summarise
+  if [ -z "$BOT" ]; then where="unknown without --bot"
+  elif [ "$MODE" = live ]; then where="LIVE (this plugin created the bot on this machine less than $LIVE_WINDOW_H h ago)"
+  else where="the DRAFT (a bot this plugin did not create here): visitors get it after Publish in the builder"; fi
+  printf '%s' "$body" | summarise "$where"
   exit 0
 fi
 
@@ -211,22 +268,54 @@ if [ "$got_uuid" != "$ch_uuid" ]; then
   echo "refusing: channel $ID ($got_uuid) is not a channel of bot $BOT ($ch_uuid). Nothing was written." >&2
   exit 70
 fi
-created="$(printf '%s' "$body" | jq -r '.created_at // empty')"
 cur_version="$(printf '%s' "$body" | jq -r '.version // .landbot.version // "?"')"
+builder="$(printf '%s' "${line:-}" | tr ' ' '\n' | sed -n 's/^builder=//p')"
+BUILDER_URL="${LANDBOT_APP_URL:-https://app.landbot.io}/gui/bot/${builder:-<builder>}/builder"
 
-case "$created" in
-''|*[!0-9.]*) echo "refusing: the channel does not report created_at, so its age cannot be checked" >&2; exit 70 ;;
-esac
-age_h=$(( ($(date +%s) - ${created%.*}) / 3600 ))
-if [ "$age_h" -ge "$MAX_AGE_H" ]; then
-  echo "refusing: channel $ID was created about ${age_h} h ago (limit ${MAX_AGE_H} h). This script only changes channels the skill created in this session. Nothing was written." >&2
-  echo "For an older bot, the person does it in the Landbot app: open the bot, Design > Custom code > Add CSS, paste the CSS file, Apply, then Publish; the web chat version is switched per account by Landbot." >&2
-  exit 70
+# Last look before any write: if the live channel, the pending flag or (for our own draft) the draft
+# moved since the first read, stop.
+last_look() {
+  local again; again="$(read_channel)" || { echo "could not re-read channel $ID before writing; nothing was written" >&2; exit 1; }
+  if [ "$(printf '%s' "$again" | jq -r '.merged | tostring')" != "$merged" ] || [ "$(printf '%s' "$again" | fingerprint)" != "$live_fp" ] \
+     || { [ -n "$OURS" ] && [ "$(draft_fp "$ID")" != "$want_draft" ]; }; then
+    echo "refusing: channel $ID changed while this write was being prepared (someone is working on it). Nothing was written; read it again with channel get." >&2
+    exit 75
+  fi
+}
+
+if [ "$OP" = "discard" ]; then
+  if [ "$merged" != "false" ]; then echo "channel $ID has no unpublished changes; nothing to discard."; exit 0; fi
+  if [ -z "$OURS" ]; then
+    echo "refusing: the unpublished changes on channel $ID are not (or no longer provably) this plugin's own draft from the last $DRAFT_TTL_H h. Discarding would throw away the person's own work; they can do it in the builder. Nothing was written." >&2
+    exit 75
+  fi
+  last_look
+  LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/discard/" '{}' >/dev/null 2>&1 || { echo "the discard was refused; nothing changed" >&2; exit 1; }
+  # The discard answer can report the old merged flag; read the channel again.
+  again="$(read_channel)" || exit 1
+  if [ "$(printf '%s' "$again" | jq -r '.merged')" = "true" ]; then
+    rm -f "$DRAFT_REC" "$DRAFT_REC".* 2>/dev/null
+    echo "channel $ID (bot $BOT): draft discarded; the builder and the preview show the live design again."; exit 0
+  fi
+  echo "the discard answered but channel $ID still reports unpublished changes" >&2; exit 1
 fi
+
+case "$merged" in
+true) ;;
+false)
+  if [ "$MODE" = live ]; then
+    echo "refusing: channel $ID holds unpublished changes (made in the builder or through the API). A live write copies the live settings over them, so they would be lost. Ask the person to publish or discard them in the builder first. Nothing was written." >&2
+    exit 75
+  elif [ -z "$OURS" ]; then
+    echo "refusing: channel $ID holds unpublished changes this plugin did not make (or can no longer prove it made) (the person is editing it in the builder, or did and did not publish). A write now would mix with their work. Ask them to publish or discard those changes first. Nothing was written." >&2
+    exit 75
+  fi ;;
+*) echo "refusing: channel $ID does not report whether it holds unpublished changes (merged), so no write can be made safely. Nothing was written." >&2; exit 70 ;;
+esac
 
 case "$OP" in
 v4)
-  if [ "$cur_version" = "3.1.0" ]; then echo "channel $ID is already on 3.1.0; nothing to do."; exit 0; fi
+  if [ "$cur_version" = "3.1.0" ] && [ "$merged" = "true" ]; then echo "channel $ID is already on 3.1.0; nothing to do."; exit 0; fi
   payload='{"version":"3.1.0"}'
   ;;
 css)
@@ -238,22 +327,59 @@ js)
   else payload="$( { printf '<script>\n'; cat "$FILE"; printf '\n</script>\n'; } | jq -Rs '{foot: .}')"; fi
   ;;
 esac
+[ "$MODE" = draft ] && payload="$(printf '%s' "$payload" | jq -c '. + {autosave: true}')"
 
-# Keep what the channel holds now, so the write can be undone with the same command.
+# Keep what the field holds now, so the write can be undone with the same command. With no pending
+# changes the draft equals the live channel, so the live value is the right backup; when continuing our
+# own draft, the right backup is what we wrote last time.
 if [ "$OP" = "css" ] || [ "$OP" = "js" ]; then
   key="style"; ext="css"; UPOP="CSS"; [ "$OP" = "js" ] && { key="foot"; ext="html"; UPOP="JS"; }
   mkdir -p "$BACKUP_DIR" 2>/dev/null
   bk="$(mktemp "$BACKUP_DIR/channel-$ID-$key-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX" 2>/dev/null)" || bk=""   # atomic: never reuses a name
   [ -n "$bk" ] || { echo "refusing: could not create a backup file in $BACKUP_DIR. Nothing was written." >&2; exit 73; }
-  if printf '%s' "$body" | jq -j --arg k "$key" '.[$k] // ""' > "$bk" 2>/dev/null; then
-    if [ -s "$bk" ]; then echo "backup: the channel's previous Custom $UPOP is saved in $bk (put it back with: channel $OP $bk --bot $BOT)"
-    else echo "backup: the channel had no Custom $UPOP before this write (undo with: channel ${OP} $( [ "$OP" = js ] && echo "--clear" || echo "<empty file>") --bot $BOT)"; fi
+  if [ "$merged" = "false" ] && [ -f "$DRAFT_REC.$key" ]; then src="the draft's"; cp "$DRAFT_REC.$key" "$bk" 2>/dev/null; ok=$?
+  else src="the channel's"; printf '%s' "$body" | jq -j --arg k "$key" '.[$k] // ""' > "$bk" 2>/dev/null; ok=$?; fi
+  if [ "$ok" = 0 ]; then
+    if [ -s "$bk" ]; then echo "backup: $src previous Custom $UPOP is saved in $bk (put it back with: channel $OP $bk --bot $BOT)"
+    else echo "backup: $src Custom $UPOP was empty before this write (undo with: channel ${OP} $( [ "$OP" = js ] && echo "--clear" || echo "<empty file>") --bot $BOT)"; fi
   else
     echo "refusing: could not save a backup of the current Custom $UPOP to $BACKUP_DIR. Nothing was written." >&2; exit 73
   fi
 fi
 
-LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/" "$payload" >/dev/null 2>&1 || { echo "the write was refused; nothing changed" >&2; exit 1; }
+last_look
+resp="$(LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/" "$payload" 2>/dev/null)" || { echo "the write was refused; nothing changed" >&2; exit 1; }
+
+# ---- a draft write: check the draft took it, and that the live channel did not move ----------------
+if [ "$MODE" = draft ]; then
+  draft="$(printf '%s' "$resp" | jq '.channel // .' 2>/dev/null)"
+  case "$OP" in
+  v4)  got="$(printf '%s' "$draft" | jq -r '.version // .landbot.version // "?"')"; [ "$got" = "3.1.0" ] || { echo "PATCH answered but the draft reports version $got" >&2; exit 1; } ;;
+  css) same="$(jq -n --rawfile f "$FILE" --argjson a "$draft" '(($a.style // "") | sub("\\s+$"; "")) == ($f | sub("\\s+$"; ""))')"
+       [ "$same" = "true" ] || { echo "PATCH answered but the draft holds different CSS than the file" >&2; exit 1; } ;;
+  js)  same="$(jq -n --argjson a "$draft" --argjson p "$payload" '(($a.foot // "") | sub("\\s+$"; "")) == (($p.foot // "") | sub("\\s+$"; ""))')"
+       [ "$same" = "true" ] || { echo "PATCH answered but the draft holds different Custom JS than was sent" >&2; exit 1; } ;;
+  esac
+  after="$(read_channel)" || exit 1
+  moved="$(jq -n --argjson b "$body" --argjson a "$after" '[$b.style, $b.foot, ($b.version // $b.landbot.version)] != [$a.style, $a.foot, ($a.version // $a.landbot.version)]')"
+  if [ "$moved" = "true" ]; then
+    echo "WARNING: the live channel changed during a draft write. That is not expected; check the share URL now and tell the person." >&2
+    exit 1
+  fi
+  dfp="$(draft_fp "$ID")"
+  if [ -n "$dfp" ]; then mkdir -p "$(dirname "$DRAFT_REC")" 2>/dev/null && printf '%s %s %s\n' "$(date +%s)" "$live_fp" "$dfp" > "$DRAFT_REC"
+  else rm -f "$DRAFT_REC"; echo "note: could not read the draft back, so the next write to this bot's design waits until the person publishes or discards it in the builder." >&2; fi
+  if [ "$OP" = "css" ] || [ "$OP" = "js" ]; then printf '%s' "$payload" | jq -j --arg k "$key" '.[$k] // ""' > "$DRAFT_REC.$key" 2>/dev/null; fi
+  case "$OP" in
+  v4)  echo "channel $ID (bot $BOT): version 3.1.0 (v4 web chat) saved to the DRAFT." ;;
+  css) echo "channel $ID (bot $BOT): Custom CSS saved to the DRAFT, $(jq -Rs 'sub("\\s+$"; "") | length' < "$FILE") characters." ;;
+  js)  if [ -n "$CLEAR" ]; then echo "channel $ID (bot $BOT): Custom JS removed in the DRAFT."; else echo "channel $ID (bot $BOT): Custom JS saved to the DRAFT. Visitors get it after Publish, and only on accounts with the Custom Code feature."; fi ;;
+  esac
+  echo "Visitors still get the published version: nothing is live. To make it live, the person opens the builder ($BUILDER_URL), reloads the tab if it was already open (an open tab publishes the copy it loaded, without this change), checks the preview and presses Publish. To drop it: channel discard --bot $BOT."
+  exit 0
+fi
+
+# ---- a live write -------------------------------------------------------------------------------
 after="$(read_channel)" || exit 1
 case "$OP" in
 v4)  new="$(printf '%s' "$after" | jq -r '.version // .landbot.version // "?"')"

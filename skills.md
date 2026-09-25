@@ -39,7 +39,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 **No terminal (Claude desktop app):** the person opens **Customize › Plugins › Add marketplace**, pastes `landbot-org/landbot-ai-skills`, installs **landbot**, then starts a new session **in the Code tab** (Cowork runs the skills too, but not tested end to end, and it has no browser pane for the live build). The rest of these steps are the same, with one difference in step 4.
 
-After installing, check the skill answers with `landbot-flows 0.3.4` as its first line. An older number means a stale copy is also installed; remove it before going on. **The skills load in a new session.** If you installed them inside this running session, you cannot load them yourself: ask the person to type `/reload-plugins` in the chat box, or to start a new session. **If they start a new session, give them the rest of their request to paste there** (for example the "Then build: …" line of the prompt they gave you), because a new session does not see this one.
+After installing, check the skill answers with `landbot-flows 0.4.0` as its first line. An older number means a stale copy is also installed; remove it before going on. **The skills load in a new session.** If you installed them inside this running session, you cannot load them yourself: ask the person to type `/reload-plugins` in the chat box, or to start a new session. **If they start a new session, give them the rest of their request to paste there** (for example the "Then build: …" line of the prompt they gave you), because a new session does not see this one.
 
 ## 3. HUMAN: copy the API token
 Ask them to open https://app.landbot.io/gui/settings/account and copy the read-only **API token** field, then tell you "done". There is no copy button: they click in the field, select all (Cmd+A, or Ctrl+A), and copy (Cmd+C, or Ctrl+C). Do not ask them to show or confirm it. On macOS only (`uname` prints `Darwin`) you may run `open https://app.landbot.io/gui/settings/account` so the page is one click away; the copy stays theirs.
@@ -62,9 +62,9 @@ Ask **once, before building**: "I will build it and publish it as I go, so you c
 
 ## 6. Style it
 Read `version` in the handoff line.
-- `3.1.0`: use the `landbot-style` skill: "make it look like <their site>". For a bot you created in this session the skill pushes the CSS to the channel (live at once; covered by the step-5 yes); otherwise **HUMAN** pastes it in Design › Custom code › Add CSS, clicks Apply, then Publish. Verify with `scripts/verify-share <share-url>`; only the share URL counts, the builder preview never shows Custom CSS.
+- `3.1.0`: use the `landbot-style` skill: "make it look like <their site>". For a bot you created in this session the skill pushes the CSS to the channel (live at once; covered by the step-5 yes). For a bot the person already had, the push goes to the bot's draft after its own yes, and **HUMAN** checks it with the builder's Preview and presses Publish; or **HUMAN** pastes it in Design › Custom code › Add CSS, clicks Apply, then Publish. Verify with `scripts/verify-share <share-url>`; only the share URL counts, the builder preview never shows Custom CSS.
 - `3.0.0` on a bot you created in this session: run the flows skill's `channel v4` step (it switches that channel to the current web chat; live at once, covered by the step-5 yes), re-read the handoff line, then style.
-- `3.0.0` on a bot the person already had: do not flip it. Say Custom CSS needs the v4 web chat and that Landbot switches it per account.
+- `3.0.0` on a bot the person already had: say Custom CSS needs the v4 web chat and offer the switch. With their yes it goes to the bot's draft; they check it with the builder's Preview and press Publish.
 
 ## 7. Embed
 Offer to add the embed snippet (builder › Share › Embed) to their site's code. **HUMAN** deploys.
