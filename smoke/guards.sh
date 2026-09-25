@@ -349,6 +349,10 @@ g "own formula edit: re-derived value not pending" 0 f2.json
 MOCK_DRAFT="$T/f1.json" "$DK" save BOTU >/dev/null 2>&1; MOCK_DRAFT="$T/f1.json" "$DK" pre BOTU >/dev/null 2>&1
 MOCK_DRAFT="$T/f3.json" "$DK" post BOTU '{"nodes":{"f":{"params":{"field":"x","formula":"Sum(1, 1)","output":"default","version":"1.0"}}}}' >/dev/null 2>&1
 g "value changed with the formula unchanged is pending" 65 f3.json
+jq '.data.diagram.nodes.f.params.formula = "Sum(3, 3)" | .data.diagram.nodes.f.params.value = {"+":{args:[3,3]}}' "$T/f1.json" > "$T/f4.json"
+MOCK_DRAFT="$T/f1.json" "$DK" save BOTU >/dev/null 2>&1; MOCK_DRAFT="$T/f1.json" "$DK" pre BOTU >/dev/null 2>&1
+MOCK_DRAFT="$T/f4.json" "$DK" post BOTU '{"nodes":{"f":{"params":{"field":"x","formula":"Sum(1, 2)","output":"default","version":"1.0"}}}}' >/dev/null 2>&1
+g "someone else's formula saved over ours is pending" 65 f4.json
 
 # lb: JSON bodies go out compact (an indented body can be refused by the firewall), and a firewall 403 is named as one
 cat > "$T/fw.py" <<'E'
@@ -360,6 +364,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if self.path.startswith('/cf'):
             self.send_response(403); self.send_header('Content-Type', 'text/html; charset=UTF-8'); self.send_header('Server', 'cloudflare'); self.send_header('CF-RAY', 'abc123-MAD'); self.end_headers()
             self.wfile.write(b'<!DOCTYPE html><title>Attention Required! | Cloudflare</title>')
+        elif self.path.startswith('/api403cf'):
+            self.send_response(403); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(b'{"detail":"Cloudflare Workers are not allowed for this plan"}')
         elif self.path.startswith('/api403'):
             self.send_response(403); self.send_header('Content-Type', 'application/json'); self.end_headers(); self.wfile.write(b'{"detail":"You do not have permission"}')
         else:
@@ -381,6 +387,8 @@ rm -f "$T/sent"; "$L" POST /bots/x/draft/blocks 'not json' >/dev/null 2>&1; rc=$
 { [ "$rc" = 65 ] && [ ! -e "$T/sent" ]; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a non-JSON write body is no longer refused before sending (rc=$rc)"; }
 "$L" POST /cf/x '{}' >/dev/null 2>"$T/cf.err"; rc=$?
 { [ "$rc" = 1 ] && grep -F 'FIREWALL' "$T/cf.err" >/dev/null && grep -F 'abc123-MAD' "$T/cf.err" >/dev/null; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a Cloudflare 403 is not named as the firewall (rc=$rc)"; }
+"$L" POST /api403cf/x '{}' >/dev/null 2>"$T/api2.err"; rc=$?
+{ [ "$rc" = 1 ] && ! grep -F 'FIREWALL' "$T/api2.err" >/dev/null; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a JSON 403 that mentions Cloudflare was named as the firewall (rc=$rc)"; }
 "$L" POST /api403/x '{}' >/dev/null 2>"$T/api.err"; rc=$?
 { [ "$rc" = 1 ] && ! grep -F 'FIREWALL' "$T/api.err" >/dev/null; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL an API 403 was named as the firewall (rc=$rc)"; }
 kill "$FSRV" 2>/dev/null; wait "$FSRV" 2>/dev/null

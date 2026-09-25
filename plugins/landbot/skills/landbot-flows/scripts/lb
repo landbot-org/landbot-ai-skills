@@ -271,7 +271,7 @@ echo "HTTP $CODE" >&2
 # account or permission problem, and must not be reported as one (SKILL.md Step 0 / write table).
 if [ "$CODE" = "403" ]; then
   hdrs="$(cat "$LB_TMP/headers" 2>/dev/null)"
-  if [[ "$PAYLOAD" == *"Cloudflare"* ]] || { [[ "$hdrs" == *[Ss]erver:\ cloudflare* ]] && [[ "$hdrs" == *[Cc]ontent-[Tt]ype:\ text/html* ]]; }; then
+  if [[ "$PAYLOAD" == *"<title>Attention Required! | Cloudflare</title>"* ]] || { [[ "$hdrs" == *[Ss]erver:\ cloudflare* ]] && [[ "$hdrs" == *[Cc]ontent-[Tt]ype:\ text/html* ]]; }; then
     ray=""; [[ "$hdrs" =~ [Cc][Ff]-[Rr][Aa][Yy]:\ *([A-Za-z0-9-]+) ]] && ray="${BASH_REMATCH[1]}"
     echo "FIREWALL: the firewall in front of the Landbot API (Cloudflare) refused this request before Landbot read it${ray:+ (Ray ID $ray)}." >&2
     echo "This is NOT a token, account or permission problem: do not ask the person to re-copy the token or check their plan." >&2

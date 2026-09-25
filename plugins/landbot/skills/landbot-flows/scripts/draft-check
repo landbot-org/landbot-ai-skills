@@ -143,7 +143,8 @@ POST_CMP='
                     # a formulas block keeps a compiled copy of its formula in `value`, which the API re-derives
                     # whenever `formula` changes; this write sent the new formula, so the new `value` is its own
                     | select(($k == "value" and (($bn[$id].template // "") | test("formula"; "i"))
-                              and ($e.params | has("formula")) and ($e.params.formula != (($an[$id].params // {}).formula))) | not)
+                              and ($e.params | has("formula")) and ($e.params.formula != (($an[$id].params // {}).formula))
+                              and ($bn[$id].params.formula == $e.params.formula)) | not)
                     | "block \($id): \($k) changed although this plugin did not send it" )
                 else empty end ) )
           elif ($e.added | not) and (($bn[$id].params | plainp) != ($an[$id].params // {} | plainp)) then "block \($id): its settings changed although this plugin only renamed or moved it"
