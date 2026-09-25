@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.3.4
+  version: 0.4.0
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.3.4`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.4.0`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -32,9 +32,9 @@ How to know:
 1. **From the handoff line.** `landbot-flows` ends with `LANDBOT_HANDOFF bot=… builder=… share=… channel=… version=…`. Read `version` and `share` from it.
 2. **From a share URL** the user gives you: `"${CLAUDE_SKILL_DIR}/scripts/verify-share" <share-url>` prints the version and whether Custom CSS is present in the published config.
 
-If the version is `3.0.0` and the bot was **created in this session by `landbot-flows`**: do not stop. Run that skill's Step 5a (`channel v4 --bot <bot_id>`; the channel write is live at once, no republish; covered by the one yes the person gave `landbot-flows` before building if a look was part of that sentence, otherwise ask) and re-read the handoff line. If the bot is one the person already had: **stop.** Say the channel is on the legacy renderer, Custom CSS will not render there, and that Landbot switches the web chat version per account; do not flip a channel you did not create and do not generate CSS "just in case".
+If the version is `3.0.0` and the bot was **created in this session by `landbot-flows`**: do not stop. Run that skill's Step 5a (`channel v4 --bot <bot_id>`; the channel write is live at once, no republish; covered by the one yes the person gave `landbot-flows` before building if a look was part of that sentence, otherwise ask) and re-read the handoff line. If the bot is one the person already had: say the channel is on the legacy renderer and Custom CSS will not render there, and offer `channel v4 --bot <bot_id>`: it goes to the bot's draft (never live), needs its own yes, and they switch by pressing Publish in the builder (see `landbot-flows` Step 5a, including the `ask_yes_no`/`code` warning). Do not generate CSS "just in case".
 
-Also say, once: the builder's Design preview never renders Custom CSS. Only the share URL counts.
+Also say, once: before Publish, the builder's **Preview** button shows the draft, Custom CSS included (verified 2026-09-25 on a `3.1.0` channel); after Publish, the share URL is what visitors get and the only thing to verify.
 
 ## Step 1 — Get the brief (one or two short rounds, then generate)
 
@@ -60,15 +60,15 @@ Say in three or four lines what each layer does and what is left out.
 
 ## Step 3 — Apply
 
-Two ways. Use the first for a bot `landbot-flows` created in this session; the second for any other bot.
+Two ways. Use the first for any bot; the second when the person prefers to paste it or `channel` refuses.
 
-**A. Push it through the API (bots created this session).** Write the block to a file and push it to the channel. **The push is live for visitors the moment it answers** (the channels API regenerates the published config; no publish step). If the person gave `landbot-flows` the one yes before building this bot in this session **and that sentence included applying the look they described**, that yes covers this push: say you are pushing, and push. A yes given without the styling clause ("just show me", or "build and publish it"), or for a different bot, does not; say what you are about to push and get a yes, exactly as for a publish:
+**A. Push it through the API.** Write the block to a file and push it to the channel. Where it lands is the script's decision: for a bot this plugin created on this machine in the last 6 hours the push is **live for visitors the moment it answers** (the channels API regenerates the published config; no publish step); for any other bot it goes to the bot's **draft**, and the person makes it live by pressing Publish in the builder. If the person gave `landbot-flows` the one yes before building this bot in this session **and that sentence included applying the look they described**, that yes covers this push: say you are pushing, and push. A yes given without the styling clause ("just show me", or "build and publish it"), or for a different bot, does not; say what you are about to push and get a yes, exactly as for a publish:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" css /path/to/style.css --bot <bot_id>   # WRITE, live at once; the channel is found from the bot
+"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" css /path/to/style.css --bot <bot_id>   # WRITE: live for a bot created here, draft otherwise; the channel is found from the bot
 ```
 
-`channel` finds the channel from the bot (never type a channel id) and refuses any channel older than 24 hours; the limit is fixed. When it refuses for age, give the person path B below. It does not know who created the bot, so the rule "only bots `landbot-flows` created in this session" is yours to keep; a bot the person built in the app today would pass the script. Say before the push that the channel's Custom CSS field is replaced whole. Every push first saves what the field held and prints the backup's path; `channel css <backup> --bot <bot_id>` puts it back.
+`channel` finds the channel from the bot (never type a channel id). There is no age limit. A push to a bot the person already had needs its own yes (name the bot, say it goes to the draft); after it, give the builder link and say: reload the tab if it was open, press **Preview**, then **Publish**. When the channel holds unpublished changes the person made, `channel` refuses (exit 75); ask them to publish or discard those first, or use path B. Say before the push that the channel's Custom CSS field is replaced whole. Every push first saves what the field held and prints the backup's path; `channel css <backup> --bot <bot_id>` puts it back.
 
 **In the live build (the in-app browser is open), push the look in steps** so the person sees it change: first the theme tokens (palette, background, text), then font and shapes, then the anchors and details. Each push is the whole file so far (the field is replaced whole). After each one, reload the pane with a new query string and answer one question so a button and a reply are on screen. Three pushes, not thirty: each one should be a visible step.
 

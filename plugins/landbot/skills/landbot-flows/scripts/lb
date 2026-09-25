@@ -32,7 +32,7 @@ BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-VERSION="0.3.4"
+VERSION="0.4.0"
 if [ "${1:-}" = "--version" ]; then echo "landbot-flows $VERSION"; exit 0; fi
 
 # Every request says it comes from this plugin, its version and which agent ran it, so Landbot can
@@ -242,6 +242,11 @@ if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
   elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
     new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
     [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || echo "WARNING: could not save the first snapshot of bot $new_id (draft-check save $new_id)" >&2; }
+    # Bots created here are the ones `channel` may change live; any other bot gets draft writes.
+    case "$new_id" in ''|*/*|.*) ;; *)
+      cdir="${LANDBOT_STATE_DIR:-$HOME/.landbot}/created"
+      { mkdir -p "$cdir" && date +%s > "$cdir/$new_id"; } 2>/dev/null || echo "WARNING: could not record bot $new_id as created here; channel writes to it will go to the draft" >&2 ;;
+    esac
   fi
 fi
 

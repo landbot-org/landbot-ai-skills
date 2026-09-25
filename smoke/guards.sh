@@ -16,33 +16,91 @@ cr=$(( $(date +%s) - ${MOCK_AGE_H:-1}*3600 ))
 case "$M $P" in
 "GET /bots/"*"/draft") cat "${MOCK_DRAFT:-$D/draft.json}";;
 "GET /bots/"*) echo "{\"data\":{\"id\":\"BOT\",\"channel_family\":\"landbot\",\"channels\":${MOCK_CHANNELS:-[\"cu-1\"]}}}";;
+"GET /channels/777/test_config/") [ -n "${MOCK_NOTESTCFG:-}" ] && exit 1; jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --arg w "$(cat "$D/dwelcome" 2>/dev/null || echo hi)" --arg tok "$RANDOM$RANDOM" --arg ch "$(cat "$D/dchat" 2>/dev/null || true)" '{test:true,version:$v,style:$s,foot:$f,welcome:$w,chat_placeholder:$ch,customerToken:$tok,landbotToken:$tok,channelToken:$tok,firestore:{api_key:$tok}}';;
 "GET /channels/"*) id="${P#/channels/}"; id="${id%/}"; [ "$id" = "777" ] || exit 1
    ver=$(cat "$D/ver" 2>/dev/null || echo 3.0.0); sty=$(cat "$D/style" 2>/dev/null || true); ft=$(cat "$D/foot" 2>/dev/null || true)
-   c="$cr"; [ -n "${MOCK_NOCREATED:-}" ] && c=null
-   jq -n --arg v "$ver" --arg s "$sty" --arg f "$ft" --arg cfg "${MOCK_CFG:-}" --argjson c "$c" '{success:true,channel:({id:777,uuid:"cu-1",version:$v,style:$s,foot:$f,created_at:$c} + (if $cfg != "" then {config_url:$cfg} else {} end))}';;
+   mg=$(cat "$D/merged" 2>/dev/null || echo "${MOCK_MERGED:-true}")
+   if [ -n "${MOCK_FLIP_LIVE:-}" ]; then n=$(( $(cat "$D/reads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/reads"; [ "$n" -ge 2 ] && sty="moved"; fi
+   if [ -n "${MOCK_FLIP:-}" ]; then n=$(( $(cat "$D/reads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/reads"; [ "$n" -ge 2 ] && mg=false; fi
+   jq -n --arg v "$ver" --arg s "$sty" --arg f "$ft" --arg cfg "${MOCK_CFG:-}" --argjson c "$cr" --arg mg "$mg" '{success:true,channel:({id:777,uuid:"cu-1",version:$v,style:$s,foot:$f,created_at:$c} + (if $mg == "none" then {} else {merged:($mg == "true")} end) + (if $cfg != "" then {config_url:$cfg} else {} end))}';;
+"PATCH /channels/777/discard/") echo discard >> "$D/patches"; echo true > "$D/merged"; rm -f "$D/dver" "$D/dstyle" "$D/dfoot" "$D/dwelcome"
+   echo '{"success":true,"channel":{"id":777,"merged":false}}';;
 "PATCH /channels/777/") printf '%s' "$B" | jq -c . >> "$D/patches"
-   v=$(printf '%s' "$B" | jq -r '.version // empty'); [ -n "$v" ] && echo "$v" > "$D/ver"
-   printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j '.style | sub("\\s+$"; "")' > "$D/style"
-   printf '%s' "$B" | jq -e 'has("foot")' >/dev/null && printf '%s' "$B" | jq -j '.foot | sub("\\s+$"; "")' > "$D/foot"; echo '{}';;
+   if printf '%s' "$B" | jq -e '.autosave == true' >/dev/null; then pre=d; echo false > "$D/merged"; else pre=; echo true > "$D/merged"; fi
+   v=$(printf '%s' "$B" | jq -r '.version // empty'); [ -n "$v" ] && echo "$v" > "$D/${pre}ver"
+   printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j '.style | sub("\\s+$"; "")' > "$D/${pre}style"
+   printf '%s' "$B" | jq -e 'has("foot")' >/dev/null && printf '%s' "$B" | jq -j '.foot | sub("\\s+$"; "")' > "$D/${pre}foot"
+   if [ -n "$pre" ]; then
+     jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" '{success:true,channel:{id:777,version:$v,style:$s,foot:$f}}'
+   else echo '{}'; fi;;
 *) exit 1;;
 esac
 E
 printf '#!/usr/bin/env bash\necho "LANDBOT_HANDOFF bot=$1 builder=4069913 share=x channel=${MOCK_RESOLVED:-777} version=3.0.0"\n' > "$T/handoff"
 chmod +x "$T/lb" "$T/handoff" "$T/channel"; printf 'a{color:red}' > "$T/s.css"
 pass=0; fail=0
-t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot"; "$@" >/dev/null 2>&1; local rc=$?
+t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome" "$T/dchat" "$T/reads"; rm -rf "$T/state/channel-drafts"; "$@" >/dev/null 2>&1; local rc=$?
   local np=0; [ -f "$T/patches" ] && np=$(wc -l < "$T/patches" | tr -d ' ')
   if [ "$rc:$np" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $name: rc=$rc writes=$np, want $want"; fi; }
 C="$T/channel"
+# The bot BOT counts as created by this plugin on this machine: its channel writes are live.
+mkdir -p "$T/state/created"; date +%s > "$T/state/created/BOT"
 t "uuid as channel id"        65:0 "$C" v4 ba59dd6c-uuid --bot BOT
 t "write without --bot"       64:0 "$C" v4 777
 t "bot with no channel"       70:0 env MOCK_CHANNELS='[]' "$C" v4 --bot BOT
 t "bot with two channels"     70:0 env MOCK_CHANNELS='["a","b"]' "$C" css "$T/s.css" --bot BOT
 t "bot number as channel id"  70:0 "$C" v4 4069913 --bot BOT
-t "old channel, env raised (v4)"  70:0 env MOCK_AGE_H=48 LANDBOT_CHANNEL_MAX_AGE_H=99999 "$C" v4 --bot BOT
-t "old channel, env raised (css)" 70:0 env MOCK_AGE_H=48 LANDBOT_CHANNEL_MAX_AGE_H=99999 "$C" css "$T/s.css" --bot BOT
-t "exactly 24 h"              70:0 env MOCK_AGE_H=24 "$C" v4 --bot BOT
-t "no created_at"             70:0 env MOCK_NOCREATED=1 "$C" v4 --bot BOT
+# No age limit: where a write lands depends on the local creation record, and pending changes block it.
+t "old channel of a bot created here: live" 0:1 env MOCK_AGE_H=480 "$C" css "$T/s.css" --bot BOT
+grep -q autosave "$T/patches" && { fail=$((fail+1)); echo "FAIL a write to a bot created here carried autosave"; } || pass=$((pass+1))
+t "bot not created here: draft"  0:1 "$C" css "$T/s.css" --bot OTHER
+grep -q '"autosave":true' "$T/patches" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a write to a bot not created here did not carry autosave"; }
+[ ! -s "$T/style" ] && [ "$(cat "$T/dstyle")" = "a{color:red}" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft write touched the live style or missed the draft"; }
+t "v4 on a bot not created here: draft" 0:1 "$C" v4 --bot OTHER
+t "live write over pending changes refused"  75:0 env MOCK_MERGED=false "$C" css "$T/s.css" --bot BOT
+t "draft write over someone else's pending changes refused" 75:0 env MOCK_MERGED=false "$C" css "$T/s.css" --bot OTHER
+t "no merged flag refused"       70:0 env MOCK_MERGED=none "$C" v4 --bot BOT
+t "age env var no longer matters" 0:1 env LANDBOT_CHANNEL_MAX_AGE_H=0 "$C" v4 --bot BOT
+echo $(( $(date +%s) - 7*3600 )) > "$T/state/created/OLD"
+t "bot created here 7 h ago: draft" 0:1 "$C" css "$T/s.css" --bot OLD
+grep -q '"autosave":true' "$T/patches" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a bot past the live window was written live"; }
+: > "$T/state/created/EMPTY"
+t "record without an epoch: draft" 0:1 "$C" v4 --bot EMPTY
+grep -q '"autosave":true' "$T/patches" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a record without an epoch counted as fresh"; }
+t "channel changed between the reads refused" 75:0 env MOCK_FLIP=1 "$C" css "$T/s.css" --bot BOT
+# Continuing our own draft: allowed, backed up from our last draft; discard only drops our own draft.
+rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot"; rm -rf "$T/state/channel-drafts"
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; printf 'b{color:blue}' > "$T/s2.css"
+[ -f "$T/state/channel-drafts/777" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft write left no draft record"; }
+"$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1 && [ "$(cat "$T/dstyle")" = "b{color:blue}" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a second draft write on our own draft was refused"; }
+lastbk="$(ls -t "$T/state/backups"/channel-777-style-* | sed -n 1p)"; [ "$(cat "$lastbk")" = "a{color:red}" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL the backup of a continued draft is not our previous draft"; }
+"$C" discard --bot OTHER >/dev/null 2>&1 && [ "$(cat "$T/merged")" = "true" ] && [ ! -f "$T/state/channel-drafts/777" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL discard of our own draft"; }
+# Our draft record fails closed: live moved since (the person published, then edited again), or too old.
+rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot"; rm -rf "$T/state/channel-drafts"
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; printf 'published{}' > "$T/style"; np0=$(wc -l < "$T/patches" | tr -d ' ')
+"$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1; rc1=$?; "$C" discard --bot OTHER >/dev/null 2>&1; rc2=$?; np1=$(wc -l < "$T/patches" | tr -d ' ')
+[ "$rc1:$rc2:$((np1-np0))" = "75:75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft record was trusted after the live channel moved ($rc1:$rc2:$((np1-np0)))"; }
+rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot"; rm -rf "$T/state/channel-drafts"
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; r="$T/state/channel-drafts/777"; printf '%s %s\n' $(( $(date +%s) - 7*3600 )) "$(awk '{print $2}' "$r")" > "$r"
+"$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1; [ $? = 75 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft record past its TTL was trusted"; }
+# The person edited the draft after ours (any field, unpublished): continuing and discarding both refuse.
+rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome"; rm -rf "$T/state/channel-drafts"
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; echo "edited welcome" > "$T/dwelcome"; np0=$(wc -l < "$T/patches" | tr -d ' ')
+"$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1; rc1=$?; "$C" discard --bot OTHER >/dev/null 2>&1; rc2=$?; np1=$(wc -l < "$T/patches" | tr -d ' ')
+[ "$rc1:$rc2:$((np1-np0))" = "75:75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft edited by the person after ours was treated as ours ($rc1:$rc2:$((np1-np0)))"; }
+rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome"; rm -rf "$T/state/channel-drafts"
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; MOCK_NOTESTCFG=1 "$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1; [ $? = 75 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL an unreadable draft was treated as ours"; }
+# A draft field whose name merely contains "chat" or "customer" still counts.
+rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome" "$T/dchat"; rm -rf "$T/state/channel-drafts"
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; echo "person" > "$T/dchat"; "$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1; [ $? = 75 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL an edit to a draft field named like chat_* was ignored"; }
+grep -rqi "token" "$T/state/channel-drafts" 2>/dev/null && { fail=$((fail+1)); echo "FAIL a draft record holds token text"; } || pass=$((pass+1))
+rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/reads"; rm -rf "$T/state/channel-drafts"
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; rm -f "$T/reads"; np0=$(wc -l < "$T/patches" | tr -d ' ')
+MOCK_FLIP_LIVE=1 "$C" discard --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(wc -l < "$T/patches" | tr -d ' ')
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL discard did not re-read before writing ($rc:$((np1-np0)))"; }
+t "discard of someone else's draft refused" 75:0 env MOCK_MERGED=false "$C" discard --bot OTHER
+t "discard with nothing pending"  0:0 "$C" discard --bot OTHER
+t "draft js skips the served check" 0:1 "$C" js "$TROOT/landbot-style/modules/messaging.js" --bot OTHER
 t "channel not resolvable"     1:0 env MOCK_RESOLVED='?' "$C" v4 --bot BOT
 t "v4"                         0:1 "$C" v4 --bot BOT
 t "css"                        0:1 "$C" css "$T/s.css" --bot BOT
@@ -74,7 +132,6 @@ t "js with eval"              65:0 "$C" js "$T/eval.js" --bot BOT --custom
 t "js loading a script"       65:0 "$C" js "$T/src.js" --bot BOT --custom
 t "js over 60k"               65:0 "$C" js "$T/big.js" --bot BOT --custom
 t "js without --bot"          64:0 "$C" js "$T/ok.js"
-t "js old channel"            70:0 env MOCK_AGE_H=48 "$C" js "$T/ok.js" --bot BOT --custom
 t "js --clear"                 0:1 "$C" js --clear --bot BOT
 t "js --clear with a file"    64:0 "$C" js --clear "$T/ok.js" --bot BOT
 t "--clear on css"            64:0 "$C" css --clear "$T/s.css" --bot BOT

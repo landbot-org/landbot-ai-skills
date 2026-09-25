@@ -1,4 +1,4 @@
-/* lb-js companion: messaging 0.3.4 — append after the look's own CSS, in the same Custom CSS block.
+/* lb-js companion: messaging 0.4.0 — append after the look's own CSS, in the same Custom CSS block.
    Every rule here styles something messaging.js adds (body.lb-js-messaging and its classes, data-lb-ts,
    data-lb-daychip, #lb-msg-composer, .lb-msg-*). Without the script (a plan without the Custom Code
    add-on, a script error) none of it applies and the chat keeps Landbot's own buttons and input.

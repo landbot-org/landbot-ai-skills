@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.3.4`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.4.0`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 
@@ -71,7 +71,7 @@ The skill names the account it is about to write to, asks once before building (
 LANDBOT_HANDOFF bot=<uuid> builder=<id> share=https://landbot.pro/v3/H-<channel>-<code>/index.html channel=<id> version=3.1.0
 ```
 
-Then: "make it look like `<your site>`". The style skill asks, writes the CSS to the channel (live at once) and verifies the share URL. If it tells you to paste instead, it gives the three clicks (Design › Custom code › Add CSS, Apply, Publish).
+Then: "make it look like `<your site>`". The style skill asks, writes the CSS to the channel (live at once on a bot it created in this build; on a bot you already had, to the bot's draft, which you check with the builder's Preview and publish yourself) and verifies the share URL. If it tells you to paste instead, it gives the three clicks (Design › Custom code › Add CSS, Apply, Publish).
 
 ## Embed
 
