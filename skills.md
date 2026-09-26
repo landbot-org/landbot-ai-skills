@@ -62,9 +62,9 @@ Ask **once, before building**: "I will build it and publish it as I go, so you c
 
 ## 6. Style it
 Read `version` in the handoff line.
-- `3.1.0`: use the `landbot-style` skill: "make it look like <their site>". For a bot you created in this session the skill pushes the CSS to the channel (live at once; covered by the step-5 yes). For a bot the person already had, the push goes to the bot's draft after its own yes, and **HUMAN** checks it with the builder's Preview and presses Publish; or **HUMAN** pastes it in Design › Custom code › Add CSS, clicks Apply, then Publish. Verify with `scripts/verify-share <share-url>`; only the share URL counts, the builder preview never shows Custom CSS.
+- `3.1.0`: use the `landbot-style` skill: "make it look like <their site>". For a bot you created in this session the skill pushes the CSS to the channel (live at once; covered by the step-5 yes). For a bot the person already had, the push goes to the bot's draft after its own yes; the skill shows it with `channel preview` and, on a second yes, makes it live with `channel publish`; or **HUMAN** pastes it in Design › Custom code › Add CSS, clicks Apply, then Publish. Verify with `scripts/verify-share <share-url>`; only the share URL counts, the builder preview never shows Custom CSS.
 - `3.0.0` on a bot you created in this session: run the flows skill's `channel v4` step (it switches that channel to the current web chat; live at once, covered by the step-5 yes), re-read the handoff line, then style.
-- `3.0.0` on a bot the person already had: say Custom CSS needs the v4 web chat and offer the switch. With their yes it goes to the bot's draft; they check it with the builder's Preview and press Publish.
+- `3.0.0` on a bot the person already had: say Custom CSS needs the v4 web chat and offer the switch. With their yes it goes to the bot's draft; the skill previews it and publishes it on their yes.
 
 ## 7. Embed
 Offer to add the embed snippet (builder › Share › Embed) to their site's code. **HUMAN** deploys.

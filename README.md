@@ -71,7 +71,7 @@ The skill names the account it is about to write to, asks once before building (
 LANDBOT_HANDOFF bot=<uuid> builder=<id> share=https://landbot.pro/v3/H-<channel>-<code>/index.html channel=<id> version=3.1.0
 ```
 
-Then: "make it look like `<your site>`". The style skill asks, writes the CSS to the channel (live at once on a bot it created in this build; on a bot you already had, to the bot's draft, which you check with the builder's Preview and publish yourself) and verifies the share URL. If it tells you to paste instead, it gives the three clicks (Design › Custom code › Add CSS, Apply, Publish).
+Then: "make it look like `<your site>`". The style skill asks, writes the CSS to the channel (live at once on a bot it created in this build; on a bot you already had, to the bot's draft, which it shows you as a local preview and publishes when you say yes) and verifies the share URL. If it tells you to paste instead, it gives the three clicks (Design › Custom code › Add CSS, Apply, Publish).
 
 ## Embed
 
