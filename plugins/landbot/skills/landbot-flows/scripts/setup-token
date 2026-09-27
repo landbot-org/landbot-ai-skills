@@ -18,7 +18,10 @@ set -uo pipefail
 
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 BASE="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"
-V2="${LANDBOT_API_V2_URL:-https://api.landbot.io/v2}"
+BASE="${BASE%/}"
+# v2 sits beside the Bots API, as lb places /v3, so whose token it is gets asked of the environment
+# lb writes to rather than of production.
+V2="${LANDBOT_API_V2_URL:-${BASE%/*}/v2}"
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 UA="landbot-plugin/$("$HERE/lb" --version | awk '{print $2}') (setup-token)"   # same tag as lb, see SECURITY.md
 ACCESS_URL="${LANDBOT_SKILLS_ACCESS_URL:-https://landbot.io/skills}"
@@ -26,13 +29,14 @@ ACCESS_URL="${LANDBOT_SKILLS_ACCESS_URL:-https://landbot.io/skills}"
 have_keychain() { command -v security >/dev/null 2>&1; }
 
 # Who a token belongs to, asked of the API rather than guessed. Takes the token on stdin so it is
-# never an argument; answers with the account's email, and nothing about the token itself.
+# never an argument; answers with the account's email, and nothing about the token itself. An answer
+# that names no email (a refused token, a login page) is a failure, never an account called "?".
 account_of() {
   local token body
   token="$(cat)"
   body="$(printf 'header = "Authorization: Token %s"\n' "$token" |
     curl -sS -A "$UA" "$V2/agents/me/" --config -)" || return 1
-  printf '%s' "$body" | jq -r '.agent | "\(.full_name // "?") <\(.email // "?")>"' 2>/dev/null ||
+  printf '%s' "$body" | jq -er '.agent | select(.email) | "\(.full_name // "?") <\(.email)>"' 2>/dev/null ||
     return 1
 }
 

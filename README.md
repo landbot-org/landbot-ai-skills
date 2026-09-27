@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.3.4`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.3.5`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 

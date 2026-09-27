@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash("${CLAUDE_SKILL_DIR}/scripts/draft-check" *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.3.4
+  version: 0.3.5
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.3.4`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.3.5`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -40,7 +40,7 @@ All five scripts reach the network, and on macOS `lb` reads the keychain. Under 
 
 ## Step 0 — Preconditions
 
-`scripts/lb` wraps every call: it resolves the base URL and the token, prints `HTTP <code>` to stderr, and exits non-zero from 400 up.
+`scripts/lb` wraps every call: it resolves the base URL and the token, prints `HTTP <code>` to stderr, and exits non-zero on anything but a 2xx. The API never redirects, so a `3xx` means something in front of it answered (a proxy, a login page, a wrong `LANDBOT_API_URL`): nothing was read or written, and `lb` says where the request was sent.
 
 ```bash
 "${CLAUDE_SKILL_DIR}/scripts/lb" GET /blocks
@@ -169,7 +169,7 @@ The greeting is **a role a node plays, decided by its id** — not a block type 
 | | |
 |---|---|
 | **The node id** | `welcome` on `landbot`, `bot_start` on `facebook` and `apichat`. WhatsApp does not restrict the slot at all, since there the bot only ever answers a message the contact sent first. |
-| **Which blocks may take it** | Only these seven: `ask_date`, `ask_number`, `ask_phone`, `ask_question`, `ask_url`, `ask_yes_no`, `buttons`. The greeting has to ask something and wait, so **`send_text` cannot be the greeting** — nor can `ask_email`, which waits just the same and is still not allowed. `can_be_welcome` in the catalog is the answer per block. |
+| **Which blocks may take it** | The ones whose `GET /blocks` entry says `can_be_welcome: true`. Read it there, not from a list: it is the rule the API enforces, and it matches the builder's own greeting menu. The greeting has to ask something and wait, so **`send_text` cannot be the greeting** — nor can `ask_email`, which waits just the same and is still not allowed. |
 | **`params.version: 3`, on `landbot`** | Required, and **no param in the catalog declares it** — the slot wants it, not the block. Without it the builder reads the node as the welcome template it used to be and offers to delete it rather than replace it. |
 
 ```bash
@@ -289,7 +289,7 @@ Publishing makes live whatever the draft holds, and Landbot checks it only for r
 - **the draft changed since your last write** (an edit in the builder, or a builder tab saving an old copy over yours), including a connection pointed somewhere else, or `lb` saw such a change before one of your writes;
 - there is **no snapshot of this bot on this machine** (you never wrote it here): nothing shows the draft is the one you meant.
 
-It prints each reason. Fix what is yours to fix. For a changed draft, run `draft-check diff`, tell the person what changed, and only when they agree the draft is right, run `draft-check save <bot_id>` and publish again. For a bot with no snapshot, go through the draft with the person the same way before `draft-check save`. Landbot's API has no "changed since I read it" lock, so a change landing between the check and the publish cannot be ruled out; the walk after the publish is what catches it. It also **warns** (and publishes) about blocks nothing reaches and questions with no next step: say each warning in the hand-back. A write that answered 400 or more wrote nothing: fix it before anything else, and never publish past it.
+It prints each reason. Fix what is yours to fix. For a changed draft, run `draft-check diff`, tell the person what changed, and only when they agree the draft is right, run `draft-check save <bot_id>` and publish again. For a bot with no snapshot, go through the draft with the person the same way before `draft-check save`. Landbot's API has no "changed since I read it" lock, so a change landing between the check and the publish cannot be ruled out; the walk after the publish is what catches it. It also **warns** (and publishes) about blocks nothing reaches and questions with no next step: say each warning in the hand-back. A write that answered anything but a 2xx wrote nothing: fix it before anything else, and never publish past it.
 
 ### When one is refused, say which of these it is
 

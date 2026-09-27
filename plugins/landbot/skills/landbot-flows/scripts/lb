@@ -13,8 +13,10 @@
 # (`https://api.landbot.io/v3`, `http://localhost:8000/api/v3`), or to $LANDBOT_AGENTS_API_URL when
 # that is set.
 #
-# Writes `HTTP <code>` to stderr and the body to stdout, and exits non-zero from 400 up,
-# so a failure is never read as a success. The token is never printed.
+# Writes `HTTP <code>` to stderr and the body to stdout, and exits non-zero on anything but a 2xx,
+# so a failure is never read as a success. The API answers no request with a redirect, so a 3xx
+# comes from something in front of it (a proxy, a login page, a wrong LANDBOT_API_URL) and the
+# request never reached it. The token is never printed.
 #
 # Three draft safeguards run on their own (scripts/draft-check), because a person forgets and so
 # does an agent:
@@ -32,7 +34,7 @@ BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-VERSION="0.3.4"
+VERSION="0.3.5"
 if [ "${1:-}" = "--version" ]; then echo "landbot-flows $VERSION"; exit 0; fi
 
 # Every request says it comes from this plugin, its version and which agent ran it, so Landbot can
@@ -214,7 +216,7 @@ if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ]; then
   fi
 fi
 
-ARGS=(-sS -X "$METHOD" "$BASE$PATH_" -A "$USER_AGENT" -w '\n%{http_code}' --config -)
+ARGS=(-sS -X "$METHOD" "$BASE$PATH_" -A "$USER_AGENT" -w '\n%{http_code} %{redirect_url}' --config -)
 if [ -n "$BODY" ]; then
   ARGS+=(-H 'Content-Type: application/json' --data-binary "$BODY")
 fi
@@ -224,12 +226,15 @@ fi
 RESPONSE="$(printf 'header = "Authorization: Token %s"\n' "$TOKEN" | curl "${ARGS[@]}")" \
   || { echo "the request did not complete" >&2; exit 1; }
 
-CODE="${RESPONSE##*$'\n'}"
+TAIL="${RESPONSE##*$'\n'}"
+CODE="${TAIL%% *}"
+REDIRECT="${TAIL#* }"
+is_ok() { case "$CODE" in 2[0-9][0-9]) return 0 ;; *) return 1 ;; esac; }
 PAYLOAD="${RESPONSE%$'\n'*}"
 
 # Remember what this plugin wrote: after a draft write, and right after a bot is created. This runs
 # before anything is printed, so a caller that stops reading early (`| head`) cannot skip it.
-if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
+if is_ok && [ -x "$DC" ]; then
   if [ -n "$DRAFT_BOT" ]; then
     expf="$(mktemp 2>/dev/null)" && printf '%s' "$EXPECT" > "$expf" || expf=""
     if [ -z "$expf" ] || ! "$DC" post "$DRAFT_BOT" "@$expf" >/dev/null 2>&1; then
@@ -252,4 +257,8 @@ else
   printf '%s\n' "$PAYLOAD"
 fi
 
-[ "$CODE" -lt 400 ] 2>/dev/null || exit 1
+case "$CODE" in 3[0-9][0-9])
+  host="${REDIRECT#*://}"; host="${host%%[/?#]*}"; host="${host##*@}"   # the host alone: no path, query or credentials
+  echo "redirected to ${host:-an unnamed location}: the request never reached the Landbot API, so nothing was read or written. Check LANDBOT_API_URL, or a VPN or proxy in front of it." >&2 ;;
+esac
+is_ok || exit 1
