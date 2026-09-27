@@ -4,10 +4,12 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.3.4
+  version: 0.3.5
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.3.4`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.3.5`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+
+**Where this runs.** Checking and pushing CSS needs a shell on the person's own computer: Claude Code (in a terminal or the Claude desktop app's Code tab), Codex or Cursor. If you have no shell tool (Claude on the web or on a phone, ChatGPT), or your commands run in a hosted sandbox instead of on the person's machine, you can still write the CSS for them to paste into Design › Custom code › Add CSS. Say plainly that from there you can neither check it on the share URL nor push it, and that https://landbot.io/skills has the setup for both. Never ask for the token in the chat.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
