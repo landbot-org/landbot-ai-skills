@@ -4,10 +4,12 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash("${CLAUDE_SKILL_DIR}/scripts/draft-check" *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.3.4
+  version: 0.3.5
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.3.4`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.3.5`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+
+**Where this runs.** Building needs a shell on the person's own computer, where the scripts reach the Landbot API with a token kept on that computer: Claude Code (in a terminal or the Claude desktop app's Code tab), Codex or Cursor. If you have no shell tool (Claude on the web or on a phone, ChatGPT), or your commands run in a hosted sandbox instead of on the person's machine, do not start. Say in one line that building a Landbot bot needs one of those tools and that https://landbot.io/skills has the setup, then stop. Never ask for the token in the chat, and never present output from a script you did not run.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 

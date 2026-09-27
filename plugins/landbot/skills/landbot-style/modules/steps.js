@@ -1,4 +1,4 @@
-/* lb-js: steps 0.3.4 — a form-style Landbot v4 web chat: a progress bar, "2 of 5", and letter keys.
+/* lb-js: steps 0.3.5 — a form-style Landbot v4 web chat: a progress bar, "2 of 5", and letter keys.
    Pairs with steps.css (append it to the look's CSS). Change only CONFIG below.
    What it does, all on the page and nothing else:
      1. a thin bar at the top that fills as the visitor answers, with an optional "n of N" label;
