@@ -396,6 +396,9 @@ if [ "$OP" = "discard" ]; then
     exit 75
   fi
   last_look
+  # Run on production 2026-09-26 and 2026-09-28 (probe channel 3517949): it copies the live channel's
+  # settings over the channel draft and nothing else; a flow edit pending in the same bot's draft was
+  # still there afterwards (2026-09-28). See REFERENCE.md.
   LANDBOT_API_URL="$V1" "$LB" PATCH "/channels/$ID/discard/" '{}' >/dev/null 2>&1 || { echo "the discard was refused; nothing changed" >&2; exit 1; }
   # The discard answer can report the old merged flag; read the channel again.
   again="$(read_channel)" || exit 1

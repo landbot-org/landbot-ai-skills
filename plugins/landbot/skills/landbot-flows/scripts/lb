@@ -32,7 +32,7 @@ BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-VERSION="0.3.5"
+VERSION="0.4.0"
 if [ "${1:-}" = "--version" ]; then echo "landbot-flows $VERSION"; exit 0; fi
 
 # Every request says it comes from this plugin, its version and which agent ran it, so Landbot can
@@ -217,7 +217,10 @@ fi
 # The API sits behind a firewall (Cloudflare) that refuses some INDENTED request bodies with an HTML
 # 403 before Landbot reads them, while the same content sent compact goes through (verified
 # 2026-09-25: three pretty-printed formulas blocks were enough; size alone was not). So a JSON body is
-# sent compact. jq -c changes only whitespace; a body that is not one JSON value is sent as given.
+# sent compact: jq -c re-serialises it. It is the same JSON to a parser, but the text can change form:
+# string escapes are rewritten (\u00e9 goes out as é), jq 1.7 writes 1e2 as 1E+2, and jq 1.6 (still
+# on Ubuntu 22.04) turns every number into a double (1.0 goes out as 1; integers above 2^53 lose
+# digits). A body that is not one JSON value is sent as given.
 LB_TMP="$(mktemp -d 2>/dev/null)" || LB_TMP=""
 [ -n "$LB_TMP" ] && trap 'rm -rf "$LB_TMP"' EXIT
 SEND_BODY="$BODY"
