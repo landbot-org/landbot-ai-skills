@@ -429,6 +429,10 @@ if [ "$OP" = "publish" ]; then
     || { echo "refusing: the draft read for channel $ID is not this channel's, or has no design object. Nothing was written." >&2; exit 70; }
   missing="$(printf '%s' "$copy" | jq -r --argjson f "$FORM_FIELDS" '[$f[] as $k | select(has($k) | not) | $k] | join(", ")')"
   [ -z "$missing" ] || { echo "refusing: the draft of channel $ID does not report $missing. Sent without them, Landbot would fill them from the live channel. Nothing was written." >&2; exit 70; }
+  # These two checks rely on GET /channels/<id>/ (live) and GET /channels/<id>/copy/ (draft) both returning
+  # every LANDBOT_FORM_FIELDS key, nullable ones included (both did on 2026-09-26, probe channel 3517949).
+  # If Landbot ever drops a field from either answer, publish refuses with exit 70 and names that field:
+  # compare the two answers and FORM_FIELDS above before changing anything here.
   live_missing="$(printf '%s' "$body" | jq -r --argjson f "$FORM_FIELDS" '[($f + ["design"])[] as $k | select(has($k) | not) | $k] | join(", ")')"
   [ -z "$live_missing" ] || { echo "refusing: the live channel $ID does not report $live_missing, so no complete backup (undo) can be kept. Nothing was written." >&2; exit 70; }
   # The copy must be the draft we fingerprinted: its look agrees with the draft the builder previews.
