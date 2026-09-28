@@ -253,9 +253,11 @@ import http.server, sys
 class H(http.server.BaseHTTPRequestHandler):
     def go(self):
         if self.path.startswith("/v2/agents/me/"):
-            ok = self.headers.get("Authorization") == "Token good"
-            b = b'{"agent":{"full_name":"Stub","email":"stub@example.invalid"}}' if ok else b'{"detail":"Invalid token."}'
-            self.send_response(200 if ok else 401)
+            auth = self.headers.get("Authorization")
+            if auth == "Token good": b = b'{"agent":{"full_name":"Stub","email":"stub@example.invalid"}}'
+            elif auth == "Token noname": b = b'{"agent":{"full_name":null,"email":"noname@example.invalid"}}'
+            else: b = b'{"detail":"Invalid token."}'
+            self.send_response(401 if b.startswith(b'{"detail"') else 200)
         else:
             b = b"<html>sign in</html>"; self.send_response(302); self.send_header("Location", "https://sso.example.invalid/login")
         self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
@@ -273,6 +275,7 @@ cp "$SRC/setup-token" "$T/"
 # https goes to a dead proxy: were --whoami to ask production again, it would fail here, not reach it
 t "whoami asks the environment lb uses" 0:0 env LANDBOT_API_TOKEN=good https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 "$T/setup-token" --whoami
 t "whoami with a refused token fails"   1:0 env LANDBOT_API_TOKEN=dummy https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 "$T/setup-token" --whoami
+env LANDBOT_API_TOKEN=noname https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 "$T/setup-token" --whoami 2>/dev/null | grep -qx "Acting as noname@example.invalid" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL whoami does not name an account that has no name by its email"; }
 kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
 ua="$(grep -c 'landbot-plugin/' "$SRC/lb")"; [ "$ua" -ge 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL user agent missing in lb"; }
 # date-format guard: pickerFormat and format must agree, or nothing is sent (exit 65)
