@@ -47,6 +47,8 @@ The token is sent to one place: **api.landbot.io**, Landbot's own API, the same 
 
 Two hosts are read without the token: **storage.googleapis.com/landbot.pro**, the public bucket that serves published channel configs, to verify a share URL and to preview a draft; and **cdn.landbot.io**, the web chat library that the local preview page loads. The full account of what is written where is in SECURITY.md in the repository.
 
+Privacy: what the plugin reads on your machine, stores and sends is set out in the plugin's [Privacy policy](https://github.com/landbot-org/landbot-ai-skills/blob/main/PRIVACY.md). What Landbot does with the data that reaches its services is covered by Landbot's [Privacy Policy](https://landbot.io/privacy-policy).
+
 ## If the first call answers 401 or 403
 
 The API gives the same answer for three causes and does not say which. Most often the account is not enabled for the Bots API yet: the API is in preview and Landbot switches it on per account. Ask the assistant on https://landbot.io/skills or book the 15-minute setup call there and give your account email in that private channel; there is nothing to fix on your side. The other two causes: the token was not copied whole, or your user lacks the "view chatbot" or "edit chatbot" permission in the workspace. Do not paste the token into the chat to check it.
