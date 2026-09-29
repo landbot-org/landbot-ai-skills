@@ -7,7 +7,7 @@
 # Reads only. Three APIs answer the five fields, and none of them answers all five:
 #   v0-alpha  GET /bots/{uuid}          → the channel uuid(s)
 #   v2        GET /bots/{uuid}/         → the numeric builder id
-#   v1        GET /channels/?limit=&offset= → numeric channel id, share token (H-<id>-...), landbot.version
+#   v1        GET /channels/?limit=&offset= → numeric channel id, share code (H-<id>-...), landbot.version
 #             (paginated, ignores ?bot=; walked to the end)
 # A field that could not be read is printed as `?` and the exit code is 2, so a partial line is
 # never mistaken for a complete one. The token is never printed; `lb` handles it.
@@ -70,9 +70,9 @@ if [ "$ch_uuid" != "?" ]; then
   fi
   if [ -n "$row" ]; then
     channel="$(printf '%s' "$row" | jq -r '.id // "?"')"
-    token="$(printf '%s' "$row" | jq -r '.token // empty')"
+    share_code="$(printf '%s' "$row" | jq -r '.token // empty')"
     version="$(printf '%s' "$row" | jq -r '.landbot.version // .version // "?"')"
-    [ -n "$token" ] && share="$SHARE_HOST/$token/index.html"
+    [ -n "$share_code" ] && share="$SHARE_HOST/$share_code/index.html"
   else
     partial=1
   fi
