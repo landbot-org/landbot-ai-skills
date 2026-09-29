@@ -13,7 +13,7 @@
 set -uo pipefail
 IN="${1:-}"; MARK="${2:-}"
 if [ -z "$IN" ]; then echo "usage: verify-share <share-url | H-<id>-<code>> [expected-css-substring]" >&2; exit 64; fi
-TOKEN="$(printf '%s' "$IN" | grep -oE 'H-[0-9]+-[A-Z0-9]+' | head -1)"
+TOKEN=""; [[ "$IN" =~ (H-[0-9]+-[A-Z0-9]+) ]] && TOKEN="${BASH_REMATCH[1]}"
 if [ -z "$TOKEN" ]; then echo "no channel token (H-<id>-<code>) found in: $IN" >&2; exit 65; fi
 CHANNEL_ID="$(printf '%s' "$TOKEN" | cut -d- -f2)"
 CONFIG_URL="${LANDBOT_CONFIG_BASE:-https://storage.googleapis.com/landbot.pro/v3}/$TOKEN/index.json"
@@ -35,7 +35,11 @@ if [ "$style_len" = "0" ]; then
   echo "FAIL: no Custom CSS in the published config. Either Publish was not clicked, or the plan is Sandbox (Custom CSS is dropped)." >&2; ok=1
 fi
 if [ -n "$MARK" ]; then
-  if printf '%s' "$body" | jq -r '.style // ""' | grep -qF -- "$MARK"; then
+  # Not `jq … | grep -q`: under pipefail, grep -q stops reading at the first match, jq is killed by
+  # SIGPIPE (141) and the pipeline counts as failed, so a marker that IS published was reported
+  # missing on most large styles (16 of 20 live channels, 2026-09-25). Test the string in the shell.
+  style="$(printf '%s' "$body" | jq -r '.style // ""')"
+  if [[ "$style" == *"$MARK"* ]]; then
     echo "marker:    found"
   else
     echo "FAIL: the published CSS does not contain '$MARK'. The paste did not reach Publish." >&2; ok=1
