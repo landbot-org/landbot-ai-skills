@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.4.1`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.4.3`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 
@@ -93,7 +93,11 @@ Claude Code and Codex fetch updates from this repo: `claude plugin update landbo
 
 ## What this is not
 
-Not a hosted MCP server, no OAuth, no server that holds your token. Everything runs on your machine with your credentials. Chat apps (claude.ai, ChatGPT) cannot run these skills yet.
+Not a hosted MCP server, no OAuth, no server that holds your token. Everything runs on your machine with your credentials, as bash scripts with `curl` and `jq`. Your token goes to one place, `api.landbot.io`, Landbot's own API. The only other hosts the skills touch are `storage.googleapis.com/landbot.pro`, the public bucket that serves published channel configs (read without a token, to verify a share URL and to preview a draft), and `cdn.landbot.io`, the web chat library the local preview page loads. Chat apps (claude.ai, ChatGPT) cannot run these skills yet.
+
+## Privacy
+
+What the plugin reads on your machine, stores and sends, and to whom, is set out in [PRIVACY.md](PRIVACY.md). What Landbot does with the data that reaches its services is covered by Landbot's [Privacy Policy](https://landbot.io/privacy-policy).
 
 ## Feedback
 

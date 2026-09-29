@@ -326,7 +326,7 @@ fi
 # landbot.pro/v3/H-3517949-…/index.html). This page does the same with the draft's channel settings laid
 # over the published config. The flow (greeting and every step after it) stays the published one. Only
 # these keys come from the draft, so no token of the builder's test chat reaches the file.
-PREVIEW_KEYS='["style","foot","design","version","use_surrogate_interaction","text","tagline","typing_options","persistent_menu","branding","logo","brand_name","is_legal_consent_enabled","privacy_policy_link","privacy_policy_link_text","privacy_policy_text","storage_off","revisit_off","revisit","hidden_fields","conditional_proactives","launcher","launcher_tracking"]'
+PREVIEW_FIELDS='["style","foot","design","version","use_surrogate_interaction","text","tagline","typing_options","persistent_menu","branding","logo","brand_name","is_legal_consent_enabled","privacy_policy_link","privacy_policy_link_text","privacy_policy_text","storage_off","revisit_off","revisit","hidden_fields","conditional_proactives","launcher","launcher_tracking"]'
 if [ "$OP" = "preview" ]; then
   if [ -n "$BOT" ] && [ "$(printf '%s' "$body" | jq -r '.uuid // empty')" != "$ch_uuid" ]; then echo "refusing: channel $ID is not bot $BOT's channel" >&2; exit 70; fi
   cfg_url="$(printf '%s' "$body" | jq -r '.config_url // empty')"
@@ -334,7 +334,7 @@ if [ "$OP" = "preview" ]; then
   pub="$(curl -sS -f "$cfg_url" 2>/dev/null | jq -c 'select(type == "object" and (.channelToken | type) == "string")' 2>/dev/null)"
   [ -n "$pub" ] || { echo "could not read the published config at $cfg_url; no preview was written" >&2; exit 1; }
   if [ "$merged" = "false" ]; then
-    draft="$(LANDBOT_API_URL="$V1" "$LB" GET "/channels/$ID/test_config/" 2>/dev/null | jq -c --argjson k "$PREVIEW_KEYS" 'select(type == "object" and .test == true) | with_entries(select(.key as $x | $k | index($x)))' 2>/dev/null)"
+    draft="$(LANDBOT_API_URL="$V1" "$LB" GET "/channels/$ID/test_config/" 2>/dev/null | jq -c --argjson k "$PREVIEW_FIELDS" 'select(type == "object" and .test == true) | with_entries(select(.key as $x | $k | index($x)))' 2>/dev/null)"
     [ -n "$draft" ] || { echo "could not read the draft (test_config) of channel $ID; no preview was written" >&2; exit 1; }
   else draft='{}'; fi
   comp="$(jq -n -c --argjson p "$pub" --argjson d "$draft" '$p + $d')"
