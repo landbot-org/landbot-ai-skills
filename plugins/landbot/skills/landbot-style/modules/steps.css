@@ -1,4 +1,4 @@
-/* lb-js companion: steps 0.3.4 — append after the look's own CSS, in the same Custom CSS block.
+/* lb-js companion: steps 0.4.0 — append after the look's own CSS, in the same Custom CSS block.
    It styles only #lb-steps, which steps.js creates; without the script nothing here applies.
    Set the colours in the look's :root. */
 :root {

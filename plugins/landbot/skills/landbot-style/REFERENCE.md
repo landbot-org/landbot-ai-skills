@@ -7,7 +7,9 @@ Facts observed on production Landbot during September 2026. Verify on the target
 - The channel `version` decides the renderer: `3.0.0` legacy, `3.1.0` v4. It is set when the channel is created, from a per-brand switch. It is not migrated afterwards, and **a duplicated bot takes the brand default, not the source bot's version.**
 - On `3.0.0` the Custom CSS is injected as `<style id="custom-styles">` and reaches nothing: the legacy renderer has no `data-lb-*` anchors and its tokens are not the ones in the catalog.
 - The published config for a channel is public: `https://storage.googleapis.com/landbot.pro/v3/H-<channel>-<code>/index.json`. It carries `version`, `use_surrogate_interaction` (true on v4) and `style` (the Custom CSS, **only on non-Sandbox plans**). `scripts/verify-share` reads it.
-- The builder's Design preview never renders Custom CSS. Only the share URL does.
+- The builder's **Preview** (the button next to Publish) renders the channel's draft, Custom CSS included: verified 2026-09-25 on a `3.1.0` channel, a draft written with `"autosave": true` showed in the preview's chat frame while the published config did not carry it. The share URL shows what visitors get.
+- A draft has no public URL: the test channel's own index.json and share page answer 404 (2026-09-26, probe channel 3517949). The share page is only `new Landbot.Native(<published index.json>)`, so `channel preview` builds the same page locally with the draft's channel settings over the published config. Served from `http://127.0.0.1` it rendered the v4 chat with the swapped CSS in the in-app browser (10 `data-lb-part` elements); opened as `file://` it stalled at the loader (headless Chrome, 15 s), and the in-app browser does not run local files (both 2026-09-26). It shows the look, never the draft's flow.
+- `channel publish` makes the plugin's own draft live the way the builder's Publish does (live PATCH, no `autosave`, every field sent). Verified 2026-09-26 on production, see `landbot-flows/REFERENCE.md`.
 
 ## 2. Apply mechanics
 

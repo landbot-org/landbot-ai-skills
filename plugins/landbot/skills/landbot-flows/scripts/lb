@@ -32,7 +32,7 @@ BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-VERSION="0.3.4"
+VERSION="0.4.0"
 if [ "${1:-}" = "--version" ]; then echo "landbot-flows $VERSION"; exit 0; fi
 
 # Every request says it comes from this plugin, its version and which agent ran it, so Landbot can
@@ -214,9 +214,28 @@ if [ -n "$DRAFT_BOT" ] && [ -x "$DC" ]; then
   fi
 fi
 
+# The API sits behind a firewall (Cloudflare) that refuses some INDENTED request bodies with an HTML
+# 403 before Landbot reads them, while the same content sent compact goes through (verified
+# 2026-09-25: three pretty-printed formulas blocks were enough; size alone was not). So a JSON body is
+# sent compact: jq -c re-serialises it. It is the same JSON to a parser, but the text can change form:
+# string escapes are rewritten (\u00e9 goes out as é), jq 1.7 writes 1e2 as 1E+2, and jq 1.6 (still
+# on Ubuntu 22.04) turns every number into a double (1.0 goes out as 1; integers above 2^53 lose
+# digits). A body that is not one JSON value is sent as given.
+LB_TMP="$(mktemp -d 2>/dev/null)" || LB_TMP=""
+[ -n "$LB_TMP" ] && trap 'rm -rf "$LB_TMP"' EXIT
+SEND_BODY="$BODY"
+if [ -n "$BODY" ] && [ -n "$LB_TMP" ] && command -v jq >/dev/null 2>&1; then
+  case "$BODY" in
+  @*) jq -c . < "${BODY#@}" > "$LB_TMP/body.json" 2>/dev/null; jrc=$? ;;
+  *)  printf '%s' "$BODY" | jq -c . > "$LB_TMP/body.json" 2>/dev/null; jrc=$? ;;
+  esac
+  if [ "$jrc" = 0 ] && [ "$(jq -s 'length' < "$LB_TMP/body.json" 2>/dev/null)" = "1" ]; then SEND_BODY="@$LB_TMP/body.json"; fi
+fi
+
 ARGS=(-sS -X "$METHOD" "$BASE$PATH_" -A "$USER_AGENT" -w '\n%{http_code}' --config -)
+[ -n "$LB_TMP" ] && ARGS+=(-D "$LB_TMP/headers")
 if [ -n "$BODY" ]; then
-  ARGS+=(-H 'Content-Type: application/json' --data-binary "$BODY")
+  ARGS+=(-H 'Content-Type: application/json' --data-binary "$SEND_BODY")
 fi
 
 # The header goes in over stdin rather than on the command line, so the token is never an argument
@@ -242,10 +261,27 @@ if [ "$CODE" -lt 400 ] 2>/dev/null && [ -x "$DC" ]; then
   elif [ "$METHOD" = "POST" ] && { [ "$PATH_" = "/bots" ] || [ "$PATH_" = "/bots/" ]; }; then
     new_id="$(printf '%s' "$PAYLOAD" | jq -r '.data.id // empty' 2>/dev/null)"
     [ -n "$new_id" ] && { "$DC" save "$new_id" >/dev/null 2>&1 || echo "WARNING: could not save the first snapshot of bot $new_id (draft-check save $new_id)" >&2; }
+    # Bots created here are the ones `channel` may change live; any other bot gets draft writes.
+    case "$new_id" in ''|*/*|.*) ;; *)
+      cdir="${LANDBOT_STATE_DIR:-$HOME/.landbot}/created"
+      { mkdir -p "$cdir" && date +%s > "$cdir/$new_id"; } 2>/dev/null || echo "WARNING: could not record bot $new_id as created here; channel writes to it will go to the draft" >&2 ;;
+    esac
   fi
 fi
 
 echo "HTTP $CODE" >&2
+# A 403 from the firewall in front of the API is an HTML page, not the API's JSON. It is not a token,
+# account or permission problem, and must not be reported as one (SKILL.md Step 0 / write table).
+if [ "$CODE" = "403" ]; then
+  hdrs="$(cat "$LB_TMP/headers" 2>/dev/null)"
+  if [[ "$PAYLOAD" == *"<title>Attention Required! | Cloudflare</title>"* ]] || { [[ "$hdrs" == *[Ss]erver:\ cloudflare* ]] && [[ "$hdrs" == *[Cc]ontent-[Tt]ype:\ text/html* ]]; }; then
+    ray=""; [[ "$hdrs" =~ [Cc][Ff]-[Rr][Aa][Yy]:\ *([A-Za-z0-9-]+) ]] && ray="${BASH_REMATCH[1]}"
+    echo "FIREWALL: the firewall in front of the Landbot API (Cloudflare) refused this request before Landbot read it${ray:+ (Ray ID $ray)}." >&2
+    echo "This is NOT a token, account or permission problem: do not ask the person to re-copy the token or check their plan." >&2
+    echo "Send the same change in smaller requests (fewer blocks per call; connections in a separate PATCH /bots/<id>/draft) and try again. If one small request is still refused, report the Ray ID to Landbot. Nothing was written." >&2
+    exit 1
+  fi
+fi
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$PAYLOAD" | jq . 2>/dev/null || printf '%s\n' "$PAYLOAD"
 else

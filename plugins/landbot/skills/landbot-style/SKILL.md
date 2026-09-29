@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.3.4
+  version: 0.4.0
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.3.4`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.4.0`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -32,9 +32,9 @@ How to know:
 1. **From the handoff line.** `landbot-flows` ends with `LANDBOT_HANDOFF bot=… builder=… share=… channel=… version=…`. Read `version` and `share` from it.
 2. **From a share URL** the user gives you: `"${CLAUDE_SKILL_DIR}/scripts/verify-share" <share-url>` prints the version and whether Custom CSS is present in the published config.
 
-If the version is `3.0.0` and the bot was **created in this session by `landbot-flows`**: do not stop. Run that skill's Step 5a (`channel v4 --bot <bot_id>`; the channel write is live at once, no republish; covered by the one yes the person gave `landbot-flows` before building if a look was part of that sentence, otherwise ask) and re-read the handoff line. If the bot is one the person already had: **stop.** Say the channel is on the legacy renderer, Custom CSS will not render there, and that Landbot switches the web chat version per account; do not flip a channel you did not create and do not generate CSS "just in case".
+If the version is `3.0.0` and the bot was **created in this session by `landbot-flows`**: do not stop. Run that skill's Step 5a (`channel v4 --bot <bot_id>`; the channel write is live at once, no republish; covered by the one yes the person gave `landbot-flows` before building if a look was part of that sentence, otherwise ask) and re-read the handoff line. If the bot is one the person already had: say the channel is on the legacy renderer and Custom CSS will not render there, and offer `channel v4 --bot <bot_id>`: it goes to the bot's draft (never live) and needs its own yes; then preview it and publish it from chat with its own yes (see `landbot-flows` Step 5a, including the `ask_yes_no`/`code` warning). Do not generate CSS "just in case".
 
-Also say, once: the builder's Design preview never renders Custom CSS. Only the share URL counts.
+Also say, once: a draft is not what visitors see. `channel preview` shows it without the builder (the builder's **Preview** shows it too, Custom CSS included: verified 2026-09-25 on a `3.1.0` channel); after `channel publish`, the share URL is what visitors get and the only thing to verify.
 
 ## Step 1 — Get the brief (one or two short rounds, then generate)
 
@@ -58,17 +58,30 @@ Rules: only selectors from the catalog (39 parts, listed in the catalog file); n
 
 Say in three or four lines what each layer does and what is left out.
 
+## Step 2b — Keep the visitor's Back button
+
+The v4 web chat has a native **Back** button: it re-asks the previous question, and the new answer replaces the old one (verified on production 2026-09-18 and again on 16 bots on 2026-09-25). Never hide it to make a chat look like a form, a game or a messaging app — a visitor who taps the wrong answer must be able to change it. Three things the CSS has to handle:
+
+- **It is invisible on phones by default.** Its wrapper is hover-only (`opacity-0` until hover), so on a touch screen nobody sees it. Force it: `div:has(> button[data-slot="button"][data-size="sm"][data-variant="ghost"]) { opacity: 1 !important; }` (no `data-lb-part` anchor exists for it; this selector is off-catalog, so say so in the hand-back).
+- **Keep it in the page flow.** `position: fixed` traps it inside the scroll area, clipped and untappable. Place it with `order` or margins and style it to fit the look (a small "‹ Back" link is enough).
+- **It is switched per channel.** `design.back_button_visible: false` removes it from the page entirely, and CSS cannot bring it back: `"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" back on --bot <bot_id>` switches it on (a write, same rules and yes as a CSS push; `channel get` shows its state). Its label is the channel's `text.back`.
+
+Tell the person two flow facts that come with Back, because they are the flow's to fix, not the CSS's:
+
+- **Back runs the steps after the previous answer again.** A score, a count or a list that is *added to* as the visitor goes (`Sum(@score, 1)`, appending to a list) counts twice after a Back. Store each answer in its own field and compute totals from the stored answers instead (verified 2026-09-25: a quiz showed 7/6 and a game took an extra life until this was changed).
+- An `email` or `webhook` step placed between two questions can run twice. Put deliveries after the last question.
+
 ## Step 3 — Apply
 
-Two ways. Use the first for a bot `landbot-flows` created in this session; the second for any other bot.
+Two ways. Use the first for any bot; the second when the person prefers to paste it or `channel` refuses.
 
-**A. Push it through the API (bots created this session).** Write the block to a file and push it to the channel. **The push is live for visitors the moment it answers** (the channels API regenerates the published config; no publish step). If the person gave `landbot-flows` the one yes before building this bot in this session **and that sentence included applying the look they described**, that yes covers this push: say you are pushing, and push. A yes given without the styling clause ("just show me", or "build and publish it"), or for a different bot, does not; say what you are about to push and get a yes, exactly as for a publish:
+**A. Push it through the API.** Write the block to a file and push it to the channel. Where it lands is the script's decision: for a bot this plugin created on this machine in the last 6 hours the push is **live for visitors the moment it answers** (the channels API regenerates the published config; no publish step), and `channel` reads the published config back (`served`; exit 5 = not carried, which on Sandbox plans means Custom CSS is dropped); for any other bot it goes to the bot's **draft**: preview it, then `channel publish` with the person's yes (`landbot-flows` Step 5a). If the person gave `landbot-flows` the one yes before building this bot in this session **and that sentence included applying the look they described**, that yes covers this push: say you are pushing, and push. A yes given without the styling clause ("just show me", or "build and publish it"), or for a different bot, does not; say what you are about to push and get a yes, exactly as for a publish:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" css /path/to/style.css --bot <bot_id>   # WRITE, live at once; the channel is found from the bot
+"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" css /path/to/style.css --bot <bot_id>   # WRITE: live for a bot created here, draft otherwise; the channel is found from the bot
 ```
 
-`channel` finds the channel from the bot (never type a channel id) and refuses any channel older than 24 hours; the limit is fixed. When it refuses for age, give the person path B below. It does not know who created the bot, so the rule "only bots `landbot-flows` created in this session" is yours to keep; a bot the person built in the app today would pass the script. Say before the push that the channel's Custom CSS field is replaced whole. Every push first saves what the field held and prints the backup's path; `channel css <backup> --bot <bot_id>` puts it back.
+`channel` finds the channel from the bot (never type a channel id). There is no age limit. A push to a bot the person already had needs its own yes (name the bot, say it goes to the draft); after it, run `channel preview --bot <bot_id>`, show the page, and ask to publish; `channel publish --bot <bot_id>` needs that yes (`landbot-flows` Step 5a). When the channel holds unpublished changes the person made, `channel` refuses (exit 75); ask them to publish or discard those first, or use path B. Say before the push that the channel's Custom CSS field is replaced whole. Every push first saves what the field held and prints the backup's path; `channel css <backup> --bot <bot_id>` puts it back.
 
 **In the live build (the in-app browser is open), push the look in steps** so the person sees it change: first the theme tokens (palette, background, text), then font and shapes, then the anchors and details. Each push is the whole file so far (the field is replaced whole). After each one, reload the pane with a new query string and answer one question so a button and a reply are on screen. Three pushes, not thirty: each one should be a visible step.
 
@@ -93,8 +106,8 @@ How to add one, on a bot `landbot-flows` created in this session:
 
 1. **It must be part of the yes.** The one yes before building covers the Custom JS push only when its sentence named the behaviour ("and add the messaging behaviour"). Otherwise say what the script does and get a yes, as for a publish.
 2. Copy the module's `.js` to a working file and **change only the values in its `CONFIG` block** (strings, numbers, true/false). `channel` checks that everything else is exactly the plugin's copy and refuses anything else. Append the module's `.css` to the end of the look's CSS and set its colour variables (`--lbm-*`, `--lbs-*`) from the brief in `:root`. Push the CSS first.
-3. Push the script: `"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" js /path/to/behaviour.js --bot <bot_id>`. It is live at once. It saves the channel's previous Custom JS first and prints the backup's path; `channel js --clear --bot <bot_id>` removes the script.
-4. Read the answer. `served` means the published config carries exactly this script. Exit `5` means it carries a different one (the previous script may still be live: check again, never call it live); exit `4` means it could not be checked. **`NOT SERVED` (exit 3) means this account's published config does not carry Custom JS**: Landbot serves it only to accounts with the Custom Code feature. Do not guess which plans have it; say what the check found. The chat works without it, because every module rule in the CSS styles only what the script adds. Say that plainly; changing the plan is theirs to decide, not something to work around.
+3. Push the script: `"${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" js /path/to/behaviour.js --bot <bot_id>`. Where it lands follows the same rule as the CSS: live at once for a bot this plugin created on this machine in the last 6 hours; past that (a long session, another machine) it goes to the **draft**, the answer says `saved to the DRAFT`, and no served check runs yet: preview it, publish it with `channel publish` on the person's yes, and read the served line from the publish. It saves the channel's previous Custom JS first and prints the backup's path; `channel js --clear --bot <bot_id>` removes the script.
+4. Read the answer (of the push, or of `channel publish` for a draft). `served` means the published config carries exactly this script. Exit `5` means it carries a different one (the previous script may still be live: check again, never call it live); exit `4` means it could not be checked. **`NOT SERVED` (exit 3) means this account's published config does not carry Custom JS**: Landbot serves it only to accounts with the Custom Code feature. Do not guess which plans have it; say what the check found. The chat works without it, because every module rule in the CSS styles only what the script adds. Say that plainly; changing the plan is theirs to decide, not something to work around.
 5. **Walk it** in the in-app browser (`landbot-flows` Step 6), then `read_console_messages` with errors only. A script error, a button that does not answer, or a page that stops responding is a failure: `channel js --clear` at once, say what happened, and hand back without the behaviour.
 
 **A custom script, when neither module fits** and the person asked for a behaviour: say in plain words what it will do on their page and get their yes to "a custom script"; then push it with `--custom`. Keep it short and page-only. `channel js --custom` refuses a script over 60,000 characters, one without an `lb-js: <name>` marker, one containing `#{` (Landbot's firewall answers it with a 403), and the common ways a page script sends data out, reads cookies, loads or builds code, adds media or forms that fetch, or navigates. **That check is a lint, not a security boundary**: it catches mistakes, not a script written to get past it, so never describe a custom script as safe because it passed. Also: wrap everything in `try`; add only attributes, classes and your own elements, never move Landbot's nodes; read `textContent`, never `innerText`, inside anything that runs on page changes (it can loop); guard a `MutationObserver` so its own changes do not trigger it again; and write the CSS so the chat looks complete when the script does not run. Walk it exactly as above.
