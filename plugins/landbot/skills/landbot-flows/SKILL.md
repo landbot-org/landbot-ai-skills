@@ -184,7 +184,7 @@ The greeting is **a role a node plays, decided by its id** — not a block type 
 
 **Filling the slot changes where the bot starts.** The head is the greeting when the slot is filled and the start point when it is not, so a bot with no greeting heads from `hidden` — which runs, and is not publishable.
 
-**And nothing warns you.** The rule reads as *"if there is a greeting, is it allowed?"*, so a diagram with no greeting at all reports **no violation**: the draft comes back `IS_PRESAVED` with `violations: []` and cannot be published. Do not read a clean draft as a publishable one — see Known gaps.
+**And nothing warns you.** The rule reads as *"if there is a greeting, is it allowed?"*, so a diagram with no greeting at all reports **no violation**: the draft comes back `IS_PRESAVED` with `violations: []` and cannot be published. Do not read a clean draft as a publishable one — see REFERENCE.md, "Known gaps".
 
 ## Step 3 — Place and wire the blocks
 
@@ -216,7 +216,7 @@ This **merges** into the diagram rather than replacing it. Grep the spec for `/d
 
 - **`200` does not mean the diagram is valid.** Broken rules are *stored with the draft* so no work is lost, and reported in `save_state` and `violations` — each with its `code`, `param` and `block_id`. **Always read `violations` after a write; never trust the status alone.** A draft with violations cannot be published or deployed to test.
 - **`422` with `violations` means the request was wrong and nothing was written.** An unknown `type`, an `id` already taken, a connection leaving an output the source does not declare, a derived param that will not compile. All or nothing, and the reason is under `error.violations` rather than at the top level. Fixing the payload fixes it.
-- **`422` with no `violations` means the bot is not one this API writes** — a previous builder built it. Nothing is wrong with the request, so changing it achieves nothing. See Known gaps.
+- **`422` with no `violations` means the bot is not one this API writes** — a previous builder built it. Nothing is wrong with the request, so changing it achieves nothing. See REFERENCE.md, "Known gaps".
 
 **The two `422`s are told apart by whether `violations` is there**, not by the status. Read for it before deciding what to say, because the advice is opposite: one means fix the payload, the other means this bot cannot be written at all.
 
@@ -302,13 +302,13 @@ Both validate before they write, so a refusal means **nothing was published**. T
 | What comes back | What it means | What to do |
 |---|---|---|
 | `422` with `violations` | The draft breaks rules. Each violation carries `code`, `param` and `block_id`, and the violations are **saved to the draft** as a side effect of the attempt. | Name the block and the param for each one, in plain language, and offer to fix them. These are yours to fix. |
-| `422` with no `violations` | A previous builder built this bot. Nothing about the request is wrong. | Report the message and stop. Retrying, or sending less, changes nothing — the bot has to be migrated. |
+| `422` with no `violations` | A previous builder built this bot. Nothing about the request is wrong. | Report the message as it comes and offer to build a new bot instead. Retrying, or sending less, changes nothing — the bot has to be migrated; reading it and its draft still work. |
 | `502` | The compiler is a separate service and it failed. The message is deliberately generic; the real detail is in that service's log, not in the answer. | Retry **once**. If it repeats, say the compiler is failing and that it is not the user's payload. Do not start editing the diagram to appease it. |
 | `403` with `FIREWALL:` | The firewall in front of the API refused this request before Landbot read it (see Step 0). Nothing was written. | Split the write into smaller requests and send them again; never report it as a permission problem. |
 | `403` | The token's account lacks *edit chatbot*. | Say whose account it is — `setup-token --whoami` — because the fix is a permission, not a change to the bot. |
 | `201`, but the builder still complains | The draft passed every rule this API checks and something outside them is unhappy. The greeting is the known case: a bot with no greeting reports no violation and is still not publishable. | Check the greeting slot first. Then report honestly that the API accepted it and the builder disagrees, rather than guessing. |
 
-**Never present a clean `violations` as "ready to publish".** It means no rule fired, which is not the same thing — see Known gaps.
+**Never present a clean `violations` as "ready to publish".** It means no rule fired, which is not the same thing — see REFERENCE.md, "Known gaps".
 
 ## Step 5a — Put a bot you created on the v4 web chat (the version the style skill needs)
 
