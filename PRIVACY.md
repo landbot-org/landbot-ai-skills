@@ -13,7 +13,7 @@ The plugin is a set of bash scripts that run on your machine, inside your coding
 - **Your Landbot API token**, from one of two places: the macOS login keychain entry it created (`landbot-api-token`), or the `LANDBOT_API_TOKEN` environment variable you set in your own shell. When you run `setup-token` on macOS it also reads the clipboard once, to take the token you just copied, and clears the clipboard afterwards.
 - **Files you name**, such as a CSS or JS file you ask it to push to a channel.
 - **Its own state folder**, `~/.landbot` by default (`LANDBOT_STATE_DIR` to move it). See "What it stores" below.
-- **A few environment variables** that say which coding agent is running (`CLAUDECODE`, `CODEX_*`, `CURSOR_*`), only to name that agent in the user agent string. It reads no other environment variables, files, browser data or credentials.
+- **A few environment variables** that say which coding agent is running (`CLAUDECODE`, `CODEX_*`, `CURSOR_*`), only to name that agent in the user agent string. Apart from those and its own `LANDBOT_*` settings (API base URLs, the state folder, the keychain entry name), it reads no other environment variables, files, browser data or credentials.
 
 ## What it stores on your machine
 
@@ -44,4 +44,4 @@ The plugin is not intended for people under 18.
 
 ## Contact
 
-Questions about this policy or about the plugin: security@landbot.io, or an issue on this repository (never with a token in it). Questions about how Landbot handles your account data: the contact given in Landbot's [Privacy Policy](https://landbot.io/privacy-policy).
+Questions about this policy, or about how Landbot handles your data: legal@landbot.io, the same contact as Landbot's [Privacy Policy](https://landbot.io/privacy-policy). A security problem in the plugin: the repository's private vulnerability reporting or security@landbot.io, never a public issue and never with a token in it.
