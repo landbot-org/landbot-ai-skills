@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash("${CLAUDE_SKILL_DIR}/scripts/draft-check" *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.4.3
+  version: 0.4.4
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.4.3`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.4.4`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -172,7 +172,7 @@ The greeting is **a role a node plays, decided by its id** — not a block type 
 | | |
 |---|---|
 | **The node id** | `welcome` on `landbot`, `bot_start` on `facebook` and `apichat`. WhatsApp does not restrict the slot at all, since there the bot only ever answers a message the contact sent first. |
-| **Which blocks may take it** | The ones whose `GET /blocks` entry says `can_be_welcome: true`. Read it there, not from a list: it is the rule the API enforces, and it matches the builder's own greeting menu. The greeting has to ask something and wait, so **`send_text` cannot be the greeting** — nor can `ask_email`, which waits just the same and is still not allowed. |
+| **Which blocks may take it** | `can_be_welcome` in the catalog is the answer per block, and the only list to trust: it is the rule the API enforces, it matches the builder's own greeting menu, and it grows as the catalog does. The greeting has to ask something and wait, so **`send_text` cannot be the greeting** — but not every block that waits is allowed either (`ask_email` is not), so read the flag rather than reasoning it out. |
 | **`params.version: 3`, on `landbot`** | Required, and **no param in the catalog declares it** — the slot wants it, not the block. Without it the builder reads the node as the welcome template it used to be and offers to delete it rather than replace it. |
 
 ```bash
@@ -208,6 +208,7 @@ This **merges** into the diagram rather than replacing it. Grep the spec for `/d
 - **Five or more buttons stop looking like buttons.** From five options, v4 draws a boxed list with a search field instead of a row of buttons. Nothing is broken, but say so when you place them, because the person is picturing buttons.
 - **A question's words are stored twice: `text` (what the builder shows) and `richText` (what the visitor's chat shows).** The same goes for `errorText` and `richErrorText`. Write the plain one and **leave the rich one out**: add-blocks and `PATCH` derive it from the plain one, and after a `PUT /draft` it is stored empty and the chat shows the plain one (both verified 2026-09-23). A rich copy a caller sends is kept as it came. So a `richText` carried over from an earlier read keeps showing the old words to visitors while the builder shows the new ones: `200`, `violations: []`, a clean publish, and nothing changes for the visitor. Never copy `richText`, `rawText`, `richErrorText` or `rawErrorText` from a read into a write. Bots written through this API before 2026-09-18 can still show Landbot's placeholder "Ask anything" in place of a question; `draft-check gate` blocks a publish while one does.
 - **Output ids differ by block**, and a wrong one answers `422`: `send_text` `$success`, `ask_question` `$success`, `set_a_field` `success`, `conditions` `true`/`false`, `formulas` `$success`/`$failed`, a `buttons` block one per button. Read each variant's `outputs`; these are examples, not a list to trust.
+- **A param that names something outside the diagram — an account, a file, a tab — says in the catalog where its value comes from, and that is the only place to get it.** Follow the operations the param's description names, read the values from their answers and write them the way the description says. When a step there needs a person — a consent at Google, a file only they can reach — the contract says how: hand over the link it answers, say who must open it and where, and poll the operation it points to until it says done; when it names a file the person has, their own tooling (a Drive connector, the URL) is where its id comes from. Never reach for an endpoint the catalog does not name, whatever version it carries.
 - **Rewiring after the first build is `PATCH /bots/{bot_id}/draft`**, one request with `blocks: {add, update, delete}` and `connections: {add, delete}` (check its `x-implemented` and the `DraftPatch` schema in the contract first). `connections.delete` takes `{"source_path": …, "type": …}` and removes every connection leaving that output; `connections.add` takes `sourcePath`, `targetPath`, `type`. `POST /draft/blocks` needs at least one block and cannot carry connections alone (`400`).
 - **Before any `PUT /draft` or `DELETE`, snapshot the whole diagram; after it, read it back and compare node and connection counts and identities.** A pilot lost all 49 connections on a `DELETE` that reported `removed_connections: []`. If anything unexplained is missing, restore the snapshot with `PUT /draft` and do not publish.
 
