@@ -67,12 +67,15 @@
 #   - the channel is read again right before the PATCH; if `merged` or the live fields moved in between,
 #     nothing is written. A builder autosave landing in the second between that read and the PATCH is
 #     still possible: closing it needs a compare-and-set on Landbot's side.
-# Reads only otherwise. Exits non-zero from HTTP 400 up. The token is never printed; `lb` handles it.
+# Reads only otherwise. Exits non-zero on anything but a 2xx. The token is never printed; `lb` handles it.
 set -uo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LB="$HERE/lb"
 HANDOFF="$HERE/handoff"
-V1="${LANDBOT_API_V1_URL:-https://api.landbot.io/v1}"
+# v1 and v2 sit beside the Bots API, as lb places /v3, so a LANDBOT_API_URL pointed at another
+# environment moves these calls with it instead of leaving them on production.
+API_ROOT="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"; API_ROOT="${API_ROOT%/}"; API_ROOT="${API_ROOT%/*}"
+V1="${LANDBOT_API_V1_URL:-$API_ROOT/v1}"
 
 usage() {
   echo "usage: channel get --bot <uuid> | channel get <channel_id> | channel v4 --bot <uuid> | channel css <file.css> --bot <uuid> | channel js <file.js> --bot <uuid> | channel js --clear --bot <uuid> | channel discard --bot <uuid> | channel publish --bot <uuid> | channel preview --bot <uuid> [--out <file.html>] | channel back on|off --bot <uuid>" >&2

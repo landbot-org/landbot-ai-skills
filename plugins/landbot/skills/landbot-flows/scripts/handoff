@@ -14,8 +14,11 @@
 set -uo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LB="$HERE/lb"
-V2="${LANDBOT_API_V2_URL:-https://api.landbot.io/v2}"
-V1="${LANDBOT_API_V1_URL:-https://api.landbot.io/v1}"
+# v1 and v2 sit beside the Bots API, as lb places /v3, so a LANDBOT_API_URL pointed at another
+# environment moves these calls with it instead of leaving them on production.
+API_ROOT="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"; API_ROOT="${API_ROOT%/}"; API_ROOT="${API_ROOT%/*}"
+V2="${LANDBOT_API_V2_URL:-$API_ROOT/v2}"
+V1="${LANDBOT_API_V1_URL:-$API_ROOT/v1}"
 SHARE_HOST="${LANDBOT_SHARE_HOST:-https://landbot.pro/v3}"
 
 BOT="${1:-}"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Offline tests for the write guards in scripts/channel, the name, body and firewall handling in scripts/lb,
-# draft-check, and the marker check in landbot-style/scripts/verify-share.
+# Offline tests for the write guards in scripts/channel, the name, body, firewall and redirect handling
+# in scripts/lb, draft-check, setup-token --whoami, and the marker check in landbot-style/scripts/verify-share.
 # No network, no token: channel runs against a fake lb + handoff in a temp dir. Exits 1 on any failure.
 set -u
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -434,6 +434,38 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "http://127.0.0.1:$PORT/b
 export LANDBOT_API_URL="http://127.0.0.1:$PORT"
 t "same name within 15 min refused" 65:0 "$L" POST /bots '{"name":"Dup test"}'
 t "different name passes the guard" 1:0 "$L" POST /bots '{"name":"Other name"}'
+kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
+# a redirect is a failure: the API never answers with one, so whatever did (a proxy, a login page)
+# stood in front of it and nothing was read or written. --whoami asks the environment lb uses, and
+# names an account only when the API does.
+cat > "$T/front.py" <<'E'
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def go(self):
+        if self.path.startswith("/v2/agents/me/"):
+            auth = self.headers.get("Authorization")
+            if auth == "Token good": b = b'{"agent":{"full_name":"Stub","email":"stub@example.invalid"}}'
+            elif auth == "Token noname": b = b'{"agent":{"full_name":null,"email":"noname@example.invalid"}}'
+            else: b = b'{"detail":"Invalid token."}'
+            self.send_response(401 if b.startswith(b'{"detail"') else 200)
+        else:
+            b = b"<html>sign in</html>"; self.send_response(302); self.send_header("Location", "https://sso.example.invalid/login")
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = go
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+E
+PORT=$(( 20000 + RANDOM % 20000 )); python3 "$T/front.py" "$PORT" & SRV=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 0.3; done
+export LANDBOT_API_URL="http://127.0.0.1:$PORT/v0-alpha"
+t "302 on a read is a failure"        1:0 "$L" GET /blocks
+t "302 on a draft write is a failure" 1:0 "$L" POST /bots/BOTU/draft/blocks '{"blocks":[{"type":"send_text","params":{"text":"hi"}}]}'
+"$L" GET /blocks 2>&1 >/dev/null | grep -q "redirected to sso.example.invalid" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a redirect does not say where it went"; }
+cp "$SRC/setup-token" "$T/"
+# https goes to a dead proxy: were --whoami to ask production again, it would fail here, not reach it
+t "whoami asks the environment lb uses" 0:0 env LANDBOT_API_TOKEN=good https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 "$T/setup-token" --whoami
+t "whoami with a refused token fails"   1:0 env LANDBOT_API_TOKEN=dummy https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 "$T/setup-token" --whoami
+env LANDBOT_API_TOKEN=noname https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 "$T/setup-token" --whoami 2>/dev/null | grep -qx "Acting as noname@example.invalid" && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL whoami does not name an account that has no name by its email"; }
 kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
 ua="$(grep -c 'landbot-plugin/' "$SRC/lb")"; [ "$ua" -ge 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL user agent missing in lb"; }
 # date-format guard: pickerFormat and format must agree, or nothing is sent (exit 65)
