@@ -1,4 +1,4 @@
-/* lb-js companion: messaging 0.4.4 — append after the look's own CSS, in the same Custom CSS block.
+/* lb-js companion: messaging 0.4.5 — append after the look's own CSS, in the same Custom CSS block.
    Every rule here styles something messaging.js adds (body.lb-js-messaging and its classes, data-lb-ts,
    data-lb-daychip, #lb-msg-composer, .lb-msg-*). Without the script (a plan without the Custom Code
    add-on, a script error) none of it applies and the chat keeps Landbot's own buttons and input.
@@ -23,6 +23,9 @@ body.lb-js-messaging [data-lb-part="message-bubble"] {
   display: inline-flex; flex-wrap: wrap; align-items: flex-end; column-gap: 8px; max-width: 85%;
 }
 body.lb-js-messaging [data-lb-part="message-bubble"] > * { order: 0; }
+/* the reply buttons come after the time, as in a messaging app: the time sits under the text, above the
+   buttons. Same reach as the line above, or "> *" wins and the time wraps under the last button. */
+body.lb-js-messaging [data-lb-part="message-bubble"] > .lb-msg-buttons { order: 2; }
 body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-msg-has-buttons] > :not(.lb-msg-buttons) { flex: 1 1 auto; min-width: 0; }
 body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-ts]::after {
   content: attr(data-lb-ts); order: 1; margin-left: auto; position: relative; top: 4px;
@@ -47,7 +50,7 @@ body.lb-js-messaging.lb-msg-typing [data-lb-part="header"] h4::after {
    [off-catalog: options have no container anchor] */
 body.lb-js-messaging.lb-msg-inline div:has(> [data-lb-part="options-group"]) { display: none !important; }
 body.lb-js-messaging [data-lb-part="message-bubble"][data-lb-msg-has-buttons] { display: flex; width: 85%; padding-bottom: 0 !important; }
-.lb-msg-buttons { order: 2; flex: 0 0 calc(100% + 18px); margin: 7px -9px 0; border-top: 1px solid var(--lbm-divider); }
+.lb-msg-buttons { flex: 0 0 calc(100% + 18px); margin: 7px -9px 0; border-top: 1px solid var(--lbm-divider); }
 .lb-msg-buttons .lb-msg-row { padding: 6px 7px; }
 .lb-msg-buttons .lb-msg-row + .lb-msg-row { border-top: 1px solid var(--lbm-divider); }
 .lb-msg-btn {
