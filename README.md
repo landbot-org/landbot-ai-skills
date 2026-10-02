@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.4.4`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.5.0`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 
@@ -89,7 +89,28 @@ Do not paste the token into the chat to "check it".
 
 ## Updates
 
-Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live API contract at run time, so a new block type on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
+The skill tells you when a newer version is out: once a day it asks GitHub for the latest release (`LANDBOT_UPDATE_CHECK=0` turns that off). To update:
+
+- **Claude Code:** `claude plugin marketplace update landbot-skills`, then `claude plugin update landbot@landbot-skills`. The first only refreshes the list of versions and the second only installs what that list already offers, so you need both. A new session loads the update.
+- **Codex:** `codex plugin marketplace upgrade`. **`install.sh`:** run it again.
+
+**Automatic updates in Claude Code.** Claude Code updates on its own only from Anthropic's marketplaces, and the Claude desktop app switches even that off. To have this plugin update itself, in the terminal and in the desktop app alike, add this to `~/.claude/settings.json` (merge it with what is there):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "landbot-skills": {
+      "source": { "source": "github", "repo": "landbot-org/landbot-ai-skills" },
+      "autoUpdate": true
+    }
+  },
+  "env": { "FORCE_AUTOUPDATE_PLUGINS": "1" }
+}
+```
+
+`autoUpdate` turns updates on for this marketplace. `FORCE_AUTOUPDATE_PLUGINS` is what the desktop app needs: it starts Claude Code with plugin updates switched off, and this variable turns them back on for every marketplace whose updates are on, Anthropic's included. Claude Code then checks a few minutes into a session and loads what it downloaded in the next one.
+
+The skills read the live API contract at run time, so a new block type on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
 
 ## What this is not
 
