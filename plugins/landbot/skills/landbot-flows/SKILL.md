@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.5.0
+  version: 0.5.1
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.5.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.5.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
