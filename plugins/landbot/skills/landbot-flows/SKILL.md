@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash("${CLAUDE_SKILL_DIR}/scripts/draft-check" *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.4.5
+  version: 0.4.6
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.4.5`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.4.6`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -184,7 +184,7 @@ The greeting is **a role a node plays, decided by its id** — not a block type 
 
 **Filling the slot changes where the bot starts.** The head is the greeting when the slot is filled and the start point when it is not, so a bot with no greeting heads from `hidden` — which runs, and is not publishable.
 
-**And nothing warns you.** The rule reads as *"if there is a greeting, is it allowed?"*, so a diagram with no greeting at all reports **no violation**: the draft comes back `IS_PRESAVED` with `violations: []` and cannot be published. Do not read a clean draft as a publishable one — see Known gaps.
+**And nothing warns you.** The rule reads as *"if there is a greeting, is it allowed?"*, so a diagram with no greeting at all reports **no violation**: the draft comes back `IS_PRESAVED` with `violations: []` and cannot be published. Do not read a clean draft as a publishable one — see REFERENCE.md, "Known gaps".
 
 ## Step 3 — Place and wire the blocks
 
@@ -216,7 +216,7 @@ This **merges** into the diagram rather than replacing it. Grep the spec for `/d
 
 - **`200` does not mean the diagram is valid.** Broken rules are *stored with the draft* so no work is lost, and reported in `save_state` and `violations` — each with its `code`, `param` and `block_id`. **Always read `violations` after a write; never trust the status alone.** A draft with violations cannot be published or deployed to test.
 - **`422` with `violations` means the request was wrong and nothing was written.** An unknown `type`, an `id` already taken, a connection leaving an output the source does not declare, a derived param that will not compile. All or nothing, and the reason is under `error.violations` rather than at the top level. Fixing the payload fixes it.
-- **`422` with no `violations` means the bot is not one this API writes** — a previous builder built it. Nothing is wrong with the request, so changing it achieves nothing. See Known gaps.
+- **`422` with no `violations` means the bot is not one this API writes** — a previous builder built it. Nothing is wrong with the request, so changing it achieves nothing. See REFERENCE.md, "Known gaps".
 
 **The two `422`s are told apart by whether `violations` is there**, not by the status. Read for it before deciding what to say, because the advice is opposite: one means fix the payload, the other means this bot cannot be written at all.
 
@@ -302,13 +302,13 @@ Both validate before they write, so a refusal means **nothing was published**. T
 | What comes back | What it means | What to do |
 |---|---|---|
 | `422` with `violations` | The draft breaks rules. Each violation carries `code`, `param` and `block_id`, and the violations are **saved to the draft** as a side effect of the attempt. | Name the block and the param for each one, in plain language, and offer to fix them. These are yours to fix. |
-| `422` with no `violations` | A previous builder built this bot. Nothing about the request is wrong. | Report the message and stop. Retrying, or sending less, changes nothing — the bot has to be migrated. |
+| `422` with no `violations` | A previous builder built this bot. Nothing about the request is wrong. | Report the message as it comes and offer to build a new bot instead. Retrying, or sending less, changes nothing — the bot has to be migrated; reading it and its draft still work. |
 | `502` | The compiler is a separate service and it failed. The message is deliberately generic; the real detail is in that service's log, not in the answer. | Retry **once**. If it repeats, say the compiler is failing and that it is not the user's payload. Do not start editing the diagram to appease it. |
 | `403` with `FIREWALL:` | The firewall in front of the API refused this request before Landbot read it (see Step 0). Nothing was written. | Split the write into smaller requests and send them again; never report it as a permission problem. |
 | `403` | The token's account lacks *edit chatbot*. | Say whose account it is — `setup-token --whoami` — because the fix is a permission, not a change to the bot. |
 | `201`, but the builder still complains | The draft passed every rule this API checks and something outside them is unhappy. The greeting is the known case: a bot with no greeting reports no violation and is still not publishable. | Check the greeting slot first. Then report honestly that the API accepted it and the builder disagrees, rather than guessing. |
 
-**Never present a clean `violations` as "ready to publish".** It means no rule fired, which is not the same thing — see Known gaps.
+**Never present a clean `violations` as "ready to publish".** It means no rule fired, which is not the same thing — see REFERENCE.md, "Known gaps".
 
 ## Step 5a — Put a bot you created on the v4 web chat (the version the style skill needs)
 
@@ -332,27 +332,14 @@ Rules, and the script enforces the first two (the mechanics, exit codes and what
 
 ## Step 5b — Lay it out before handing it back
 
-A block added without `top` and `left` lands at `top: 0, left: 0`, and a flow of them is drawn as one pile. The flow runs; it is just unreadable. **Give every block its `top` and `left` in the same `POST /draft/blocks` request that places it** (the add-blocks operation takes them beside `id` and `type`; verified 2026-09-22). To move a block that is already there, `PATCH /draft/blocks/{block_id}` with `top` and `left`. **Do not `PUT` the whole diagram just to lay it out**: that is the operation that once lost every connection. A link to a pile is not something a person can check, so lay it out before you hand it back.
-
-**Do not move the start point.** `hidden` sits at `top: 0, left: 0` and the builder draws it in a fixed place; a layout that walks every node and repositions it moves the one node that is not yours to move. Anchor on the greeting instead, which a new bot is given at `top: 200, left: 500`, and go right from there. Leave `hidden` exactly as the draft reports it.
-
-Place the rest on the builder's own grid — it puts a greeting at `top: 200, left: 500` and the block after it at `top: 200, left: 850`:
-
-- **Left is how far along the conversation is.** Start at `500` and add `350` per step. A block goes to the right of *every* block that points at it, so when two paths meet, the block they meet at goes past the furthest of them.
-- **Top is which branch you are on.** Start at `200`. A block's **first exit keeps its parent's `top`**, so the main path is one straight horizontal line; the other exits go below it, `250` apart. A block with many exits is tall, so leave `250 + 30` per exit below it.
-- **Never give two blocks the same `top` and `left`.** Check it, because overlapping blocks are invisible in the builder:
+A block added without `top` and `left` lands at `top: 0, left: 0`, and a flow of them is drawn as one pile. **Give every block its `top` and `left` in the same `POST /draft/blocks` request that places it**; move one that is already there with `PATCH /draft/blocks/{block_id}`, never a `PUT` of the whole diagram (the operation that once lost every connection). **Never move `hidden`** (the start point, at `top: 0, left: 0`). Use the builder's grid, anchored on the greeting at `top: 200, left: 500`: **left** is how far along the conversation is (`+350` per step, past every block that points in); **top** is the branch (a block's first exit keeps its parent's `top`, other exits go `250` below, `+30` per exit on a tall block). **No two blocks on the same cell**; this must print `[]`:
 
 ```bash
 "${CLAUDE_SKILL_DIR}/scripts/lb" GET /bots/<bot_id>/draft \
   | jq '[.data.diagram.nodes[] | "\(.top),\(.left)"] | group_by(.) | map(select(length > 1))'
 ```
 
-`[]` means no two blocks share a cell. Anything else, move them with `PATCH /draft/blocks/{block_id}` (`top`, `left`), never a `PUT` of the whole diagram.
-
-- A loop back to an earlier block does not move anything — the edge just runs backwards, which is what a loop looks like.
-- Anything the start cannot reach goes in a column of its own, past everything else. It is also a bug worth reporting: a block nothing arrives at never runs.
-
-Use the branch names to decide what goes below what: an error or fallback path reads better under the path it recovers from, and the order the user described the flow in usually is the order to stack it.
+Loops, unreachable blocks and which branch goes below which: REFERENCE.md, "Laying out a flow".
 
 ## Step 6 — Hand it back
 
@@ -410,18 +397,4 @@ Never sign in anywhere in that browser, never open `app.landbot.io` for the pers
 
 ## Known gaps
 
-**The contract is written by hand, not derived from the code.** Serving it does not make it true — it makes it the same everywhere, which a copy taken by hand does not. A contract test beside it is what keeps it honest. So if the API answers something the contract does not describe, **the API is still right**: report the difference rather than working around it, because it means the document has drifted from the code it describes.
-
-**A bot a previous builder built cannot be written at all.** Every write refuses it with `422`, and **that refusal carries no `violations`** — the bot itself is the reason, so there is no rule to attribute. Reading it and reading its draft still work. The message says to migrate the bot, and that is the whole answer: there is nothing to fix in the request, and retrying, sending fewer blocks or rebuilding the payload changes nothing.
-
-This is the failure most likely to meet a real brand, because most bots in one predate this API. Recognise it by a `422` whose `error` has no `violations`, report the message as it comes, and offer to build a new bot instead — never read it as "the draft broke a rule".
-
-**Different environments are at different versions.** The catalog grows one block family at a time, and a block reaches an environment only once it is deployed there — so a block production lists may be missing on a staging environment, and the reverse. `GET /blocks` is the only answer for the environment you are talking to. Never carry over what a catalog said somewhere else.
-
-**No violation means no rule fired — not that the bot is publishable.** The clearest case is the greeting: the rule asks whether an existing greeting is *allowed*, so a diagram with none at all reports nothing, and the draft comes back `IS_PRESAVED` with `violations: []` while the product refuses to publish it. So `violations: []` is the absence of a complaint, not a verdict. Never tell the user a bot is ready on the strength of it; say the draft broke no rule this API checks, which is a smaller claim and a true one.
-
-**This API records the tier a diagram needs. It does not enforce the plan.** `required_tier` is per variant, the publish *calculates* it and stores it on the bot, and nothing in this API compares it with the brand's subscription — the catalog does not report the plan either, and there is no operation that answers it. So do not promise that a block above the plan will be refused here, and do not promise it will work: whether something downstream refuses it is outside this API and not yours to assert. What is worth doing is naming the tier when you place a block that needs one above `sandbox` — `formulas` wants professional; `ai_agent`, `conditions` and `webhook` want starter — so the user knows before, not after.
-
-**A v0-alpha path never takes a trailing slash.** `GET /blocks/` is a `404` served by the marketing site as a page of HTML, not a JSON error — so there is no `error` to read and `lb` prints the page. If a call comes back as HTML, check the path before anything else.
-
-**Not every operation in the spec is served.** Each one carries `x-implemented`; a `false` one is agreed and not built, and its description says what a request to it answers today. Check it before building a plan around an operation.
+In full, with the reasons, in REFERENCE.md "Known gaps"; the two about `422` without `violations` and `violations: []` are in Steps 2–5 above. The rest: **the contract is written by hand**, so when the API answers something it does not describe, the API is right: report the difference, do not work around it. **Environments differ**: `GET /blocks` answers only for the one you are talking to; never carry a catalog over. **The tier is recorded, not enforced**: name it when a block needs more than `sandbox` (`formulas` professional; `ai_agent`, `conditions`, `webhook` starter) and promise neither refusal nor success. **No trailing slash on a v0-alpha path**: an HTML answer means check the path first. **Not every operation is served**: check `x-implemented` before planning around one.
