@@ -1,6 +1,6 @@
 # Contributing
 
-One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). How the version is set and bumped is under [Versions](#versions).
+One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). The Cursor files, `plugins/landbot/.cursor-plugin/plugin.json` and `.cursor-plugin/marketplace.json`, are derived from those two. How they are kept in sync, and how the version is set and bumped, is under [Versions](#versions).
 
 Rules:
 
@@ -12,11 +12,11 @@ Rules:
 - Paths in a `SKILL.md` are written as `${CLAUDE_SKILL_DIR}/scripts/…` (and `${CLAUDE_PLUGIN_ROOT}/skills/…` across skills). Claude Code substitutes them; `scripts/install.sh` writes absolute folders for Codex and Cursor. Never hard-code a home folder.
 - `allowed-tools` pre-approves reads only (`lb GET`, `setup-token --whoami|--check`, `handoff`, `channel get`, `verify-share`). Anything that writes to a bot or channel must keep prompting.
 - Test on a brand that is not a customer's before opening a pull request, and say in the PR which environment you tested against.
-- CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
+- CI runs `claude plugin validate --strict` on both manifests and `scripts/sync-manifests --check`, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && scripts/sync-manifests --check && smoke/versions.sh && smoke/guards.sh`.
 
 ## Versions
 
-The plugin is the unit that Claude Code and Codex install and update, so it carries one version for both skills. `plugins/landbot/.claude-plugin/plugin.json` is the only place that declares it; the entry in `marketplace.json` has no `version`. Both agents give a person who already installed the plugin a new copy only when that version changes, so a change under `plugins/` that people should receive needs a bump.
+The plugin is the unit that Claude Code and Codex install and update, so it carries one version for both skills. `plugins/landbot/.claude-plugin/plugin.json` is the only place where it is set; the Cursor manifest copies it (below), and the entry in `marketplace.json` has no `version`. Both agents give a person who already installed the plugin a new copy only when that version changes, so a change under `plugins/` that people should receive needs a bump.
 
 The same value is repeated, and must match, in:
 
@@ -26,6 +26,8 @@ The same value is repeated, and must match, in:
 - the version quoted in `README.md`, `skills.md` and `SECURITY.md`.
 
 `smoke/versions.sh` checks all of them.
+
+Cursor does not read `.claude-plugin/`. Its docs say it lists a multi-plugin repo from `.cursor-plugin/marketplace.json` and resolves each entry through `<source>/.cursor-plugin/plugin.json`, here `plugins/landbot/.cursor-plugin/plugin.json`. Codex finds the `.claude-plugin/` files first and never reads these two. `scripts/sync-manifests` derives both from the Claude ones: the Cursor manifest copies its version from `.claude-plugin/plugin.json`, and the Cursor index, like `.claude-plugin/marketplace.json`, has none. CI refuses a tree where they are stale. Never edit them by hand: change the Claude file, then run `scripts/sync-manifests`. No Cursor install has been tested yet, so the README still sends Cursor users to `scripts/install.sh`.
 
 The plugin stays on `0.x`. Moving to `1.0` is a decision of its own, not the result of a change type. While on `0.x`:
 

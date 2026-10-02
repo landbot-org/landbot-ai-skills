@@ -1,0 +1,16 @@
+{
+  "name": "landbot-skills",
+  "owner": {
+    "name": "Landbot"
+  },
+  "metadata": {
+    "description": "Official Landbot skills for coding agents: build a bot from a prompt, style it, verify it on the share URL."
+  },
+  "plugins": [
+    {
+      "name": "landbot",
+      "source": "plugins/landbot",
+      "description": "Build, style and publish Landbot bots from your coding agent. Includes the landbot-flows and landbot-style skills. Writes to real bots with your own API token."
+    }
+  ]
+}

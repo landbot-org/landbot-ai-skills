@@ -24,6 +24,7 @@ This repository is a plugin marketplace for Claude Code and Codex. It has one pl
 - While on `0.x`: `feat` or `!` raises the minor; `fix` and any other type raise the patch. Changes outside `plugins/` do not bump. Moving to `1.0` is not decided by a change type.
 - The same version is repeated in each `SKILL.md` (twice), `VERSION` in `plugins/landbot/skills/landbot-flows/scripts/lb`, the header of each file in `plugins/landbot/skills/landbot-style/modules/`, `README.md`, `skills.md` and `SECURITY.md`. Change all of them together. `marketplace.json` must not declare a version.
 - `smoke/versions.sh` checks that they agree. `smoke/version-bump.sh origin/main` checks that the version went up.
+- The Cursor files, `plugins/landbot/.cursor-plugin/plugin.json` and `.cursor-plugin/marketplace.json`, are derived from the `.claude-plugin/` files. Never edit them; after changing the version or anything else in a `.claude-plugin/` file, run `scripts/sync-manifests`. `scripts/sync-manifests --check` fails when they are stale.
 
 ## Tags
 
@@ -44,5 +45,5 @@ This repository is a plugin marketplace for Claude Code and Codex. It has one pl
 ## Checks to run before pushing
 
 ```bash
-claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh
+claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && scripts/sync-manifests --check && smoke/versions.sh && smoke/guards.sh
 ```
