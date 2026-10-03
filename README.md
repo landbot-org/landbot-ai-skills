@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.4.5`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.4.6`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 
@@ -68,7 +68,7 @@ Each skill prints its version (`landbot-flows 0.4.5`) the first time it runs. If
 The skill names the account it is about to write to, asks once before building (that yes covers the publish, the switch to the current web chat and, if you described a look, the CSS it pushes) or before every write on a bot you already had, and ends with one line:
 
 ```
-LANDBOT_HANDOFF bot=<uuid> builder=<id> share=https://landbot.pro/v3/H-<channel>-<code>/index.html channel=<id> version=3.1.0
+LANDBOT_HANDOFF bot=<uuid> builder=<id> share=https://landbot.online/v3/H-<channel>-<code>/index.html channel=<id> version=3.1.0
 ```
 
 Then: "make it look like `<your site>`". The style skill asks, writes the CSS to the channel (live at once on a bot it created in this build; on a bot you already had, to the bot's draft, which it shows you as a local preview and publishes when you say yes) and verifies the share URL. If it tells you to paste instead, it gives the three clicks (Design › Custom code › Add CSS, Apply, Publish).
@@ -93,7 +93,7 @@ Claude Code and Codex fetch updates from this repo: `claude plugin update landbo
 
 ## What this is not
 
-Not a hosted MCP server, no OAuth, no server that holds your token. Everything runs on your machine with your credentials, as bash scripts with `curl` and `jq`. Your token goes to one place, `api.landbot.io`, Landbot's own API. The only other hosts the skills touch are `storage.googleapis.com/landbot.pro`, the public bucket that serves published channel configs (read without a token, to verify a share URL and to preview a draft), and `cdn.landbot.io`, the web chat library the local preview page loads. Chat apps (claude.ai, ChatGPT) cannot run these skills yet.
+Not a hosted MCP server, no OAuth, no server that holds your token. Everything runs on your machine with your credentials, as bash scripts with `curl` and `jq`. Your token goes to one place, `api.landbot.io`, Landbot's own API. The only other hosts the skills touch are `storage.googleapis.com/landbot.pro`, `/landbot.online` and `/landbot.site`, the public buckets that serve published channel configs (Landbot serves each account on one of the three) (read without a token, to verify a share URL and to preview a draft), and `cdn.landbot.io`, the web chat library the local preview page loads. Chat apps (claude.ai, ChatGPT) cannot run these skills yet.
 
 ## Privacy
 

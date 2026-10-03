@@ -16,9 +16,23 @@ if [ -z "$IN" ]; then echo "usage: verify-share <share-url | H-<id>-<code>> [exp
 SHARE_CODE=""; [[ "$IN" =~ (H-[0-9]+-[A-Z0-9]+) ]] && SHARE_CODE="${BASH_REMATCH[1]}"
 if [ -z "$SHARE_CODE" ]; then echo "no share code (H-<id>-<code>) found in: $IN" >&2; exit 65; fi
 CHANNEL_ID="$(printf '%s' "$SHARE_CODE" | cut -d- -f2)"
-CONFIG_URL="${LANDBOT_CONFIG_BASE:-https://storage.googleapis.com/landbot.pro/v3}/$SHARE_CODE/index.json"
-
-body="$(curl -sS -f "$CONFIG_URL")" || { echo "could not read $CONFIG_URL (not published yet, or the share code is wrong)" >&2; exit 1; }
+# The published config sits in the bucket named after the share URL's host. Landbot serves each brand on
+# one of landbot.pro, landbot.online and landbot.site; a bare share code does not say which, so all three
+# are tried. The legacy hosts (chats.landbot.io, landbot.io) predate the v4 web chat this skill styles.
+# LANDBOT_CONFIG_BASE (one base, or several separated by spaces) replaces the list, for tests.
+GCS="https://storage.googleapis.com"
+if [ -n "${LANDBOT_CONFIG_BASE:-}" ]; then BASES="$LANDBOT_CONFIG_BASE"
+elif [[ "$IN" =~ ^https?://(landbot\.(pro|online|site))/ ]]; then BASES="$GCS/${BASH_REMATCH[1]}/v3"
+elif [[ "$IN" =~ ^https?:// ]]; then
+  echo "unsupported share host in $IN: v4 share pages are served on landbot.pro, landbot.online or landbot.site. Take the share URL from the handoff line." >&2; exit 65
+else BASES="$GCS/landbot.pro/v3 $GCS/landbot.online/v3 $GCS/landbot.site/v3"; fi
+body=""; CONFIG_URL=""; tried=""
+for base in $BASES; do
+  CONFIG_URL="$base/$SHARE_CODE/index.json"; tried="$tried $CONFIG_URL"
+  body="$(curl -sS -f "$CONFIG_URL" 2>/dev/null)" && [ -n "$body" ] && break
+  body=""
+done
+if [ -z "$body" ]; then echo "could not read the published config at:$tried (not published yet, or the share code is wrong)" >&2; exit 1; fi
 
 v4="$(printf '%s' "$body" | jq -r '.use_surrogate_interaction // empty')"
 ver="$(printf '%s' "$body" | jq -r '.version // empty')"
