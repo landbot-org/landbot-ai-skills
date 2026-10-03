@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/handoff" *) Bash("${CLAUDE_PLUGIN_ROOT}/skills/landbot-flows/scripts/channel" get *) Bash(jq *)
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.4.5
+  version: 0.4.6
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.4.5`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.4.6`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -122,7 +122,7 @@ A bot the person already had: never push a script. Give them the file and these 
 
 Exit 0 means: v4 renderer, Custom CSS present in the **published** config, and your marker is in it. Anything else is a real failure. `FAIL: no Custom CSS in the published config` after a Publish means the plan is Sandbox: Custom CSS is dropped there. Say that plainly; the upgrade is the user's decision, not a bug to work around.
 
-Then in the browser, on the share URL (`https://landbot.pro/v3/H-<channel>-<code>/index.html`), after answering one option so a user pill and the next question are visible:
+Then in the browser, on the share URL (the `share=` of the handoff line; its host is `landbot.pro`, `landbot.online` or `landbot.site`), after answering one option so a user pill and the next question are visible:
 
 ```js
 document.querySelectorAll('[data-lb-part]').length            // > 0 (about 16 on load, ~29 after two turns)
