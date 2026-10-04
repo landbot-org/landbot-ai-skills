@@ -562,27 +562,39 @@ grep -F 'body.lb-js-messaging [data-lb-part="message-bubble"] > .lb-msg-buttons 
   && grep -F 'setInterval(function () { burst = 0; render(); }, 400);' "$MJ" >/dev/null; } \
   && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL messaging.js: render is not scheduled from the observer with a capped burst"; }
 
-# setup-token --check: the Bots API is open to every account, so a refusal names the token (401), the user or
-# workspace (403) or the firewall (HTML 403 with a Ray ID) — never "not enabled". A fake curl answers the probe.
+# setup-token --check: there is no per-account switch for the Bots API, so a refusal names the token (401), the
+# user or workspace (JSON 403) or the firewall/proxy (an answer that is not Landbot's JSON) — never "not enabled".
+# A fake curl answers the probe. It refuses (599) a call that is not the plugin's: wrong path, no landbot-plugin
+# user agent, or a token that did not arrive over stdin as a curl config "header =" line.
 FC="$TROOT/fakecurl"; mkdir -p "$FC"
 cat > "$FC/curl" <<'E'
 #!/usr/bin/env bash
-o=/dev/null; d=/dev/null; w=""
-while [ $# -gt 0 ]; do case "$1" in -o) o="$2"; shift;; -D) d="$2"; shift;; -w) w="$2"; shift;; esac; shift; done
-cat >/dev/null
-printf '%s' "${MOCK_BODY:-}" > "$o"; printf '%s' "${MOCK_HEADERS:-}" > "$d"
-[ -n "$w" ] && printf '%s' "${MOCK_CODE:-200}"
+w=""; url=""; ua=""; inc=0
+while [ $# -gt 0 ]; do case "$1" in -w) w="$2"; shift;; -A) ua="$2"; shift;; -i) inc=1;; -o|-D) shift;; --config) shift;; -*) ;; *) url="$1";; esac; shift; done
+cfg="$(cat)"
+case "$cfg" in *'header = "Authorization: Token fixture-not-a-token"'*) ;; *) printf '%s' 599; exit 0;; esac
+case "$ua" in landbot-plugin/*) ;; *) printf '%s' 599; exit 0;; esac
+case "$url" in
+*/blocks) [ "$inc" = 1 ] && printf '%s\r\n\r\n' "${MOCK_HEADERS:-HTTP/2 ${MOCK_CODE:-200}}"; printf '%s' "${MOCK_BODY:-}"; [ -n "$w" ] && printf '\n%s' "${MOCK_CODE:-200}";;
+*/agents/me/) printf '%s' '{"agent":{"full_name":"Fixture Agent","email":"fixture@example.com"}}';;
+*) printf '%s' 599;;
+esac
 exit 0
 E
 chmod +x "$FC/curl"
 st() { local name="$1" code="$2" body="$3" hdrs="$4" want_rc="$5" want_text="$6" out
-  out="$(PATH="$FC:$PATH" LANDBOT_API_TOKEN=fixture-not-a-token MOCK_CODE="$code" MOCK_BODY="$body" MOCK_HEADERS="$hdrs" bash "$SRC/setup-token" --check 2>&1)"; local rc=$?
-  if [ "$rc" = "$want_rc" ] && printf '%s' "$out" | grep -qF -- "$want_text" && ! printf '%s' "$out" | grep -qi "not enabled"; then pass=$((pass+1))
-  else fail=$((fail+1)); echo "FAIL setup-token $name: rc=$rc (want $want_rc), text: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"; fi; }
-st "401 is the token"        401 '{"detail":"Invalid token."}' $'HTTP/2 401\ncontent-type: application/json\n' 1 "this is the token itself"
-st "403 is user or workspace" 403 '{"detail":"You do not have permission to perform this action."}' $'HTTP/2 403\ncontent-type: application/json\n' 1 'lacks the "view chatbot" permission'
-st "403 from the firewall"   403 '<html><head><title>Attention Required! | Cloudflare</title></head></html>' $'HTTP/2 403\nserver: cloudflare\ncontent-type: text/html\ncf-ray: 9abc123-MAD\n' 1 "FIREWALL: the firewall in front of the Landbot API (Cloudflare) refused this request before Landbot read it (Ray ID 9abc123-MAD)"
-st "200 passes"              200 '{"data":[]}' $'HTTP/2 200\ncontent-type: application/json\n' 0 "OK: GET /blocks answered 200."
+  out="$(PATH="$FC:$PATH" LANDBOT_API_URL=http://fixture.invalid/v0-alpha LANDBOT_API_V2_URL=http://fixture.invalid/v2 LANDBOT_API_TOKEN=fixture-not-a-token MOCK_CODE="$code" MOCK_BODY="$body" MOCK_HEADERS="$hdrs" bash "$SRC/setup-token" --check 2>&1)"; local rc=$?
+  if [ "$rc" = "$want_rc" ] && printf '%s' "$out" | grep -qF -- "$want_text" && ! printf '%s' "$out" | grep -qi "not enabled" && { [ "$code" = 200 ] || printf '%s' "$out" | grep -qF "HTTP $code"; }; then pass=$((pass+1))
+  else fail=$((fail+1)); echo "FAIL setup-token $name: rc=$rc (want $want_rc), text: $(printf '%s' "$out" | head -3 | tr '\n' ' ')"; fi; }
+J=$'content-type: application/json'
+st "401 is the token"            401 '{"detail":"Invalid token."}' "HTTP/2 401"$'\r\n'"$J" 1 "this is the token itself"
+st "403 JSON is user/workspace"  403 '{"detail":"You do not have permission to perform this action."}' "HTTP/2 403"$'\r\n'"$J" 1 'lacks the "view chatbot" permission'
+st "403 Cloudflare HTML"         403 '<html><head><title>Attention Required! | Cloudflare</title></head></html>' $'HTTP/2 403\r\nserver: cloudflare\r\ncontent-type: text/html\r\ncf-ray: 9abc123-MAD' 1 "FIREWALL: the answer is not Landbot's (an HTML page, an empty body or a firewall error), Ray ID 9abc123-MAD"
+st "403 Cloudflare JSON error"   403 '{"success":false,"errors":[{"code":1020}]}' $'HTTP/2 403\r\nserver: cloudflare\r\ncf-ray: 9abc124-MAD\r\n'"$J" 1 "FIREWALL:"
+st "403 with an empty body"      403 '' "HTTP/2 403" 1 "FIREWALL:"
+st "401 as a proxy HTML page"    401 '<html>Proxy Authentication</html>' $'HTTP/1.1 401\r\ncontent-type: text/html' 1 "FIREWALL:"
+st "200 that is not JSON fails"  200 '<html>captive portal</html>' $'HTTP/1.1 200\r\ncontent-type: text/html' 1 "not with Landbot's JSON"
+st "200 JSON passes, names the account" 200 '{"data":[]}' "HTTP/2 200"$'\r\n'"$J" 0 "Acting as Fixture Agent <fixture@example.com>"
 
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]

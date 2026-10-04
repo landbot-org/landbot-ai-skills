@@ -50,10 +50,10 @@ Linux, Windows, CI: **HUMAN** runs `export LANDBOT_API_TOKEN='…'` in their own
 Claude desktop app (Cowork): same as macOS, the skill runs `setup-token` in its shell and reads the clipboard. Not yet verified inside Cowork; if the clipboard read fails there, use Claude Code in a terminal for this one step, or book the setup call.
 Then run `scripts/setup-token --whoami` and report the account verbatim.
 
-If the check answers 401 or 403, repeat the cause the script printed and stop; do not loop on re-copying the token. The Bots API is open to every Landbot account, so never say it has to be enabled:
+If the check answers 401 or 403, repeat the cause the script printed and stop; do not loop on re-copying the token. There is no Bots API switch to enable on an account any more, so never say it has to be enabled:
 1. `401`: the token was not copied whole, or the user was deactivated. Copy the field once more.
 2. `403`: the user lacks the "view chatbot" permission (writes also need "edit chatbot"), or the workspace is disabled or locked. The workspace admin fixes it, not a new token. A trial that has ended reads fine but refuses every write.
-3. `FIREWALL:` with a Ray ID: the firewall refused the request, not Landbot. Another network, or give Landbot the Ray ID.
+3. `FIREWALL:` (an answer that is not Landbot's JSON, often with a Ray ID): the firewall or a proxy refused the request, not Landbot. Another network, or give Landbot the Ray ID.
 Never tell them to put their email or token in a public GitHub issue; the assistant on https://landbot.io/skills can help.
 
 ## 5. Build the first bot

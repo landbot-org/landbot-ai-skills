@@ -51,7 +51,7 @@ Privacy: what the plugin reads on your machine, stores and sends is set out in t
 
 ## If the first call answers 401 or 403
 
-The Bots API is open to every Landbot account, so a refusal is never about enabling it. `401` is the token (not copied whole, or the user deactivated): copy the "API token" field again. `403` is the user or the workspace (missing "view chatbot" or "edit chatbot" permission, or a disabled or locked workspace): the workspace admin fixes it. A `403` on a write when reads work is a trial that has ended. A `FIREWALL:` line with a Ray ID is the firewall in front of the API, not Landbot. Never paste the token into the chat; the assistant on https://landbot.io/skills can help.
+There is no Bots API switch to enable on an account any more, so a refusal is never about enabling it. `401` is the token (not copied whole, or the user deactivated): copy the "API token" field again. `403` is the user or the workspace (missing "view chatbot" or "edit chatbot" permission, or a disabled or locked workspace): the workspace admin fixes it. A `403` on a write when reads work is a trial that has ended. A `FIREWALL:` line (an answer that is not Landbot's JSON, often with a Ray ID) is the firewall in front of the API or a proxy, not Landbot. Never paste the token into the chat; the assistant on https://landbot.io/skills can help.
 
 ## Docs and support
 

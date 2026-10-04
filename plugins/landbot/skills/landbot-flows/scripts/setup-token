@@ -12,8 +12,9 @@
 #   Linux / Windows  the LANDBOT_API_TOKEN environment variable, set in your own shell, never in a file
 #                    this skill writes. `lb` reads it and nothing else does.
 #
-# The token is verified against the API before it is stored, and is never printed, never written to
-# a file, and never passed as an argument. On success the clipboard is cleared.
+# The token is verified against the API before it is stored, and is never printed and never written to
+# a file. It reaches curl over stdin, never as an argument; the one command that receives it as an
+# argument is `security add-generic-password -w`, to store it. On success the clipboard is cleared.
 set -uo pipefail
 
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
@@ -36,48 +37,54 @@ account_of() {
     return 1
 }
 
-# HTTP status of GET /blocks with the token on stdin. 200 proves environment, token and permission.
-# The headers and the body are kept (PROBE_DIR), because a refusal only makes sense with them: the API
-# answers JSON with a "detail", the firewall in front of it answers an HTML page.
-PROBE_DIR="$(mktemp -d 2>/dev/null)" || PROBE_DIR=""
-[ -n "$PROBE_DIR" ] && trap 'rm -rf "$PROBE_DIR"' EXIT
-check_blocks() {
-  local token out=/dev/null hdr=/dev/null
-  if [ -n "$PROBE_DIR" ]; then out="$PROBE_DIR/body"; hdr="$PROBE_DIR/headers"; fi
+# The probe: GET /blocks with the token on stdin (process substitution, so this runs in the main shell and
+# can set the variables below without writing anything to disk). Sets CODE, PROBE_HEADERS and PROBE_BODY.
+# 200 with Landbot's JSON proves environment, token and permission. Nothing is kept in a file: a proxy
+# or a wrong LANDBOT_API_URL could echo the request back, and the body must then stay in memory only.
+probe_blocks() {
+  local token raw
   token="$(cat)"
-  printf 'header = "Authorization: Token %s"\n' "$token" |
-    curl -sS -A "$UA" -o "$out" -D "$hdr" -w '%{http_code}' "$BASE/blocks" --config -
+  raw="$(printf 'header = "Authorization: Token %s"\n' "$token" |
+    curl -sS -i -A "$UA" -w '\n%{http_code}' "$BASE/blocks" --config -)" || return 1
+  CODE="${raw##*$'\n'}"
+  raw="${raw%$'\n'*}"
+  PROBE_HEADERS="$(printf '%s\n' "$raw" | sed -n '1,/^\r\{0,1\}$/p')"
+  PROBE_BODY="$(printf '%s\n' "$raw" | sed '1,/^\r\{0,1\}$/d')"
 }
 
-# The Bots API is open to every Landbot account (since 2026-09-23), so a refusal is never "not enabled":
-# 401 is the token, 403 is this user or this workspace, and an HTML 403 is the firewall, not Landbot.
+# What the probe's answer means. The Bots API has had no per-account switch since 2026-09-23, so a
+# refusal is never "not enabled": 401 is the token, a JSON 403 is this user or this workspace, and an
+# answer that is not Landbot's JSON (HTML page, empty body, Cloudflare error) is the firewall or a proxy.
 explain_code() {
-  local hdrs body detail ray
-  hdrs="$(cat "${PROBE_DIR:-/nonexistent}/headers" 2>/dev/null)"
-  body="$(head -c 4000 "${PROBE_DIR:-/nonexistent}/body" 2>/dev/null)"
-  case "$1" in
-  200) return 0 ;;
+  local code="$1" json=0 detail="" ray=""
+  if printf '%s' "${PROBE_BODY:-}" | jq -e . >/dev/null 2>&1; then json=1; fi
+  [[ "${PROBE_HEADERS:-}" =~ [Cc][Ff]-[Rr][Aa][Yy]:\ *([A-Za-z0-9-]+) ]] && ray="${BASH_REMATCH[1]}"
+  [ "$json" = 1 ] && detail="$(printf '%s' "$PROBE_BODY" | jq -r '.detail // .message // .error // empty' 2>/dev/null | head -c 200)"
+  [ "$code" = 200 ] || echo "HTTP $code" >&2
+  case "$code" in
+  200)
+    if [ "$json" = 1 ]; then return 0; fi
+    echo "$BASE answered 200, but not with Landbot's JSON: a proxy or captive portal on your network answered instead. Check the network and try again." >&2
+    return 1 ;;
   401 | 403)
-    if [[ "$body" == *"<title>Attention Required! | Cloudflare</title>"* ]] || { [[ "$hdrs" == *[Ss]erver:\ cloudflare* ]] && [[ "$hdrs" == *[Cc]ontent-[Tt]ype:\ text/html* ]]; }; then
-      ray=""; [[ "$hdrs" =~ [Cc][Ff]-[Rr][Aa][Yy]:\ *([A-Za-z0-9-]+) ]] && ray="${BASH_REMATCH[1]}"
+    if [ "$json" = 0 ] || { [ -n "$ray" ] && [ -z "$detail" ]; }; then
       cat >&2 <<EOM
-FIREWALL: the firewall in front of the Landbot API (Cloudflare) refused this request before Landbot read it${ray:+ (Ray ID $ray)}.
+FIREWALL: the answer is not Landbot's (an HTML page, an empty body or a firewall error)${ray:+, Ray ID $ray}. The firewall in front of the API (Cloudflare) or a proxy on your network refused the request before Landbot read it.
 This is not a token, account or permission problem: do not re-copy the token. Try again from another network, or give the Ray ID to Landbot.
 EOM
       return 1
     fi
-    detail="$(printf '%s' "$body" | jq -r '.detail // .message // .error // empty' 2>/dev/null | head -c 200)"
-    if [ "$1" = 401 ]; then
+    if [ "$code" = 401 ]; then
       cat >&2 <<EOM
 the API refused the token (401${detail:+: $detail}).
-The Bots API is open to every Landbot account, so this is the token itself: it is not the whole token (copy the read-only
-"API token" field at https://app.landbot.io/gui/settings/account again), or this user has been deactivated.
+There is no Bots API switch to enable on your account, so this is the token itself: it is not the whole token (copy the read-only
+"API token" field at https://app.landbot.io/gui/settings/account once more), or this user has been deactivated.
 Do not paste the token into the chat to check it.
 EOM
     else
       cat >&2 <<EOM
 the API knows the token but refused this user (403${detail:+: $detail}).
-The Bots API is open to every Landbot account, so there is nothing to enable. Two causes:
+There is no Bots API switch to enable on your account. Two causes:
   - this user lacks the "view chatbot" permission in the workspace (writes also need "edit chatbot"): ask the workspace admin;
   - the workspace is disabled or locked: check it in Landbot.
 A trial that has ended still answers reads but refuses every write with 403, so that one shows on the first bot creation, not here.
@@ -85,8 +92,8 @@ EOM
     fi
     echo "If you are stuck, the assistant at $ACCESS_URL can help; never share the token there." >&2
     return 1 ;;
-  404) echo "$BASE has no Bots API ($1). Check LANDBOT_API_URL." >&2; return 1 ;;
-  *) echo "unexpected answer from $BASE: HTTP $1" >&2; return 1 ;;
+  404) echo "$BASE has no Bots API ($code). Check LANDBOT_API_URL." >&2; return 1 ;;
+  *) echo "unexpected answer from $BASE: HTTP $code" >&2; return 1 ;;
   esac
 }
 
@@ -142,7 +149,7 @@ EOM
     exit 65
   fi
   echo "Checking LANDBOT_API_TOKEN against $BASE ..." >&2
-  CODE="$(printf '%s' "$LANDBOT_API_TOKEN" | check_blocks)" || { echo "could not reach $BASE" >&2; exit 1; }
+  probe_blocks < <(printf '%s' "$LANDBOT_API_TOKEN") || { echo "could not reach $BASE" >&2; exit 1; }
   explain_code "$CODE" || exit 1
   WHO="$(printf '%s' "$LANDBOT_API_TOKEN" | account_of 2>/dev/null)" || WHO="whoever this token belongs to — $V2 would not say"
   echo "OK: GET /blocks answered 200." >&2
@@ -240,7 +247,7 @@ if ! printf '%s' "$TOKEN" | grep -qE '^[0-9a-f]{40}$'; then
 fi
 
 echo "Checking it against $BASE ..." >&2
-CODE="$(printf '%s' "$TOKEN" | check_blocks)" || {
+probe_blocks < <(printf '%s' "$TOKEN") || {
   echo "could not reach $BASE — check your connection and try again" >&2
   exit 1
 }

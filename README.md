@@ -79,11 +79,11 @@ Share → Embed in the builder gives you the snippet. Paste it on any page.
 
 ## 401 or 403 on the first call
 
-The Bots API is open to every Landbot account, so a refusal is never about enabling it. The skill tells the three cases apart:
+There is no Bots API switch to enable on an account any more, so a refusal is never about enabling it. The skill tells the three cases apart:
 
 1. **`401`: the token.** It was not copied whole, or your user was deactivated. Copy the read-only "API token" field again and run `set up my Landbot token` once more.
 2. **`403`: your user or your workspace.** Your user lacks the "view chatbot" permission (writes also need "edit chatbot"), or the workspace is disabled or locked. Ask your workspace admin. A trial that has ended still reads but refuses every write with `403`: pick a plan to publish.
-3. **`FIREWALL:` with a Ray ID.** The firewall in front of the API refused the request before Landbot read it. Not a token or account problem; try another network or give Landbot the Ray ID.
+3. **`FIREWALL:`** (the answer was not Landbot's JSON: an HTML page, an empty body, a firewall error, often with a Ray ID). The firewall in front of the API or a proxy on your network refused the request before Landbot read it. Not a token or account problem; try another network or give Landbot the Ray ID.
 
 Do not paste the token into the chat to "check it". If you are stuck, the assistant on https://landbot.io/skills can help.
 

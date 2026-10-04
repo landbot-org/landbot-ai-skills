@@ -282,12 +282,12 @@ if [ "$CODE" = "403" ]; then
     exit 1
   fi
 fi
-# The Bots API is open to every account (since 2026-09-23). A 401 is the token; a 403 from the API is this
-# user, this workspace or, on a write, a trial that has ended. None of them is fixed by re-copying the token.
+# The Bots API has had no per-account switch since 2026-09-23. A 401 is the token; a 403 from the API is
+# this user, this workspace or, on a write, a trial that has ended. Nothing here is fixed by re-copying the token in a loop.
 if [ "$CODE" = "401" ]; then
-  echo "TOKEN REFUSED: the token is not whole (copy the API token field again) or this user has been deactivated. Not something to retry." >&2
+  echo "TOKEN REFUSED: the token is not whole (copy the API token field once more, carefully) or this user has been deactivated." >&2
 elif [ "$CODE" = "403" ]; then
-  echo "REFUSED FOR THIS USER: the user lacks the view/edit chatbot permission, the workspace is disabled or locked, or (on a write) the trial has ended and the account has no plan. Say which one is likely from the body below; nothing to enable on Landbot's side." >&2
+  echo "REFUSED FOR THIS USER: the user lacks the view/edit chatbot permission, the workspace is disabled or locked, or (on a write) the trial has ended and the account has no plan. Say which one is likely from the body below; there is no Bots API switch to enable." >&2
 fi
 if command -v jq >/dev/null 2>&1; then
   printf '%s' "$PAYLOAD" | jq . 2>/dev/null || printf '%s\n' "$PAYLOAD"
