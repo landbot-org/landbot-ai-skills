@@ -53,7 +53,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.4.5`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.4.6`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Your token
 
@@ -79,13 +79,13 @@ Share → Embed in the builder gives you the snippet. Paste it on any page.
 
 ## 401 or 403 on the first call
 
-The token check answers `401` or `403` for three different reasons, and the API does not say which:
+The Bots API is open to every Landbot account, so a refusal is never about enabling it. The skill tells the three cases apart:
 
-1. **Your account is not enabled for the Bots API yet.** The API is in preview and Landbot switches it on per account. Ask the assistant on https://landbot.io/skills or book the 15-minute setup call there, and give your account email in that private channel (never in a public issue, and never the token); we enable it. Nothing to fix on your side.
-2. The token was not copied whole. Copy the field again and run `set up my Landbot token` once more.
-3. Your user lacks the "view chatbot" or "edit chatbot" permission in the workspace.
+1. **`401`: the token.** It was not copied whole, or your user was deactivated. Copy the read-only "API token" field again and run `set up my Landbot token` once more.
+2. **`403`: your user or your workspace.** Your user lacks the "view chatbot" permission (writes also need "edit chatbot"), or the workspace is disabled or locked. Ask your workspace admin. A trial that has ended still reads but refuses every write with `403`: pick a plan to publish.
+3. **`FIREWALL:` with a Ray ID.** The firewall in front of the API refused the request before Landbot read it. Not a token or account problem; try another network or give Landbot the Ray ID.
 
-Do not paste the token into the chat to "check it".
+Do not paste the token into the chat to "check it". If you are stuck, the assistant on https://landbot.io/skills can help.
 
 ## Updates
 

@@ -51,7 +51,7 @@ Privacy: what the plugin reads on your machine, stores and sends is set out in t
 
 ## If the first call answers 401 or 403
 
-The API gives the same answer for three causes and does not say which. Most often the account is not enabled for the Bots API yet: the API is in preview and Landbot switches it on per account. Ask the assistant on https://landbot.io/skills or book the 15-minute setup call there and give your account email in that private channel; there is nothing to fix on your side. The other two causes: the token was not copied whole, or your user lacks the "view chatbot" or "edit chatbot" permission in the workspace. Do not paste the token into the chat to check it.
+The Bots API is open to every Landbot account, so a refusal is never about enabling it. `401` is the token (not copied whole, or the user deactivated): copy the "API token" field again. `403` is the user or the workspace (missing "view chatbot" or "edit chatbot" permission, or a disabled or locked workspace): the workspace admin fixes it. A `403` on a write when reads work is a trial that has ended. A `FIREWALL:` line with a Ray ID is the firewall in front of the API, not Landbot. Never paste the token into the chat; the assistant on https://landbot.io/skills can help.
 
 ## Docs and support
 

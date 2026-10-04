@@ -562,5 +562,27 @@ grep -F 'body.lb-js-messaging [data-lb-part="message-bubble"] > .lb-msg-buttons 
   && grep -F 'setInterval(function () { burst = 0; render(); }, 400);' "$MJ" >/dev/null; } \
   && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL messaging.js: render is not scheduled from the observer with a capped burst"; }
 
+# setup-token --check: the Bots API is open to every account, so a refusal names the token (401), the user or
+# workspace (403) or the firewall (HTML 403 with a Ray ID) — never "not enabled". A fake curl answers the probe.
+FC="$TROOT/fakecurl"; mkdir -p "$FC"
+cat > "$FC/curl" <<'E'
+#!/usr/bin/env bash
+o=/dev/null; d=/dev/null; w=""
+while [ $# -gt 0 ]; do case "$1" in -o) o="$2"; shift;; -D) d="$2"; shift;; -w) w="$2"; shift;; esac; shift; done
+cat >/dev/null
+printf '%s' "${MOCK_BODY:-}" > "$o"; printf '%s' "${MOCK_HEADERS:-}" > "$d"
+[ -n "$w" ] && printf '%s' "${MOCK_CODE:-200}"
+exit 0
+E
+chmod +x "$FC/curl"
+st() { local name="$1" code="$2" body="$3" hdrs="$4" want_rc="$5" want_text="$6" out
+  out="$(PATH="$FC:$PATH" LANDBOT_API_TOKEN=fixture-not-a-token MOCK_CODE="$code" MOCK_BODY="$body" MOCK_HEADERS="$hdrs" bash "$SRC/setup-token" --check 2>&1)"; local rc=$?
+  if [ "$rc" = "$want_rc" ] && printf '%s' "$out" | grep -qF -- "$want_text" && ! printf '%s' "$out" | grep -qi "not enabled"; then pass=$((pass+1))
+  else fail=$((fail+1)); echo "FAIL setup-token $name: rc=$rc (want $want_rc), text: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"; fi; }
+st "401 is the token"        401 '{"detail":"Invalid token."}' $'HTTP/2 401\ncontent-type: application/json\n' 1 "this is the token itself"
+st "403 is user or workspace" 403 '{"detail":"You do not have permission to perform this action."}' $'HTTP/2 403\ncontent-type: application/json\n' 1 'lacks the "view chatbot" permission'
+st "403 from the firewall"   403 '<html><head><title>Attention Required! | Cloudflare</title></head></html>' $'HTTP/2 403\nserver: cloudflare\ncontent-type: text/html\ncf-ray: 9abc123-MAD\n' 1 "FIREWALL: the firewall in front of the Landbot API (Cloudflare) refused this request before Landbot read it (Ray ID 9abc123-MAD)"
+st "200 passes"              200 '{"data":[]}' $'HTTP/2 200\ncontent-type: application/json\n' 0 "OK: GET /blocks answered 200."
+
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]

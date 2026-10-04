@@ -39,7 +39,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 **No terminal (Claude desktop app):** the person opens **Customize › Plugins › Add marketplace**, pastes `landbot-org/landbot-ai-skills`, installs **landbot**, then starts a new session **in the Code tab** (Cowork runs the skills too, but not tested end to end, and it has no browser pane for the live build). The rest of these steps are the same, with one difference in step 4.
 
-After installing, check the skill answers with `landbot-flows 0.4.5` as its first line. An older number means a stale copy is also installed; remove it before going on. **The skills load in a new session.** If you installed them inside this running session, you cannot load them yourself: ask the person to type `/reload-plugins` in the chat box, or to start a new session. **If they start a new session, give them the rest of their request to paste there** (for example the "Then build: …" line of the prompt they gave you), because a new session does not see this one.
+After installing, check the skill answers with `landbot-flows 0.4.6` as its first line. An older number means a stale copy is also installed; remove it before going on. **The skills load in a new session.** If you installed them inside this running session, you cannot load them yourself: ask the person to type `/reload-plugins` in the chat box, or to start a new session. **If they start a new session, give them the rest of their request to paste there** (for example the "Then build: …" line of the prompt they gave you), because a new session does not see this one.
 
 ## 3. HUMAN: copy the API token
 Ask them to open https://app.landbot.io/gui/settings/account and copy the read-only **API token** field, then tell you "done". There is no copy button: they click in the field, select all (Cmd+A, or Ctrl+A), and copy (Cmd+C, or Ctrl+C). Do not ask them to show or confirm it. On macOS only (`uname` prints `Darwin`) you may run `open https://app.landbot.io/gui/settings/account` so the page is one click away; the copy stays theirs.
@@ -50,10 +50,11 @@ Linux, Windows, CI: **HUMAN** runs `export LANDBOT_API_TOKEN='…'` in their own
 Claude desktop app (Cowork): same as macOS, the skill runs `setup-token` in its shell and reads the clipboard. Not yet verified inside Cowork; if the clipboard read fails there, use Claude Code in a terminal for this one step, or book the setup call.
 Then run `scripts/setup-token --whoami` and report the account verbatim.
 
-If the check answers 401 or 403, say all three causes and stop; do not loop on re-copying the token:
-1. The account is not enabled for the Bots API yet (Landbot switches it on per account; nothing the person can fix). Tell them to ask the assistant on https://landbot.io/skills or book the 15-minute setup call there, and give their account email in that private channel. Never tell them to put their email or token in a public GitHub issue.
-2. The token was not copied whole.
-3. The user lacks the "view chatbot" permission.
+If the check answers 401 or 403, repeat the cause the script printed and stop; do not loop on re-copying the token. The Bots API is open to every Landbot account, so never say it has to be enabled:
+1. `401`: the token was not copied whole, or the user was deactivated. Copy the field once more.
+2. `403`: the user lacks the "view chatbot" permission (writes also need "edit chatbot"), or the workspace is disabled or locked. The workspace admin fixes it, not a new token. A trial that has ended reads fine but refuses every write.
+3. `FIREWALL:` with a Ray ID: the firewall refused the request, not Landbot. Another network, or give Landbot the Ray ID.
+Never tell them to put their email or token in a public GitHub issue; the assistant on https://landbot.io/skills can help.
 
 ## 5. Build the first bot
 Use the `landbot-flows` skill with the person's description. **If they asked for a bot but gave no description, or said "show me", do not interview them:** build the skill's default lead-qualification bot (greet, ask name, email and company size, tell companies over 50 people a person will follow up, thank the rest), publish it on the v4 web chat with Landbot's default look, and offer styling as the next step. Do not push a style nobody described. They can change anything afterwards.
