@@ -2,11 +2,11 @@
 
 This is the privacy policy of the **landbot** plugin for coding agents (the `landbot-flows` and `landbot-style` skills in this repository). It describes what the plugin reads on your machine, what it stores, what it sends and to whom. It applies to the plugin only. What Landbot does with the data that reaches its services is covered by Landbot's [Privacy Policy](https://landbot.io/privacy-policy), which applies to your Landbot account whether or not you use this plugin.
 
-Last updated: 2026-09-29. The policy is versioned with the repository; its history is the file's Git history.
+Last updated: 2026-10-02. The policy is versioned with the repository; its history is the file's Git history.
 
 ## The short version
 
-The plugin is a set of bash scripts that run on your machine, inside your coding agent, with your own Landbot API token. It sends what you ask it to build to Landbot's API and nothing anywhere else. It has no server of its own, no analytics, no telemetry beyond a user agent string, and it never prints your token.
+The plugin is a set of bash scripts that run on your machine, inside your coding agent, with your own Landbot API token. It sends what you ask it to build to Landbot's API, asks GitHub once a day which version of the plugin is the latest, and sends nothing anywhere else. It has no server of its own, no analytics, no telemetry beyond a user agent string, and it never prints your token.
 
 ## What the plugin reads on your machine
 
@@ -18,13 +18,14 @@ The plugin is a set of bash scripts that run on your machine, inside your coding
 ## What it stores on your machine
 
 - **The token**, in the macOS login keychain, if you chose `setup-token`. On Linux and Windows it stores nothing: the token lives in your shell. `setup-token --forget` removes the keychain entry.
-- **Working state under `~/.landbot`**: snapshots of the bot drafts this plugin last wrote (so it can tell when someone else changed a draft), a record of the bots it created on this machine, a copy of a channel's CSS and JS taken before each write (so a change can be undone), and the local preview pages it builds. These hold bot definitions and styling, never your token and never visitor data. Delete the folder at any time; the plugin recreates what it needs.
+- **Working state under `~/.landbot`**: snapshots of the bot drafts this plugin last wrote (so it can tell when someone else changed a draft), a record of the bots it created on this machine, a copy of a channel's CSS and JS taken before each write (so a change can be undone), the local preview pages it builds, and when it last asked GitHub for the latest version and what GitHub answered. These hold bot definitions and styling, never your token and never visitor data. Delete the folder at any time; the plugin recreates what it needs.
 
 ## What it sends, and to whom
 
 - **api.landbot.io**, Landbot's own API, the same server the Landbot app talks to. Every request carries your API token in the `Authorization` header and the content you asked the plugin to write: the flow and its texts, AI agent block settings, channel settings, Custom CSS and Custom JS. Each request also carries a user agent such as `landbot-plugin/<version> (landbot-flows; agent=claude-code)`, naming the plugin version and the coding agent, so Landbot can count plugin use and failures per version. No user identifier, machine identifier or other content is added. What you create stays in your Landbot account until you delete it there, under Landbot's Privacy Policy. This is the only place the token is ever sent.
 - **storage.googleapis.com/landbot.pro**, the public bucket that serves published channel configs, the same files the share URL loads in a visitor's browser. The plugin reads a config by its public share code (`H-<id>-<code>`) to verify a share URL and to build a local preview. No token is sent.
 - **cdn.landbot.io**, the web chat library, loaded by the local preview page when you open it in your browser. No token is sent.
+- **api.github.com**, at most once a day, to read the latest release of this repository so the plugin can tell you when your copy is out of date. The request carries the same user agent as above and nothing else: no token, no content, no identifier. GitHub sees your IP address, as it does when you install the plugin. `LANDBOT_UPDATE_CHECK=0` turns it off.
 
 Nothing is sent to Anthropic, OpenAI, Cursor, or to Landbot beyond the requests above. The plugin has no server, no analytics and no crash reporting.
 

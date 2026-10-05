@@ -10,6 +10,7 @@ T="$TROOT/landbot-flows/scripts"; mkdir -p "$T" "$TROOT/landbot-style/modules"
 cp "$HERE/plugins/landbot/skills/landbot-style/modules/"*.js "$TROOT/landbot-style/modules/"
 cp "$SRC/channel" "$SRC/draft-check" "$SRC/richtext.jq" "$T/"; cp "$SRC/lb" "$T/lb.real"
 export LANDBOT_STATE_DIR="$T/state"
+export LANDBOT_UPDATE_CHECK=0   # offline: only the update-notice tests below turn the GitHub check on, against a local server
 cat > "$T/lb" <<'E'
 #!/usr/bin/env bash
 M="$1"; P="$2"; B="${3:-}"; D="$(dirname "$0")"
@@ -436,6 +437,28 @@ t "same name within 15 min refused" 65:0 "$L" POST /bots '{"name":"Dup test"}'
 t "different name passes the guard" 1:0 "$L" POST /bots '{"name":"Other name"}'
 kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
 ua="$(grep -c 'landbot-plugin/' "$SRC/lb")"; [ "$ua" -ge 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL user agent missing in lb"; }
+# update notice: once a day the first GET /blocks compares this copy with the latest release (a local server
+# stands in for GitHub); it never changes the exit code, is silent when this copy is current, and stays off with
+# LANDBOT_UPDATE_CHECK=0. A failed ask keeps the last answer and waits a day before asking again.
+US="$T/upd"; mkdir -p "$US"; UR="$US/latest-release"; unow=$(date +%s); lbv="$(sed -n 's/^VERSION="\(.*\)"$/\1/p' "$SRC/lb")"
+upd() { LANDBOT_STATE_DIR="$US" LANDBOT_UPDATE_CHECK="${UPD_ON:-1}" LANDBOT_RELEASES_URL="${UPD_URL:-http://127.0.0.1:9/latest}" "$L" "$@" 2>&1 >/dev/null | grep -c '^UPDATE:'; }
+uck() { [ "$2" = "$3" ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL update notice: $1 (got [$2], want [$3])"; }; }
+printf '%s 99.0.0\n' "$unow" > "$UR"; uck "a newer release is announced"          "$(upd GET /blocks)" 1
+uck "LANDBOT_UPDATE_CHECK=0 is silent"                                         "$(UPD_ON=0 upd GET /blocks)" 0
+uck "only GET /blocks checks"                                                  "$(upd GET /bots/x)" 0
+LANDBOT_STATE_DIR="$US" LANDBOT_UPDATE_CHECK=1 "$L" GET /blocks >/dev/null 2>&1; uck "the exit code stays the request's" "$?" 1
+printf '%s %s\n' "$unow" "$lbv" > "$UR"; uck "the installed version is not announced" "$(upd GET /blocks)" 0
+printf '%s 0.0.1\n' "$unow" > "$UR";   uck "an older release is not announced"     "$(upd GET /blocks)" 0
+printf '%s 99.0.0\n' "$((unow - 90000))" > "$UR"; uck "a failed ask keeps the last answer" "$(upd GET /blocks)" 1
+read -r u_at u_ver < "$UR"; uck "a failed ask is recorded, so the next call does not wait" "$([ "$u_at" -ge "$unow" ] && echo "$u_ver")" 99.0.0
+rm -f "$UR"; uck "no record and no answer is silent" "$(upd GET /blocks)" 0
+RW="$T/rel"; mkdir -p "$RW"; printf '{"url":"x","tag_name":"v99.1.0","name":"v99.1.0"}' > "$RW/latest"
+RP=$(( 20000 + RANDOM % 20000 )); (cd "$RW" && python3 -m http.server "$RP" --bind 127.0.0.1 >/dev/null 2>&1) & RSRV=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "http://127.0.0.1:$RP/latest" && break; sleep 0.3; done
+printf '%s 0.0.1\n' "$((unow - 90000))" > "$UR"; uck "a stale record is asked again and announced" "$(UPD_URL="http://127.0.0.1:$RP/latest" upd GET /blocks)" 1
+read -r u_at u_ver < "$UR"; uck "the new answer is recorded" "$u_ver" 99.1.0
+printf '%s 0.0.1\n' "$unow" > "$UR"; uck "a fresh record is not asked again" "$(UPD_URL="http://127.0.0.1:$RP/latest" upd GET /blocks)" 0
+kill "$RSRV" 2>/dev/null; wait "$RSRV" 2>/dev/null
 # date-format guard: pickerFormat and format must agree, or nothing is sent (exit 65)
 dfb='{"blocks":[{"type":"ask_date","params":{"text":"When?","destination":"d","pickerFormat":"dd/MM/yyyy","format":["%Y/%m/%d"]}}]}'
 dfg='{"blocks":[{"type":"ask_date","params":{"text":"When?","destination":"d","pickerFormat":"dd/MM/yyyy","format":["%d/%m/%Y"]}}]}'

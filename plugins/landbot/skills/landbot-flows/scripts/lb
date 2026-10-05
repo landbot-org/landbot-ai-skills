@@ -32,7 +32,7 @@ BASE="${BASE%/}"
 AGENTS_BASE="${LANDBOT_AGENTS_API_URL:-${BASE%/*}/v3}"
 KEYCHAIN_SERVICE="${LANDBOT_TOKEN_KEYCHAIN_SERVICE:-landbot-api-token}"
 
-VERSION="0.4.5"
+VERSION="0.5.0"
 if [ "${1:-}" = "--version" ]; then echo "landbot-flows $VERSION"; exit 0; fi
 
 # Every request says it comes from this plugin, its version and which agent ran it, so Landbot can
@@ -55,6 +55,39 @@ BODY="${3:-}"
 case "$PATH_" in
 /ai-agents | /ai-agents/*) BASE="${AGENTS_BASE%/}" ;;
 esac
+
+# Claude Code updates a plugin from this marketplace only when someone asks it to, and the Claude
+# desktop app switches automatic plugin updates off altogether (REFERENCE.md, "Plugin updates"), so an
+# old copy can stay installed for weeks. Once a day, the first `GET /blocks` (SKILL.md Step 0 runs it)
+# asks GitHub which version is the latest release and prints one UPDATE line when this copy is older.
+# The answer is kept in the state folder with the time it was asked, a failed ask included, so a network
+# problem costs one short timeout a day. Only the request itself goes to GitHub: no token, no body.
+# LANDBOT_UPDATE_CHECK=0 turns it off.
+newer_than() {   # is version $1 above version $2? Both are X.Y.Z.
+  local IFS=. i; local -a a b; read -r -a a <<< "$1"; read -r -a b <<< "$2"
+  for i in 0 1 2; do
+    [ "$((10#${a[i]:-0}))" -gt "$((10#${b[i]:-0}))" ] && return 0
+    [ "$((10#${a[i]:-0}))" -lt "$((10#${b[i]:-0}))" ] && return 1
+  done
+  return 1
+}
+update_notice() {
+  [ "${LANDBOT_UPDATE_CHECK:-1}" = "0" ] && return 0
+  local rec="${LANDBOT_STATE_DIR:-$HOME/.landbot}/latest-release" at="" latest="" now json
+  now="$(date +%s)"
+  [ -f "$rec" ] && read -r at latest < "$rec" 2>/dev/null
+  case "$at" in '' | *[!0-9]*) at=0 ;; esac
+  if [ $((now - at)) -ge 86400 ]; then
+    json="$(curl -sS -f --connect-timeout 2 -m 3 -A "$USER_AGENT" -H 'Accept: application/vnd.github+json' \
+      "${LANDBOT_RELEASES_URL:-https://api.github.com/repos/landbot-org/landbot-ai-skills/releases/latest}" 2>/dev/null)" || json=""
+    # A failed ask keeps the last answer, so a release already known to be newer is still announced.
+    [[ "$json" =~ \"tag_name\":[[:space:]]*\"v?([0-9]+\.[0-9]+\.[0-9]+)\" ]] && latest="${BASH_REMATCH[1]}"
+    { mkdir -p "$(dirname "$rec")" && printf '%s %s\n' "$now" "$latest" > "$rec"; } 2>/dev/null
+  fi
+  [[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && newer_than "$latest" "$VERSION" || return 0
+  echo "UPDATE: landbot-flows $VERSION is installed and $latest is out. Not an error: carry on, tell the person once and offer the update (REFERENCE.md, \"Plugin updates\")." >&2
+}
+if [ "$METHOD" = "GET" ] && [ "$PATH_" = "/blocks" ]; then update_notice; fi
 
 # The API refuses a bot name over 50 characters (422 bot_name_not_accepted). Say so before the call,
 # so a create never fails on its name. Covers POST /bots only; a rename is not checked here.

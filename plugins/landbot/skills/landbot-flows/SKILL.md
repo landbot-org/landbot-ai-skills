@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash("${CLAUDE_SKILL_DIR}/scripts/draft-check" *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.4.5
+  version: 0.5.0
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.4.5`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.5.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -54,6 +54,7 @@ A `200` means the environment, the token and its permissions are all good. Anyth
 | `403` with `FIREWALL:` from `lb` | The firewall in front of the API (Cloudflare) refused the request before Landbot read it; `lb` prints `FIREWALL:` and a Ray ID instead of the API's JSON. **Not a token, account or permission problem.** Do not use the row below and do not ask the person to re-copy the token. Send the change in smaller requests (fewer blocks per call, connections in a separate `PATCH /bots/{id}/draft`). If one small request is still refused, give the person the Ray ID for Landbot. |
 | `401`/`403` | The API refused the token, and the body does not say why. Three causes, in order of likelihood for a new account: **the account is not enabled for the Bots API yet** (Landbot switches it on per account; no token fixes it), the token is incomplete, or the user lacks `VIEW_CHATBOT`/`EDIT_CHATBOT`. Both codes are served for the same cause, so treat them alike. Say plainly: "Your Landbot account is not enabled for the Bots API yet, or the token was not copied whole. This is not something to fix by re-copying three times." Then point them at the help on the skills page (https://landbot.io/skills: the assistant there, or a 15-minute setup call), where they can give their account email privately. Never suggest putting the email or the token in a public GitHub issue. Stop until they come back. |
 | `404` | This environment is older than the v0-alpha API. |
+| `UPDATE:` from `lb`, beside any code | A newer version of this plugin is out. **Not an error**: carry on with what was asked. Tell the person once, in one line, and offer the update or automatic updates as REFERENCE.md, "Plugin updates", says; act only on their yes. |
 
 `LANDBOT_API_URL` picks the environment and **defaults to production, `https://api.landbot.io/v0-alpha`**. Read it before the first write and say which environment you are about to touch.
 

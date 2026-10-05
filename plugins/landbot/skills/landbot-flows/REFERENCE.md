@@ -61,6 +61,17 @@ SKILL.md Step 5a has the rules the agent follows; this is how the script carries
 - **Someone's unpublished changes.** When the channel holds changes nobody published (`pending: YES` in `channel get`), every write refuses (exit 75): a live write would erase them, and a draft write would mix with them. The same exit comes when the channel changed while the write was being prepared.
 - **The builder.** Its Preview shows the channel draft too (verified 2026-09-25). A builder tab opened before a draft write publishes the copy it loaded, so the person reloads it before pressing Publish there.
 
+## Plugin updates (the `UPDATE:` line from `lb`)
+
+Once a day the first `lb GET /blocks` asks GitHub for this plugin's latest release and prints `UPDATE: landbot-flows <installed> is installed and <latest> is out` when this copy is older. Observed 2026-10-02 on macOS, in the Claude desktop app's Code tab (bundled Claude Code 2.1.284) and with the `claude` CLI (2.1.278), checked against Claude Code's docs (plugins/loading, plugins/install, plugins/cli-reference):
+
+- **Claude Code updates this marketplace only when asked.** Automatic updates are on by default for Anthropic's own marketplaces and off for every other one, this one included.
+- **The desktop app switches them off for every marketplace.** It starts each Code-tab session with `DISABLE_AUTOUPDATER=1`, which turns off Claude Code's whole plugin auto-update pass: on the machine checked, Anthropic's official marketplace had not refreshed in 10 days of desktop use.
+- **To update now, in Claude Code:** `claude plugin marketplace update landbot-skills`, then `claude plugin update landbot@landbot-skills`. The first refreshes the listing and leaves the installed plugin where it is; the second installs what the refreshed listing offers. The new version loads in the next session, or after `/reload-plugins`. In a terminal session, `/plugin` › Marketplaces › landbot-skills › Update marketplace does both. **Codex:** `codex plugin marketplace upgrade`. **`install.sh` copies:** run it again from a fresh clone.
+- **`claude` is not on the PATH of everyone who uses the desktop app.** When it is missing, offer automatic updates instead of the two commands.
+- **Automatic updates, Claude Code in the terminal and the desktop app:** in `~/.claude/settings.json`, give the `landbot-skills` entry under `extraKnownMarketplaces` `"autoUpdate": true` (add the entry, with `"source": {"source": "github", "repo": "landbot-org/landbot-ai-skills"}`, when it is missing). For the desktop app also add `"FORCE_AUTOUPDATE_PLUGINS": "1"` under `env`. With both, a new desktop session refreshed this marketplace and Anthropic's about 90 seconds after it started and updated nine Anthropic plugins on disk, while a marketplace with auto-update off was left alone. The variable applies to every marketplace whose auto-update is on, Anthropic's included: say so when offering it. It is the person's settings file: read it first, change only those keys, and tell them what changed. A version downloaded this way loads in the session after the one that downloaded it.
+- `LANDBOT_UPDATE_CHECK=0` turns the daily check off.
+
 ## What this skill does not do
 
 - It does not style. Presentation is the `landbot-style` skill, which consumes the `LANDBOT_HANDOFF` line this skill prints.
