@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Offline tests for the write guards in scripts/channel, the name, body, firewall and redirect handling
-# in scripts/lb, draft-check, setup-token --whoami, and the marker check in landbot-style/scripts/verify-share.
+# in scripts/lb, draft-check, setup-token --whoami, the marker and host checks in
+# landbot-style/scripts/verify-share, and the share URL handoff prints.
 # No network, no token: channel runs against a fake lb + handoff in a temp dir. Exits 1 on any failure.
 set -u
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -580,6 +581,12 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "http://127.0.0.1:$VP/H-1
 vok=0; for _ in 1 2 3 4 5 6 7 8 9 10; do LANDBOT_CONFIG_BASE="http://127.0.0.1:$VP" "$V" H-1-AAA "lb-style: guard" >/dev/null 2>&1 && vok=$((vok+1)); done
 [ "$vok" = 10 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share found a published marker in only $vok of 10 runs"; }
 LANDBOT_CONFIG_BASE="http://127.0.0.1:$VP" "$V" H-2-BBB "lb-style: guard" >/dev/null 2>&1; [ $? = 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share passed a missing marker"; }
+# verify-share (2026-10-03): with several bases it reads the first that has the config, names every URL it tried
+# when none has it, and refuses a share URL on a host that does not serve v4 pages
+LANDBOT_CONFIG_BASE="http://127.0.0.1:$VP/none http://127.0.0.1:$VP" "$V" H-1-AAA "lb-style: guard" >/dev/null 2>&1 && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share did not fall through to the next base"; }
+LANDBOT_CONFIG_BASE="http://127.0.0.1:$VP/a http://127.0.0.1:$VP/b" "$V" H-1-AAA >/dev/null 2>"$T/vs.err"; rc=$?
+{ [ "$rc" = 1 ] && grep -F "$VP/a/H-1-AAA" "$T/vs.err" >/dev/null && grep -F "$VP/b/H-1-AAA" "$T/vs.err" >/dev/null; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share did not name every config URL it tried (rc=$rc)"; }
+env -u LANDBOT_CONFIG_BASE "$V" https://chats.landbot.io/v3/H-1-AAA/index.html >/dev/null 2>&1; [ $? = 65 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share accepted a legacy share host"; }
 kill "$VSRV" 2>/dev/null; wait "$VSRV" 2>/dev/null
 
 # messaging module (2026-10-02): the reply buttons must be ordered after the time with the same reach as
@@ -593,6 +600,28 @@ grep -F 'body.lb-js-messaging [data-lb-part="message-bubble"] > .lb-msg-buttons 
 { grep -F 'Promise.resolve().then(function () { queued = false; render(); })' "$MJ" >/dev/null && grep -F 'if (queued || burst > 40) return;' "$MJ" >/dev/null \
   && grep -F 'setInterval(function () { burst = 0; render(); }, 400);' "$MJ" >/dev/null; } \
   && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL messaging.js: render is not scheduled from the observer with a capped burst"; }
+
+# handoff (2026-10-03): the share URL is the channel's own `url` (landbot.pro, .online or .site, one per brand),
+# never a hardcoded landbot.pro (that 404'd for 87% of September's new web channels); LANDBOT_SHARE_HOST overrides
+HT="$TROOT/ho"; mkdir -p "$HT"; cp "$SRC/handoff" "$HT/"
+cat > "$HT/lb" <<'E'
+#!/usr/bin/env bash
+case "${LANDBOT_API_URL:-v0}" in
+*/v2) echo '{"bot":{"id":4080195}}';;
+*/v1) jq -n --arg u "${MOCK_ROW_URL-https://landbot.online/v3/H-9-ABC/index.html}" '{total:1,channels:[({id:9,uuid:"cu-9",token:"H-9-ABC",landbot:{version:"3.1.0"}} + (if $u != "" then {url:$u} else {} end))]}';;
+*) echo '{"data":{"channels":["cu-9"]}}';;
+esac
+E
+chmod +x "$HT/handoff" "$HT/lb"
+out="$(env -u LANDBOT_SHARE_HOST -u LANDBOT_API_URL "$HT/handoff" b-1 2>/dev/null)"
+case "$out" in *" share=https://landbot.online/v3/H-9-ABC/index.html "*) pass=$((pass+1));; *) fail=$((fail+1)); echo "FAIL handoff did not print the channel's own url: $out";; esac
+out="$(env -u LANDBOT_API_URL MOCK_ROW_URL=https://landbot.site/v3/H-9-ABC/index.html "$HT/handoff" b-1 2>/dev/null)"
+case "$out" in *" share=https://landbot.site/v3/H-9-ABC/index.html "*) pass=$((pass+1));; *) fail=$((fail+1)); echo "FAIL handoff did not follow a landbot.site url: $out";; esac
+out="$(env -u LANDBOT_API_URL LANDBOT_SHARE_HOST=https://x.test/v3 "$HT/handoff" b-1 2>/dev/null)"
+case "$out" in *" share=https://x.test/v3/H-9-ABC/index.html "*) pass=$((pass+1));; *) fail=$((fail+1)); echo "FAIL LANDBOT_SHARE_HOST no longer overrides the share host: $out";; esac
+out="$(env -u LANDBOT_SHARE_HOST -u LANDBOT_API_URL MOCK_ROW_URL= "$HT/handoff" b-1 2>/dev/null)"; rc=$?
+{ [ "$rc" = 2 ] && case "$out" in *" share=? "*) true;; *) false;; esac; } && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL a channel without url was not reported as partial (rc=$rc): $out"; }
+! grep -E 'landbot\.pro' "$SRC/handoff" | grep -v '^#' >/dev/null && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL handoff hardcodes landbot.pro again"; }
 
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]

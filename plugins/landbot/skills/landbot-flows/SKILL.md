@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Bots API v0-alpha — read 
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/lb" GET *) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --whoami) Bash("${CLAUDE_SKILL_DIR}/scripts/setup-token" --check) Bash("${CLAUDE_SKILL_DIR}/scripts/handoff" *) Bash("${CLAUDE_SKILL_DIR}/scripts/channel" get *) Bash("${CLAUDE_SKILL_DIR}/scripts/draft-check" *) Bash(jq *) Bash(grep *)
 metadata:
   short-description: Build and edit Landbot bots via the Bots API v0-alpha
-  version: 0.4.6
+  version: 0.4.7
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.4.6`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.4.7`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for the reconciled pilot learnings before building or editing.
 
@@ -112,7 +112,7 @@ Everything below the catalog mutates a real brand's real bots — the ones the t
 
 1. **Create the bot and place the greeting** (Step 2), with its position.
 2. **Publish that first version** (`POST /bots/{id}/versions`, covered by the one yes; nobody has the link yet), and **switch the web chat to v4** if a look was part of the yes (Step 5a). Styling only shows on v4, so the switch comes now, not at the end. The check before this publish warns that the greeting has no next step yet; that is expected here, and only warnings on the final publish go in the hand-back.
-3. **Open the share URL in the pane** (`preview_start` with `url`, from `handoff`). Say once: "Watch the pane on the right: I'll build it there." The person may be asked to allow `landbot.pro`; that is theirs.
+3. **Open the share URL in the pane** (`preview_start` with `url`, from `handoff`). Say once: "Watch the pane on the right: I'll build it there." The person may be asked to allow the share host (`landbot.pro`, `landbot.online` or `landbot.site`); that is theirs.
 4. **Style it now, on the greeting alone, when a look was part of the yes** (`landbot-style` Steps 1–3): push the first pass as soon as the pane shows the greeting — the theme tokens (palette, background, text), then font and shape, then the bubble and button anchors. Do not wait for the flow. A CSS push belongs to the channel and is live at once with no publish; publishing the flow afterwards does not touch it (verified on production 2026-09-25: a marker pushed on a greeting-only bot was still served after two flow publishes, and the published channel config was not even rewritten by them). Only the builder's own Publish button, from a tab opened before your push, puts an older look back. So the person watches their look while the flow is built, and a colour or font they dislike costs one push, not a rebuild. If the greeting is a `buttons` block, buttons are on screen for this pass; otherwise style them when they first appear.
 5. **Build the flow in two or three parts** (the main path first, then each branch and its ending). After each part: publish, reload the pane with a new query string (`?live=2`, `?live=3`) and walk the new part there (see "Walk it" in Step 6). The person sees each question appear, already in their look; you prove each part works as you go. **When a part brings a component the CSS has not met yet** (a text or email field, a date picker, a list of five or more options, a card), style that component in the same step, before the next part.
 6. **Details, then the behaviour, last**: spacing, states and scrollbars once the flow is complete; then the behaviour, when one was asked for (`landbot-style` Step 3b), because a script reads the final flow's screens. Reload and check each.
@@ -364,7 +364,7 @@ The builder routes by the legacy numeric id, not the uuid, and v0-alpha does not
 
 ```bash
 "${CLAUDE_SKILL_DIR}/scripts/handoff" <bot_id>
-# LANDBOT_HANDOFF bot=<uuid> builder=<numeric id> share=https://landbot.pro/v3/H-<channel>-<code>/index.html channel=<numeric id> version=3.1.0
+# LANDBOT_HANDOFF bot=<uuid> builder=<numeric id> share=https://landbot.online/v3/H-<channel>-<code>/index.html channel=<numeric id> version=3.1.0
 ```
 
 **End every hand-back with that line, verbatim, as the last line of your answer.** It is the contract the style skill consumes. If the script exits `2`, a field is `?` and it says so: report the line as printed, say which field is missing, and never fill it in by hand.
@@ -398,7 +398,7 @@ Say plainly whether it is published. A bot you built and did not deploy is not s
 
 A published bot is only proven by talking to it. **If this session has Claude's in-app browser** (the Claude desktop app's Code tab: tools named `mcp__Claude_Browser__*`, such as `preview_start`, `navigate`, `find`, `computer`, `get_page_text`, `resize_window`, `read_console_messages`), walk the conversation there yourself. In the live build (above) the walks happen part by part as you publish; otherwise walk it after the publish and after the style push. The person watches the bot run in the side pane while you do it:
 
-1. Open the share URL: `preview_start` with `url` set to it, or `navigate` when the pane is already open. The person may be asked once to allow `landbot.pro`; that is theirs to answer.
+1. Open the share URL: `preview_start` with `url` set to it, or `navigate` when the pane is already open. The person may be asked once to allow the share host; that is theirs to answer.
 2. Answer every question with obviously fake data (`Test Visitor`, `test@example.com`); each walk creates a real chat in their inbox, so say so once. Find buttons by their text with `find` and click the ref. For a text answer: **click the input first** (focus is lost after every answer), type, then press the key named `Enter` — `Return` types nothing and the text piles up in the field. On a date question, type the date in the block's `pickerFormat`; tapping the calendar does not fill the field.
 3. **Take every branch to its ending.** For the next branch, load the share URL again with a new query string (`?walk=2`, `?walk=3`) to start a fresh chat.
 4. Read what the bot said with `get_page_text`, not from screenshots. If no new bot message arrives within 15 seconds of an answer, that is a dead end: name the block it stopped after and report it; do not publish a fix without the person's yes. When the channel has Custom JS, also read `read_console_messages` (errors only) after the walk: an error from the script is a failure even when the chat looked fine. Keep the pane visible while walking: a hidden pane slows the page's timers and the chat looks stuck when it is not.

@@ -7,7 +7,7 @@
 # Reads only. Three APIs answer the five fields, and none of them answers all five:
 #   v0-alpha  GET /bots/{uuid}          → the channel uuid(s)
 #   v2        GET /bots/{uuid}/         → the numeric builder id
-#   v1        GET /channels/?limit=&offset= → numeric channel id, share code (H-<id>-...), landbot.version
+#   v1        GET /channels/?limit=&offset= → numeric channel id, share URL (`url`), landbot.version
 #             (paginated, ignores ?bot=; walked to the end)
 # A field that could not be read is printed as `?` and the exit code is 2, so a partial line is
 # never mistaken for a complete one. The token is never printed; `lb` handles it.
@@ -19,7 +19,10 @@ LB="$HERE/lb"
 API_ROOT="${LANDBOT_API_URL:-https://api.landbot.io/v0-alpha}"; API_ROOT="${API_ROOT%/}"; API_ROOT="${API_ROOT%/*}"
 V2="${LANDBOT_API_V2_URL:-$API_ROOT/v2}"
 V1="${LANDBOT_API_V1_URL:-$API_ROOT/v1}"
-SHARE_HOST="${LANDBOT_SHARE_HOST:-https://landbot.pro/v3}"
+# The share URL is the channel's own `url`: Landbot serves each brand on one host, landbot.pro,
+# landbot.online or landbot.site (87% of web channels created in September 2026 were on .online), so a
+# host written here is wrong for most brands. LANDBOT_SHARE_HOST, when set, overrides it (tests only).
+SHARE_HOST="${LANDBOT_SHARE_HOST:-}"
 
 BOT="${1:-}"
 if [ -z "$BOT" ]; then echo "usage: handoff <bot_uuid>" >&2; exit 64; fi
@@ -75,7 +78,12 @@ if [ "$ch_uuid" != "?" ]; then
     channel="$(printf '%s' "$row" | jq -r '.id // "?"')"
     share_code="$(printf '%s' "$row" | jq -r '.token // empty')"
     version="$(printf '%s' "$row" | jq -r '.landbot.version // .version // "?"')"
-    [ -n "$share_code" ] && share="$SHARE_HOST/$share_code/index.html"
+    if [ -n "$SHARE_HOST" ]; then
+      [ -n "$share_code" ] && share="$SHARE_HOST/$share_code/index.html"
+    else
+      share="$(printf '%s' "$row" | jq -r '.url // empty')"
+      [ -n "$share" ] || share="?"
+    fi
   else
     partial=1
   fi
