@@ -1,4 +1,4 @@
-/* lb-js: messaging 0.4.4 — makes a Landbot v4 web chat behave like a messaging app.
+/* lb-js: messaging 0.4.6 — makes a Landbot v4 web chat behave like a messaging app.
    Pairs with messaging.css (append it to the look's CSS). Change only CONFIG below.
    What it does, all on the page and nothing else:
      1. stamps each bubble with the time it first appeared (data-lb-ts) and the first message with a
@@ -9,7 +9,7 @@
         CSS can show it under the header name.
    It only adds attributes, classes and its own elements; it never re-parents Landbot's nodes, never
    reads or sends answers, and on any error the plain chat keeps working (the CSS only styles what
-   this script adds). Extracted from a verified messaging-look demo (2026-09-17/19) and re-checked on 2026-09-23. */
+   this script adds). Extracted from a verified messaging-look demo (2026-09-17/19), re-checked on 2026-09-23 and 2026-10-02. */
 (function () {
   var CONFIG = {
     placeholder: 'Type a message', // the composer's placeholder, also used on question turns
@@ -142,10 +142,20 @@
         if (input && input.getAttribute('placeholder') !== CONFIG.placeholder) input.setAttribute('placeholder', CONFIG.placeholder);
       } catch (e) { stats.error = String(e); }
     }
+    /* render also runs once per batch of page changes, before paint, so a new bubble shows its time in the
+       same frame as its text (the 400 ms tick alone left it 184-317 ms late, measured 2026-10-02). Capped
+       per tick, so the script's own changes can never loop; the tick keeps everything in step regardless. */
+    var queued = false, burst = 0;
     render();
-    setInterval(render, 400);
+    setInterval(function () { burst = 0; render(); }, 400);
     /* v4 re-creates the footer between blocks; put the bar back in the same frame */
-    try { new MutationObserver(function () { try { syncComposer(); } catch (e) { stats.error = String(e); } }).observe(document.body, { childList: true, subtree: true }); }
-    catch (e) { stats.observer = String(e); }
+    try {
+      new MutationObserver(function () {
+        try { syncComposer(); } catch (e) { stats.error = String(e); }
+        if (queued || burst > 40) return;
+        queued = true; burst++;
+        Promise.resolve().then(function () { queued = false; render(); });
+      }).observe(document.body, { childList: true, subtree: true });
+    } catch (e) { stats.observer = String(e); }
   } catch (err) { window.__lbJsError = 'messaging: ' + String(err); }
 })();

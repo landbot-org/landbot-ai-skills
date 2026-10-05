@@ -582,5 +582,17 @@ vok=0; for _ in 1 2 3 4 5 6 7 8 9 10; do LANDBOT_CONFIG_BASE="http://127.0.0.1:$
 LANDBOT_CONFIG_BASE="http://127.0.0.1:$VP" "$V" H-2-BBB "lb-style: guard" >/dev/null 2>&1; [ $? = 1 ] && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL verify-share passed a missing marker"; }
 kill "$VSRV" 2>/dev/null; wait "$VSRV" 2>/dev/null
 
+# messaging module (2026-10-02): the reply buttons must be ordered after the time with the same reach as
+# "> * { order: 0 }", or the time wraps under the last button; and render must also run from the observer
+# (one microtask per batch, capped per tick), or each time shows up to 400 ms after its text
+MC="$HERE/plugins/landbot/skills/landbot-style/modules/messaging.css"; MJ="$HERE/plugins/landbot/skills/landbot-style/modules/messaging.js"
+grep -F 'body.lb-js-messaging [data-lb-part="message-bubble"] > .lb-msg-buttons { order: 2; }' "$MC" >/dev/null \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL messaging.css: .lb-msg-buttons order is weaker than '> * { order: 0 }'"; }
+! grep -E '^\.lb-msg-buttons \{([^}]*;)? *order *:' "$MC" >/dev/null \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL messaging.css: a bare .lb-msg-buttons order rule is outranked and does nothing"; }
+{ grep -F 'Promise.resolve().then(function () { queued = false; render(); })' "$MJ" >/dev/null && grep -F 'if (queued || burst > 40) return;' "$MJ" >/dev/null \
+  && grep -F 'setInterval(function () { burst = 0; render(); }, 400);' "$MJ" >/dev/null; } \
+  && pass=$((pass+1)) || { fail=$((fail+1)); echo "FAIL messaging.js: render is not scheduled from the observer with a capped burst"; }
+
 echo "guards: $pass passed, $fail failed"
 [ "$fail" = 0 ]
