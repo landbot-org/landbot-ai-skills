@@ -17,6 +17,8 @@ So, before every `PUT /draft` or `DELETE /draft/blocks/{id}`:
 
 ## Things the API does that the contract may not say
 
+- **The share host belongs to the brand** (2026-10-03, production: `dim_channels` and live reads of the public configs). Landbot serves a brand's web chats on one of `landbot.pro`, `landbot.online` or `landbot.site`; 10 of 5,041 brands with a channel created since 2026-09-01 have more than one. Of the web channels created in September 2026, 87% were on `.online`, 9% on `.pro`, 4% on `.site`; a share URL on another host answers 404. The v1 channel's `url` and `config_url` carry the right host, and `handoff` prints `url`. Before 0.4.6 it wrote `landbot.pro` for every brand.
+
 - `POST /bots` returned the uuid as `data.id`. Read the actual response.
 - Button payloads needed `$` prefixes; condition outputs were `true` / `false`. Read the variant's `outputs`.
 - An add-blocks request needs at least one block; it is not a connections-only call.

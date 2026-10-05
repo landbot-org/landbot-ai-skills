@@ -45,7 +45,7 @@ Requirements: a Landbot account with the Bots API enabled, `bash`, `curl` and `j
 
 The token is sent to one place: **api.landbot.io**, Landbot's own API, the same server the Landbot app talks to. There is no MCP server, no OAuth and no hosted component. Nothing sits between your machine and that API. Each request carries a user agent naming the plugin version and the coding agent, so Landbot can count plugin use per version; no user, machine or content data is added.
 
-Two hosts are read without the token: **storage.googleapis.com/landbot.pro**, the public bucket that serves published channel configs, to verify a share URL and to preview a draft; and **cdn.landbot.io**, the web chat library that the local preview page loads. The full account of what is written where is in SECURITY.md in the repository.
+Two kinds of host are read without the token: **storage.googleapis.com/landbot.pro**, **/landbot.online** and **/landbot.site**, the public buckets that serve published channel configs (Landbot serves each account on one of the three), to verify a share URL and to preview a draft; and **cdn.landbot.io**, the web chat library that the local preview page loads. The full account of what is written where is in SECURITY.md in the repository.
 
 Privacy: what the plugin reads on your machine, stores and sends is set out in the plugin's [Privacy policy](https://github.com/landbot-org/landbot-ai-skills/blob/main/PRIVACY.md). What Landbot does with the data that reaches its services is covered by Landbot's [Privacy Policy](https://landbot.io/privacy-policy).
 
