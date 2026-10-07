@@ -1,18 +1,17 @@
 # Contributing
 
-One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). How the version is set and bumped is under [Versions](#versions).
+One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, optional `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json` and the Landbot MCP server is declared in `plugins/landbot/.mcp.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). How the version is set and bumped is under [Versions](#versions).
 
 Rules:
 
-- **No token, ever.** No fixture, test, log line or example may contain a real or partial Landbot token. `scripts/lb` is the only thing that reads it, and it passes it to `curl` over stdin.
-- **No bundled schema.** The skills read `GET /openapi.yml` and `GET /blocks` at run time. Do not paste the contract into a skill.
+- **Everything goes through the Landbot MCP server.** No script calls Landbot's API and nothing asks for a token. A capability the server lacks is asked of the server, not worked around here.
+- **No bundled schema.** The skills read the catalog and schemas from the server at run time. Do not paste them into a skill.
 - **Every claim in a REFERENCE.md says when and where it was observed.** Anything observed on production gets a date. Stale is fine; unlabelled is not.
-- **Scripts never print more than they must**, exit non-zero from HTTP 400 up, and write `HTTP <code>` to stderr so a failure cannot be read as a success.
 - Keep `SKILL.md` under about 400 lines. Move long learnings to `REFERENCE.md`.
-- Paths in a `SKILL.md` are written as `${CLAUDE_SKILL_DIR}/scripts/…` (and `${CLAUDE_PLUGIN_ROOT}/skills/…` across skills). Claude Code substitutes them; `scripts/install.sh` writes absolute folders for Codex and Cursor. Never hard-code a home folder.
-- `allowed-tools` pre-approves reads only (`lb GET`, `setup-token --whoami|--check`, `handoff`, `channel get`, `verify-share`). Anything that writes to a bot or channel must keep prompting.
+- Paths in a `SKILL.md` are written as `${CLAUDE_SKILL_DIR}/scripts/…`. Claude Code substitutes them; `scripts/install.sh` writes absolute folders for Codex and Cursor. Never hard-code a home folder.
+- `allowed-tools` pre-approves reads only: `verify-share` and the Landbot MCP server's read tools, named `mcp__plugin_landbot_landbot__<tool>` in Claude Code. Anything that writes to a bot or web chat must keep prompting.
 - Test on a brand that is not a customer's before opening a pull request, and say in the PR which environment you tested against.
-- CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. `smoke/weekly.sh` needs a token and stays out of CI. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
+- CI runs `claude plugin validate --strict` on both manifests, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && smoke/versions.sh && smoke/guards.sh`.
 
 ## Versions
 
@@ -21,9 +20,8 @@ The plugin is the unit that Claude Code and Codex install and update, so it carr
 The same value is repeated, and must match, in:
 
 - each `SKILL.md`: `metadata.version` and the "First line" it tells the agent to print;
-- `VERSION` in `plugins/landbot/skills/landbot-flows/scripts/lb`, sent in the user agent;
 - the header comment of each file in `plugins/landbot/skills/landbot-style/modules/`;
-- the version quoted in `README.md`, `skills.md` and `SECURITY.md`.
+- the version quoted in `README.md` and `skills.md`.
 
 `smoke/versions.sh` checks all of them.
 
