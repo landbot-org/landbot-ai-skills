@@ -83,6 +83,17 @@ Share → Embed in the builder gives you the snippet. Paste it on any page.
 
 Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live block catalog at run time, so a new block type on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
 
+## Upgrading from 0.4
+
+0.5.0 no longer uses the API token or the local state of earlier versions, and cannot remove them for you. The token cannot be rotated, so remove it:
+
+```bash
+security delete-generic-password -a "$USER" -s landbot-api-token   # macOS keychain
+rm -rf ~/.landbot                                                  # drafts, backups and previews of 0.4
+```
+
+On Linux and WSL, also remove the `export LANDBOT_API_TOKEN=…` line from your shell profile.
+
 ## Where data goes
 
 The agent talks to one Landbot host, `mcp.landbot.io`, which acts on your Landbot account with the access you allowed at sign-in. The only other hosts the skills read are `storage.googleapis.com/landbot.pro`, `/landbot.online` and `/landbot.site`, the public buckets that serve published chat configs, to verify a share URL.

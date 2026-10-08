@@ -6,8 +6,6 @@ body:
     attributes:
       value: |
         **Never paste a Landbot credential, or any part of one, in this issue.** Leave out your account email too; this repository is public.
-
-        A `401` or `403` on the first call has three causes, listed in the README; the first one, an account not yet enabled for the Bots API, is fixed through the assistant on https://landbot.io/skills, not through an issue.
   - type: dropdown
     id: agent
     attributes:
@@ -45,9 +43,7 @@ body:
       options:
         - macOS
         - Linux
-        - Windows (WSL)
-    validations:
-      required: true
+        - Windows
   - type: input
     id: bot
     attributes:
@@ -57,7 +53,7 @@ body:
     id: step
     attributes:
       label: What failed
-      description: The step that failed, what you asked for, and what happened instead. Include the `HTTP <code>` line and the error the script printed.
+      description: The step that failed, what you asked for, and what happened instead. Include the error the Landbot tool answered.
     validations:
       required: true
   - type: checkboxes
