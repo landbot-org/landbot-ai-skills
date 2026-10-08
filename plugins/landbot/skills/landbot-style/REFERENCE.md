@@ -8,8 +8,7 @@ Facts observed on production Landbot during September 2026. Verify on the target
 - On `3.0.0` the Custom CSS is injected as `<style id="custom-styles">` and reaches nothing: the legacy renderer has no `data-lb-*` anchors and its tokens are not the ones in the catalog.
 - The published config for a channel is public: `https://storage.googleapis.com/<host>/v3/H-<channel>-<code>/index.json`, where `<host>` is the share URL's host: `landbot.pro`, `landbot.online` or `landbot.site`, one per brand (2026-10-03: 87% of web channels created in September were on `landbot.online`; a config is in one bucket only). It carries `version`, `use_surrogate_interaction` (true on v4) and `style` (the Custom CSS, **only on non-Sandbox plans**). `scripts/verify-share` reads it.
 - The builder's **Preview** (the button next to Publish) renders the channel's draft, Custom CSS included: verified 2026-09-25 on a `3.1.0` channel, a draft written with `"autosave": true` showed in the preview's chat frame while the published config did not carry it. The share URL shows what visitors get.
-- A draft has no public URL: the test channel's own index.json and share page answer 404 (2026-09-26, probe channel 3517949). The share page is only `new Landbot.Native(<published index.json>)`, so `channel preview` builds the same page locally with the draft's channel settings over the published config. Served from `http://127.0.0.1` it rendered the v4 chat with the swapped CSS in the in-app browser (10 `data-lb-part` elements); opened as `file://` it stalled at the loader (headless Chrome, 15 s), and the in-app browser does not run local files (both 2026-09-26). It shows the look, never the draft's flow.
-- `channel publish` makes the plugin's own draft live the way the builder's Publish does (live PATCH, no `autosave`, every field sent). Verified 2026-09-26 on production, see `landbot-flows/REFERENCE.md`.
+- A draft has no public URL: the test channel's own index.json and share page answer 404 (2026-09-26, probe channel 3517949). The builder's Preview is the only place to see a draft before it is published.
 
 ## 2. Apply mechanics
 
@@ -32,9 +31,9 @@ Avatars are images from the bot configuration, not colours. Multi-select `option
 - On `3.1.0`, `ask_yes_no` never renders and `code` blocks are skipped silently. Build Yes/No as `buttons`. This belongs to the flow, but a styling request is often where it is first noticed.
 - Enter submits short text inputs on `3.1.0`.
 - Input-row trap: the submit wrapper inside `input-field` is full width. Any rule that turns the row into a flex container lets it swallow the width and the `<input>` collapses to about 23 px. Pair it with `> input { flex:1 1 0%; width:auto; min-width:0 }` and `> div { flex:0 0 auto; width:auto }`, then type real text and measure `input.getBoundingClientRect().width`.
-- Channel Custom JS (Design › Custom code › Add JS, the channel's `foot`) runs on the share page on `3.1.0`. It is a separate surface from flow `code` blocks. Landbot serves it only to accounts with the Custom Code feature (the trial has it). Where it is missing, the script is stored and not served: `channel js` reads the published config and says so. A look must never need its script to work.
-- Use it for behaviour only, when asked and authorised, and never for data. `scripts/channel js` accepts the ready-made `modules/` (messaging, steps) as they ship, with only their CONFIG values changed; any other script needs `--custom`, the person's yes to a custom script, and passes a lint that is not a security boundary.
-- A dark look also needs the channel's `design` colours, or the page shows a white loader before the chat draws. This plugin does not write `design`; say so when a dark look is asked for.
+- Channel Custom JS (Design › Custom code › Add JS, the channel's `foot`) runs on the share page on `3.1.0`. It is a separate surface from flow `code` blocks. Landbot serves it only to accounts with the Custom Code feature (the trial has it). Where it is missing, the script is stored and not served. A look must never need its script to work.
+- Use it for behaviour only, when asked, and never for data. The MCP server does not write it: the person pastes it in the builder.
+- A dark look also needs the channel's `design` colours, or the page shows a white loader before the chat draws. The MCP server does not write `design`: the person sets those colours in the builder's Design tab; say so when a dark look is asked for.
 
 ## 5. Welcome screens on form-style replicas
 

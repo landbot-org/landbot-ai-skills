@@ -22,7 +22,7 @@ This repository is a plugin marketplace for Claude Code and Codex. It has one pl
 
 - A change to any file under `plugins/` must raise the version in `plugins/landbot/.claude-plugin/plugin.json`. Claude Code and Codex only update people who already installed the plugin when that version changes.
 - While on `0.x`: `feat` or `!` raises the minor; `fix` and any other type raise the patch. Changes outside `plugins/` do not bump. Moving to `1.0` is not decided by a change type.
-- The same version is repeated in each `SKILL.md` (twice), `VERSION` in `plugins/landbot/skills/landbot-flows/scripts/lb`, the header of each file in `plugins/landbot/skills/landbot-style/modules/`, `README.md`, `skills.md` and `SECURITY.md`. Change all of them together. `marketplace.json` must not declare a version.
+- The same version is repeated in each `SKILL.md` (twice), the header of each file in `plugins/landbot/skills/landbot-style/modules/`, `README.md` and `skills.md`. Change all of them together. `marketplace.json` must not declare a version.
 - `smoke/versions.sh` checks that they agree. `smoke/version-bump.sh origin/main` checks that the version went up.
 
 ## Tags
@@ -38,7 +38,7 @@ This repository is a plugin marketplace for Claude Code and Codex. It has one pl
 
 ## Secrets
 
-- Never write a Landbot API token, or any part of one, in code, tests, logs, commits, pull requests or issues. It cannot be rotated.
+- Never write a Landbot credential, or any part of one, in code, tests, logs, commits, pull requests or issues.
 - Security problems go through GitHub's private vulnerability reporting, never a public issue. See `SECURITY.md`.
 
 ## Checks to run before pushing

@@ -1,6 +1,6 @@
 # Landbot skills for coding agents
 
-Describe a conversation to Claude, Codex or Cursor; get a published Landbot bot with your own look, on a URL you can share or embed. The agent builds the flow through Landbot's Bots API, publishes when you say so, styles the web chat and checks the result on the live share URL.
+Describe a conversation to Claude, Codex or Cursor; get a published Landbot bot with your own look, on a URL you can share or embed. The agent builds the flow through the Landbot MCP server, publishes when you say so, styles the web chat and checks the result on the live share URL.
 
 What people build with it: lead-qualification bots, one-question-at-a-time forms, product configurators that end in a quote request, step-by-step lessons, AI assistants that answer from your docs and hand over to a human. Every one of them keeps Landbot's builder, inbox, integrations and WhatsApp channel underneath.
 
@@ -8,16 +8,16 @@ One plugin, `landbot`, with two skills:
 
 | Skill | What it does |
 |---|---|
-| `landbot-flows` | Reads the live block catalog, creates the bot, places and wires blocks, sets up an AI agent block, publishes when you say so, puts the web chat on the current renderer, and hands back the builder link plus a one-line handoff. |
-| `landbot-style` | Turns "make it look like our site / dark / like a form" into one Custom CSS block, pushes it to the channel (or tells you where to paste it) and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code feature (the trial has it); the chat works without them. |
+| `landbot-flows` | Reads the live block catalog, creates the bot, places and wires blocks, sets up an AI agent block, puts the web chat on the current renderer, publishes when you say so, and hands back the builder link and the share URL. |
+| `landbot-style` | Turns "make it look like our site / dark / like a form" into one Custom CSS block, applies it to the web chat (or tells you where to paste it) and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which you paste in the builder and Landbot serves to accounts with the Custom Code feature (the trial has it); the chat works without them. |
 
-Requirements: a Landbot account (free to create; the 14-day trial includes the API token), `bash`, `curl`, `jq`. macOS, Linux or WSL.
+Requirements: a Landbot account (free to create) and a coding agent that connects to remote MCP servers.
 
 ## Install
 
 Pick your agent. Each install gives you both skills.
 
-**Claude desktop app, Code tab (recommended), no terminal.** Open **Customize › Plugins**, choose **Add marketplace**, paste `landbot-org/landbot-ai-skills`, then install **landbot**. Say "set up my Landbot token" in a new session in the Code tab. There the agent builds your chat live in the app's built-in browser, beside the conversation: you watch each question appear and the look change step by step, and it talks to the bot on every branch and checks it at desktop and phone width. (Cowork runs the skills too; it has no browser pane, and it is not tested end to end yet.)
+**Claude desktop app, Code tab (recommended), no terminal.** Open **Customize › Plugins**, choose **Add marketplace**, paste `landbot-org/landbot-ai-skills`, then install **landbot**, and describe your bot in a new session in the Code tab. There the agent builds your chat live in the app's built-in browser, beside the conversation: you watch each question appear and the look change step by step, and it talks to the bot on every branch and checks it at desktop and phone width. (Cowork runs the skills too; it has no browser pane, and it is not tested end to end yet.)
 
 **Claude Code (terminal).** Your agent can run these itself; you can also type them:
 
@@ -41,7 +41,13 @@ codex plugin marketplace add landbot-org/landbot-ai-skills
 codex plugin add landbot@landbot-skills
 ```
 
-Or copy the skill folders directly (works on every Codex version):
+Then connect the Landbot MCP server:
+
+```bash
+codex mcp add landbot --url https://mcp.landbot.io/mcp && codex mcp login landbot
+```
+
+Or copy the skill folders directly (works on every Codex version), and connect the server the same way:
 
 ```bash
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh codex
@@ -53,47 +59,44 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
 ```
 
-Each skill prints its version (`landbot-flows 0.4.6`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Then add `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
-## Your token
+Each skill prints its version (`landbot-flows 0.5.0`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
-1. Open https://app.landbot.io/gui/settings/account and copy the read-only **API token** field.
-2. In your agent, say: `set up my Landbot token`. On macOS the skill reads it from the clipboard, checks it against the API, stores it in your keychain and clears the clipboard. On Linux and Windows it asks you to `export LANDBOT_API_TOKEN='…'` in your own shell, then checks it.
-3. **Never paste the token into the chat.** The skills refuse a token that arrived that way, because a Landbot token cannot be rotated. Nothing in this repo stores your token anywhere but your own keychain or shell.
+## Signing in
+
+The first time the agent uses Landbot, your browser opens Landbot's sign-in and asks you to allow access. There is no token to copy: the agent acts as you, on your brand, with the access you allowed, and you can sign out from the agent (`/mcp` in Claude Code) at any time.
 
 ## First bot
 
 > Build a lead-qualification bot for `<your site>`: greet, ask name, email and company size, tell companies over 50 people a person will follow up, thank the rest. Publish it and give me the builder link and the share URL.
 
-The skill names the account it is about to write to, asks once before building (that yes covers the publish, the switch to the current web chat and, if you described a look, the CSS it pushes) or before every write on a bot you already had, and ends with one line:
+The skill builds the bot and styles it before anything is live, then asks once before publishing it. On a bot you already had, it asks before every change. It ends with the builder link, the share URL and a plain description of the conversation.
 
-```
-LANDBOT_HANDOFF bot=<uuid> builder=<id> share=https://landbot.online/v3/H-<channel>-<code>/index.html channel=<id> version=3.1.0
-```
-
-Then: "make it look like `<your site>`". The style skill asks, writes the CSS to the channel (live at once on a bot it created in this build; on a bot you already had, to the bot's draft, which it shows you as a local preview and publishes when you say yes) and verifies the share URL. If it tells you to paste instead, it gives the three clicks (Design › Custom code › Add CSS, Apply, Publish).
+Then: "make it look like `<your site>`". On a bot that was never published the look applies at once; on a published one it goes to the bot's draft, which you publish from the builder.
 
 ## Embed
 
 Share → Embed in the builder gives you the snippet. Paste it on any page.
 
-## 401 or 403 on the first call
-
-The token check answers `401` or `403` for three different reasons, and the API does not say which:
-
-1. **Your account is not enabled for the Bots API yet.** The API is in preview and Landbot switches it on per account. Ask the assistant on https://landbot.io/skills or book the 15-minute setup call there, and give your account email in that private channel (never in a public issue, and never the token); we enable it. Nothing to fix on your side.
-2. The token was not copied whole. Copy the field again and run `set up my Landbot token` once more.
-3. Your user lacks the "view chatbot" or "edit chatbot" permission in the workspace.
-
-Do not paste the token into the chat to "check it".
-
 ## Updates
 
-Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live API contract at run time, so a new block type on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
+Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live block catalog at run time, so a new block type on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
 
-## What this is not
+## Upgrading from 0.4
 
-Not a hosted MCP server, no OAuth, no server that holds your token. Everything runs on your machine with your credentials, as bash scripts with `curl` and `jq`. Your token goes to one place, `api.landbot.io`, Landbot's own API. The only other hosts the skills touch are `storage.googleapis.com/landbot.pro`, `/landbot.online` and `/landbot.site`, the public buckets that serve published channel configs (Landbot serves each account on one of the three) (read without a token, to verify a share URL and to preview a draft), and `cdn.landbot.io`, the web chat library the local preview page loads. Chat apps (claude.ai, ChatGPT) cannot run these skills yet.
+0.5.0 no longer uses the API token or the local state of earlier versions, and cannot remove them for you. The token cannot be rotated, so remove it:
+
+```bash
+security delete-generic-password -a "$USER" -s landbot-api-token   # macOS keychain
+rm -rf ~/.landbot                                                  # drafts, backups and previews of 0.4
+```
+
+On Linux and WSL, also remove the `export LANDBOT_API_TOKEN=…` line from your shell profile.
+
+## Where data goes
+
+The agent talks to one Landbot host, `mcp.landbot.io`, which acts on your Landbot account with the access you allowed at sign-in. The only other hosts the skills read are `storage.googleapis.com/landbot.pro`, `/landbot.online` and `/landbot.site`, the public buckets that serve published chat configs, to verify a share URL.
 
 ## Privacy
 
@@ -101,7 +104,7 @@ What the plugin reads on your machine, stores and sends, and to whom, is set out
 
 ## Feedback
 
-Open an issue here with the bot id and the step that failed; never the token.
+Open an issue here with the bot id and the step that failed.
 
 ## License
 

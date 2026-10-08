@@ -5,9 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Never paste your Landbot API token, or any part of it, in this issue.** It cannot be rotated. Leave out your account email too; this repository is public.
-
-        A `401` or `403` on the first call has three causes, listed in the README; the first one, an account not yet enabled for the Bots API, is fixed through the assistant on https://landbot.io/skills, not through an issue.
+        **Never paste a Landbot credential, or any part of one, in this issue.** Leave out your account email too; this repository is public.
   - type: dropdown
     id: agent
     attributes:
@@ -45,19 +43,17 @@ body:
       options:
         - macOS
         - Linux
-        - Windows (WSL)
-    validations:
-      required: true
+        - Windows
   - type: input
     id: bot
     attributes:
       label: Bot id
-      description: The `bot=` value in the `LANDBOT_HANDOFF` line, if the skill got that far.
+      description: The bot id the skill handed back, if it got that far.
   - type: textarea
     id: step
     attributes:
       label: What failed
-      description: The step that failed, what you asked for, and what happened instead. Include the `HTTP <code>` line and the error the script printed.
+      description: The step that failed, what you asked for, and what happened instead. Include the error the Landbot tool answered.
     validations:
       required: true
   - type: checkboxes
@@ -65,5 +61,5 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: This issue contains no API token, no part of one, and no account email.
+        - label: This issue contains no credential, no part of one, and no account email.
           required: true

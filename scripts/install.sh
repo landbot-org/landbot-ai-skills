@@ -36,5 +36,5 @@ PY
   echo "installed $s $DEST/$s (version $(grep -m1 -oE 'landbot-[a-z]+ [0-9]+\.[0-9]+\.[0-9]+' "$DEST/$s/SKILL.md"))"
 done
 echo
-echo "Next: copy your API token from https://app.landbot.io/gui/settings/account, then in your agent say:"
-echo "  set up my Landbot token"
+echo "Next: connect the Landbot MCP server, https://mcp.landbot.io/mcp, in your agent and sign in."
+echo "  Codex: codex mcp add landbot --url https://mcp.landbot.io/mcp && codex mcp login landbot"

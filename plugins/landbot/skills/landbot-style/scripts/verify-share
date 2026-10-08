@@ -24,7 +24,7 @@ GCS="https://storage.googleapis.com"
 if [ -n "${LANDBOT_CONFIG_BASE:-}" ]; then BASES="$LANDBOT_CONFIG_BASE"
 elif [[ "$IN" =~ ^https?://(landbot\.(pro|online|site))/ ]]; then BASES="$GCS/${BASH_REMATCH[1]}/v3"
 elif [[ "$IN" =~ ^https?:// ]]; then
-  echo "unsupported share host in $IN: v4 share pages are served on landbot.pro, landbot.online or landbot.site. Take the share URL from the handoff line." >&2; exit 65
+  echo "unsupported share host in $IN: v4 share pages are served on landbot.pro, landbot.online or landbot.site. Take the share URL from `share_url` in `get_web_chat`." >&2; exit 65
 else BASES="$GCS/landbot.pro/v3 $GCS/landbot.online/v3 $GCS/landbot.site/v3"; fi
 body=""; CONFIG_URL=""; tried=""
 for base in $BASES; do
