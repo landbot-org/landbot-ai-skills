@@ -28,7 +28,7 @@ Avatars are images from the bot configuration, not colours. Multi-select `option
 
 ## 4. Runtime facts that change what you build
 
-- On `3.1.0`, `ask_yes_no` never renders and `code` blocks are skipped silently. Build Yes/No as `buttons`. This belongs to the flow, but a styling request is often where it is first noticed.
+- On `3.1.0`, `ask_yes_no` never renders. Build Yes/No as `buttons`. This belongs to the flow, but a styling request is often where it is first noticed.
 - Enter submits short text inputs on `3.1.0`.
 - Input-row trap: the submit wrapper inside `input-field` is full width. Any rule that turns the row into a flex container lets it swallow the width and the `<input>` collapses to about 23 px. Pair it with `> input { flex:1 1 0%; width:auto; min-width:0 }` and `> div { flex:0 0 auto; width:auto }`, then type real text and measure `input.getBoundingClientRect().width`.
 - Channel Custom JS (Design › Custom code › Add JS, the channel's `foot`) runs on the share page on `3.1.0`. It is a separate surface from flow `code` blocks. Landbot serves it only to accounts with the Custom Code feature (the trial has it). Where it is missing, the script is stored and not served. A look must never need its script to work.

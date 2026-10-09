@@ -11,8 +11,8 @@ What earlier builds learned on production Landbot. The Landbot MCP server's tool
 
 ## What the visitor runtime does on v4 (`3.1.0`)
 
-- `ask_yes_no` never renders ("Thinking..." forever). `code` blocks are skipped silently. Use `buttons` for Yes/No; do not rely on `code`.
-  Checked 2026-09-22 on one published flow, before and after the channel's switch to `3.1.0`. On `3.0.0` its `code` block ran: the page title changed, a window variable was set, a console line and a network request appeared. On `3.1.0` none of the four happened, and the chat went straight on to the next block. The `ask_yes_no` after it never appeared on `3.1.0` (waited over 20 s).
+- `ask_yes_no` never renders on `3.1.0` ("Thinking..." forever). It is a known v4 incompatibility the builder flags on save (checked 2026-09-22). Use `buttons` for Yes/No.
+- `code` blocks run on `3.1.0` (checked 2026-10-09).
 - On `3.1.0` the `ask_yes_no` question IS sent: the inbox shows it with its buttons. Only the visitor's page never draws it, so the visitor is stuck while the chat looks normal to an agent reading the inbox.
 - A bot open in the builder overwrites writes made elsewhere on its next save, and `edited_at` does not move (2026-09-22). Opening a bot and leaving it untouched changed nothing in 60 s.
 - `https://app.landbot.io/gui/chats_v4/<chat uuid>` opens that exact chat in the inbox (2026-09-22).
