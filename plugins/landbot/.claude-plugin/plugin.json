@@ -1,7 +1,7 @@
 {
   "name": "landbot",
   "description": "Build, style and publish Landbot bots from your coding agent. Two skills: landbot-flows builds and edits the flow through the Landbot MCP server (live block catalog, AI agent block, publish on your say-so); landbot-style turns a brief into Custom CSS for the v4 web chat and verifies it on the share URL. You sign in to Landbot in your browser; there is no token to copy.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": {
     "name": "Landbot",
     "url": "https://landbot.io"

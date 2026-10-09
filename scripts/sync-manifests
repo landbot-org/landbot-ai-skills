@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Claude Code and Codex read .claude-plugin/. Cursor does not: it lists a multi-plugin repo from
+# .cursor-plugin/marketplace.json and resolves each entry through <source>/.cursor-plugin/plugin.json.
+# Codex finds .claude-plugin/ first for both files and never reads the Cursor ones.
+# The Claude files are the source; the Cursor files are derived from them and never edited by hand.
+#
+#   scripts/sync-manifests          rewrite plugins/landbot/.cursor-plugin/plugin.json and .cursor-plugin/marketplace.json
+#   scripts/sync-manifests --check  exit 1 when either differs from what the Claude files say (CI runs this)
+set -euo pipefail
+cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
+SRC=plugins/landbot/.claude-plugin/plugin.json
+MKT=.claude-plugin/marketplace.json
+MCP=plugins/landbot/.mcp.json
+
+# Cursor's schemas (github.com/cursor/plugins, schemas/) refuse any key they do not list, $schema
+# included, allow only name and email in author and owner, and want strings where they ask for
+# them. So only the listed keys are copied and an absent value is dropped, never written as null.
+NONULL='def nonull: with_entries(select(.value != null));'
+
+# Claude Code reads the plugin's MCP servers from .mcp.json by name; Cursor reads them from the path in mcpServers.
+cursor_plugin() {
+  local mcp=null; [ -f "$MCP" ] && mcp='"./.mcp.json"'
+  jq --argjson mcp "$mcp" "$NONULL"'{
+    name, version, description,
+    author: (.author | if . then {name, email} | nonull else null end),
+    homepage, repository, license, keywords,
+    mcpServers: $mcp
+  } | nonull' "$SRC"
+}
+
+cursor_marketplace() {
+  jq "$NONULL"'{
+    name,
+    owner: (.owner | if . then {name, email} | nonull else null end),
+    metadata: ({description: (.description // .metadata.description)} | nonull),
+    plugins: [.plugins[] | {name, source: (.source | ltrimstr("./")), description} | nonull]
+  } | if .metadata == {} then del(.metadata) else . end | nonull' "$MKT"
+}
+
+write_or_check() {  # generator  target
+  # set -e is off in a function called with ||, so every step that can fail returns on its own
+  local target="$2" want
+  want="$($1)" || return 1
+  if [ "$MODE" = check ]; then
+    if [ ! -f "$target" ] || ! diff -q <(printf '%s\n' "$want") "$target" >/dev/null; then
+      echo "$target is out of date; run scripts/sync-manifests" >&2
+      return 1
+    fi
+  else
+    { mkdir -p "$(dirname "$target")" && printf '%s\n' "$want" > "$target"; } || return 1
+    echo "wrote $target"
+  fi
+}
+
+MODE=write; [ "${1:-}" = "--check" ] && MODE=check
+rc=0
+write_or_check cursor_plugin plugins/landbot/.cursor-plugin/plugin.json || rc=1
+write_or_check cursor_marketplace .cursor-plugin/marketplace.json || rc=1
+[ "$MODE" = check ] && [ "$rc" = 0 ] && echo "derived manifests are in sync"
+exit "$rc"
