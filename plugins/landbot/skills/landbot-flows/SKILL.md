@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.5.1
+  version: 0.5.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.5.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.5.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -38,7 +38,7 @@ Everything the server does acts on the signed-in person's own brand, on producti
 
 ### "Just show me": no description, or "show me"
 
-If the person **asks for a bot** but gives no description, or says "show me" or "just show me", do not interview them. (A question about a block, a draft or the API is not a request for a bot; answer it.) Say in one line what you will build and ask: *"I'll build a lead-qualification bot and publish it so you can try it. Go?"* That yes is the publish yes for this bot (Step 4). Then build the default lead bot: the greeting asks for their name (`ask_question` in the greeting slot), then their work email (`ask_email`), then company size as a `buttons` block (`1–10` / `11–50` / `51+`); `51+` gets a `send_text` saying a person will follow up within a day, the other two a `send_text` thanking them by name. Name it `Lead qualification <MM-DD HH:MM>`; **always create a new bot, never reuse one found by name.** Five blocks, nothing above the `sandbox` tier, no `ask_yes_no`, no `code`. Switch its web chat to v4 (Step 3) and leave Landbot's default look; offer `landbot-style` as the next step. They can change anything afterwards; the point is a working bot on a share URL in one turn, not the right questions.
+If the person **asks for a bot** but gives no description, or says "show me" or "just show me", do not interview them. (A question about a block, a draft or the API is not a request for a bot; answer it.) Say in one line what you will build and ask: *"I'll build a lead-qualification bot and publish it so you can try it. Go?"* That yes is the publish yes for this bot (Step 4). Then build the default lead bot: the greeting asks for their name (`ask_question` in the greeting slot), then their work email (`ask_email`), then company size as a `buttons` block (`1–10` / `11–50` / `51+`); `51+` gets a `send_text` saying a person will follow up within a day, the other two a `send_text` thanking them by name. Name it `Lead qualification <MM-DD HH:MM>`; **always create a new bot, never reuse one found by name.** Five blocks, nothing above the `sandbox` tier, no `ask_yes_no`. Switch its web chat to v4 (Step 3) and leave Landbot's default look; offer `landbot-style` as the next step. They can change anything afterwards; the point is a working bot on a share URL in one turn, not the right questions.
 
 ### Any other bot
 
@@ -48,7 +48,7 @@ When the request describes a look, or the person wants one, ask for it in one se
 
 Build the whole flow, then read `violations` after every write. On a web bot (`channel_family` `landbot`) these are the rules the server cannot check for you:
 
-- **Never place `ask_yes_no` or `code`.** Both are in the catalog and both fail silently on the v4 web chat: `ask_yes_no` shows "Thinking..." forever, `code` is skipped without a log. Build Yes/No as a `buttons` block. Catalog presence is not evidence the chat renders it.
+- **Never place `ask_yes_no`.** It is in the catalog, but the v4 web chat does not render it: the visitor sees "Thinking..." forever. Build Yes/No as a `buttons` block. Catalog presence is not evidence the chat renders it.
 - **On `ask_date`, `format` and `pickerFormat` must agree, and the defaults do not.** `format` is the list of patterns the block accepts (strftime); `pickerFormat` is how the calendar writes the date. Set `pickerFormat` alone and every date the visitor sends is refused, forever, while the draft reports no violation. Set both: `dd/MM/yyyy` → `["%d/%m/%Y"]`, `MM/dd/yyyy` → `["%m/%d/%Y"]`, `yyyy/MM/dd` → `["%Y/%m/%d"]`.
 - **The visitor types the date**: tapping a day in the calendar does not fill the field. So the date question says the format in its own text ("dd/mm/yyyy").
 - **Five or more buttons stop looking like buttons.** From five options the v4 web chat draws a boxed list with a search field. Nothing is broken, but say so when you place them, because the person is picturing buttons.
@@ -76,7 +76,7 @@ A bot's web chat look (the v4 web chat, Custom CSS, the visitor's Back button) i
 1. Switch it to the v4 web chat (`use_v4`) right after `create_bot`: Custom CSS only reaches v4, and there is no switching back.
 2. When there is a look, style it now with `landbot-style`, **before the first publish**, so the first version visitors get already has it. While nothing is published nobody can see it, so this needs no yes.
 
-For a bot the person already had: say that the change goes to the draft and needs their yes; it reaches visitors when they publish from the builder. Before switching such a bot to v4, read its draft: if it uses `ask_yes_no` or `code` blocks, say those steps stop working on the v4 web chat once they publish.
+For a bot the person already had: say that the change goes to the draft and needs their yes; it reaches visitors when they publish from the builder. Before switching such a bot to v4, read its draft: if it uses `ask_yes_no` blocks, say those steps stop working on the v4 web chat once they publish.
 
 ## Step 4 — One yes to publish
 

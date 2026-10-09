@@ -37,7 +37,7 @@ Then **HUMAN** adds `https://mcp.landbot.io/mcp` as a remote MCP server in Curso
 
 **No terminal (Claude desktop app):** the person opens **Customize › Plugins › Add marketplace**, pastes `landbot-org/landbot-ai-skills`, installs **landbot**, then starts a new session **in the Code tab** (Cowork runs the skills too, but not tested end to end, and it has no browser pane).
 
-After installing, check the skill answers with `landbot-flows 0.5.1` as its first line. An older number means a stale copy is also installed; remove it before going on. **The skills load in a new session.** If you installed them inside this running session, you cannot load them yourself: ask the person to type `/reload-plugins` in the chat box, or to start a new session. **If they start a new session, give them the rest of their request to paste there** (for example the "Then build: …" line of the prompt they gave you), because a new session does not see this one.
+After installing, check the skill answers with `landbot-flows 0.5.2` as its first line. An older number means a stale copy is also installed; remove it before going on. **The skills load in a new session.** If you installed them inside this running session, you cannot load them yourself: ask the person to type `/reload-plugins` in the chat box, or to start a new session. **If they start a new session, give them the rest of their request to paste there** (for example the "Then build: …" line of the prompt they gave you), because a new session does not see this one.
 
 ## 3. HUMAN: sign in
 The first Landbot tool call opens Landbot's sign-in in the browser (Codex: `codex mcp login landbot`). The person signs in and allows access. If they are asked again later for more access, that is a new kind of change the server needs their permission for; let them answer it.
@@ -51,6 +51,6 @@ When they described a look, the `landbot-style` skill applies it before the firs
 Offer to add the embed snippet (builder › Share › Embed) to their site's code. **HUMAN** deploys.
 
 ## Limits
-On the v4 web chat use `buttons` for yes/no and do not rely on `code` blocks. Custom CSS needs the trial or a paid plan. Custom JS (the messaging and step-form behaviours) is pasted in the builder and served only to accounts with the Custom Code feature (the trial has it); the chat works without it.
+On the v4 web chat use `buttons` for yes/no. Custom CSS needs the trial or a paid plan. Custom JS (the messaging and step-form behaviours) is pasted in the builder and served only to accounts with the Custom Code feature (the trial has it); the chat works without it.
 
 Help: open an issue at https://github.com/landbot-org/landbot-ai-skills (bot id and step) or use the assistant on the skills page.
