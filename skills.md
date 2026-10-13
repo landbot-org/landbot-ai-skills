@@ -1,6 +1,6 @@
 # Landbot AI skills: setup instructions for coding agents
 
-You are a coding agent (Claude Code, the Claude desktop app, Codex or Cursor) and a person asked you to set up the Landbot skills. Follow these steps in order. Steps marked **HUMAN** are done by the person: say what you need, then stop and wait.
+You are an AI assistant (Claude Code, the Claude desktop app, claude.ai, Codex or Cursor) and a person asked you to set up the Landbot skills. Follow these steps in order. Steps marked **HUMAN** are done by the person: say what you need, then stop and wait.
 
 **Best place to run this: the Claude desktop app, Code tab.** There the skills show the chat in a browser pane beside the conversation, and walk every branch of the published bot themselves. In a terminal, Codex or Cursor everything works the same, except that the person walks the finished chat instead.
 
@@ -36,6 +36,12 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 Then **HUMAN** adds `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
 **No terminal (Claude desktop app):** the person opens **Customize › Plugins › Add marketplace**, pastes `landbot-org/landbot-ai-skills`, installs **landbot**, then starts a new session **in the Code tab** (Cowork runs the skills too, but not tested end to end, and it has no browser pane).
+
+**claude.ai (web or mobile app, no shell):** you cannot install anything yourself, so skip the commands above. First check whether the Landbot tools are already there (for example `list_bots`). If they are not, **HUMAN** does these, then starts a new chat and pastes their request there:
+- Install **Landbot** from the Claude Directory (https://claude.ai/directory, search "Landbot"). This brings both skills.
+- If the Landbot tools still don't appear in the new chat, add the server: claude.ai › Settings › Connectors › **Add custom connector**, name `Landbot`, URL `https://mcp.landbot.io/mcp`. With the server but no plugin there are no skills; follow the server's own instructions instead.
+
+On claude.ai there is no browser pane, so you cannot walk the published chat yourself: give the person the share URL to try it.
 
 After installing, check the skill answers with `landbot-flows 0.5.1` as its first line. An older number means a stale copy is also installed; remove it before going on. **The skills load in a new session.** If you installed them inside this running session, you cannot load them yourself: ask the person to type `/reload-plugins` in the chat box, or to start a new session. **If they start a new session, give them the rest of their request to paste there** (for example the "Then build: …" line of the prompt they gave you), because a new session does not see this one.
 
