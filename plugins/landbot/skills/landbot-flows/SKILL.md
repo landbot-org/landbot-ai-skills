@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.5.2
+  version: 0.6.0
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.5.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.6.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -54,6 +54,10 @@ Build the whole flow, then read `violations` after every write. On a web bot (`c
 - **Five or more buttons stop looking like buttons.** From five options the v4 web chat draws a boxed list with a search field. Nothing is broken, but say so when you place them, because the person is picturing buttons.
 - **An AI agent's `instructions` stop at 9,000 characters**, though its schema declares no limit. Count before you send; if it is over, shorten it rather than retrying.
 - Name the tier when you place a block that needs one above `sandbox` (`required_tier` in the catalog), so the person knows before, not after: the publish does not check the plan.
+
+### A file the bot shows
+
+A block shows an image, a video, an audio or a document from a public URL. A file already online goes in as it is. A file on the person's machine is uploaded first with `create_media_upload`, which is what the catalog means by `POST /media`. Follow its description: you send the file's raw bytes yourself, in one `PUT` from a shell where the file is, so they never go through the conversation. That `PUT` is the one request you send outside the Landbot tools. The `data.url` it answers is what the block takes. Without a shell, ask the person for a public URL instead. Anyone with that URL can open the file, so upload only what the person wants the bot to show.
 
 ### Lay it out
 
