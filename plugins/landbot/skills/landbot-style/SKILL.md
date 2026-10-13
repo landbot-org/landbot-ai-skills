@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) mcp__plugin_landbot_landbot__get_web_chat
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.5.1
+  version: 0.5.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.5.1`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.5.2`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -20,7 +20,7 @@ This skill reads and writes the chat through the Landbot MCP server (`get_web_ch
 
 `get_web_chat` answers both:
 
-- **`renders_v4`.** The anchors and tokens only exist on the v4 web chat. On the legacy one the CSS saves and **changes nothing**, and nothing in the builder warns you. If it is false, `update_web_chat` with `use_v4` switches it (there is no switching back): for a bot `landbot-flows` created in this conversation, do it; for a bot the person already had, say Custom CSS needs the v4 web chat and get their yes first, warning that `ask_yes_no` and `code` blocks in its flow stop working on v4. Do not generate CSS "just in case".
+- **`renders_v4`.** The anchors and tokens only exist on the v4 web chat. On the legacy one the CSS saves and **changes nothing**, and nothing in the builder warns you. If it is false, `update_web_chat` with `use_v4` switches it (there is no switching back): for a bot `landbot-flows` created in this conversation, do it; for a bot the person already had, say Custom CSS needs the v4 web chat and get their yes first, warning that `ask_yes_no` blocks in its flow stop working on v4. Do not generate CSS "just in case".
 - **Live or draft.** On a bot never published, whose chat has no unpublished changes, a change is **live at once**. Otherwise it goes to the chat's **draft**: visitors get it when the person publishes the bot from the Landbot builder, and the builder's **Preview** shows it before then. Say which, before the first change.
 - **`share_url`**, which Step 4 verifies on.
 

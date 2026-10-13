@@ -11,8 +11,9 @@ What earlier builds learned on production Landbot. The Landbot MCP server's tool
 
 ## What the visitor runtime does on v4 (`3.1.0`)
 
-- `ask_yes_no` never renders ("Thinking..." forever). `code` blocks are skipped silently. Use `buttons` for Yes/No; do not rely on `code`.
-  Checked 2026-09-22 on one published flow, before and after the channel's switch to `3.1.0`. On `3.0.0` its `code` block ran: the page title changed, a window variable was set, a console line and a network request appeared. On `3.1.0` none of the four happened, and the chat went straight on to the next block. The `ask_yes_no` after it never appeared on `3.1.0` (waited over 20 s).
+- `ask_yes_no` never renders ("Thinking..." forever). Use `buttons` for Yes/No.
+  Checked 2026-09-22 on one published flow, before and after the channel's switch to `3.1.0`: the `ask_yes_no` never appeared on `3.1.0` (waited over 20 s). Not re-checked since.
+- `code` blocks run on `3.1.0`. Checked 2026-10-13 on a published onboarding flow of Landbot's own brand, on its share page: after the first answer a `code` block set a CSS variable on `<html>` and emitted the bot's tracking events, and the Custom CSS reacted to the variable. The widget runs the script with the widget instance as `this` (landbot-3 releases of 29–30 Sep 2026); on 2026-09-22, before them, the same kind of block was skipped silently on `3.1.0` (page title, window variable, console line and network request all missing). Reach the page as `(this && this.document) || document`: on the share page both are the page itself (2026-10-13); in the app's embed the chat lives in an iframe, and that is the form Landbot's own onboarding bot uses there (not re-verified here).
 - On `3.1.0` the `ask_yes_no` question IS sent: the inbox shows it with its buttons. Only the visitor's page never draws it, so the visitor is stuck while the chat looks normal to an agent reading the inbox.
 - A bot open in the builder overwrites writes made elsewhere on its next save, and `edited_at` does not move (2026-09-22). Opening a bot and leaving it untouched changed nothing in 60 s.
 - `https://app.landbot.io/gui/chats_v4/<chat uuid>` opens that exact chat in the inbox (2026-09-22).

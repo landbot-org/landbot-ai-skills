@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.5.1
+  version: 0.5.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.5.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.5.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -48,7 +48,7 @@ When the request describes a look, or the person wants one, ask for it in one se
 
 Build the whole flow, then read `violations` after every write. On a web bot (`channel_family` `landbot`) these are the rules the server cannot check for you:
 
-- **Never place `ask_yes_no` or `code`.** Both are in the catalog and both fail silently on the v4 web chat: `ask_yes_no` shows "Thinking..." forever, `code` is skipped without a log. Build Yes/No as a `buttons` block. Catalog presence is not evidence the chat renders it.
+- **Never place `ask_yes_no`.** It is in the catalog and fails silently on the v4 web chat: the question is sent, the visitor's page never draws it, and the chat shows "Thinking..." forever. Build Yes/No as a `buttons` block. Catalog presence is not evidence the chat renders it. `code` blocks do run on v4 (since the widget release of 30 Sep 2026, checked 2026-10-13): the script gets the widget instance as `this`, so reach the page through `(this && this.document) || document`, not `document` alone.
 - **On `ask_date`, `format` and `pickerFormat` must agree, and the defaults do not.** `format` is the list of patterns the block accepts (strftime); `pickerFormat` is how the calendar writes the date. Set `pickerFormat` alone and every date the visitor sends is refused, forever, while the draft reports no violation. Set both: `dd/MM/yyyy` → `["%d/%m/%Y"]`, `MM/dd/yyyy` → `["%m/%d/%Y"]`, `yyyy/MM/dd` → `["%Y/%m/%d"]`.
 - **The visitor types the date**: tapping a day in the calendar does not fill the field. So the date question says the format in its own text ("dd/mm/yyyy").
 - **Five or more buttons stop looking like buttons.** From five options the v4 web chat draws a boxed list with a search field. Nothing is broken, but say so when you place them, because the person is picturing buttons.
@@ -76,7 +76,7 @@ A bot's web chat look (the v4 web chat, Custom CSS, the visitor's Back button) i
 1. Switch it to the v4 web chat (`use_v4`) right after `create_bot`: Custom CSS only reaches v4, and there is no switching back.
 2. When there is a look, style it now with `landbot-style`, **before the first publish**, so the first version visitors get already has it. While nothing is published nobody can see it, so this needs no yes.
 
-For a bot the person already had: say that the change goes to the draft and needs their yes; it reaches visitors when they publish from the builder. Before switching such a bot to v4, read its draft: if it uses `ask_yes_no` or `code` blocks, say those steps stop working on the v4 web chat once they publish.
+For a bot the person already had: say that the change goes to the draft and needs their yes; it reaches visitors when they publish from the builder. Before switching such a bot to v4, read its draft: if it uses `ask_yes_no` blocks, say those steps stop working on the v4 web chat once they publish.
 
 ## Step 4 — One yes to publish
 
