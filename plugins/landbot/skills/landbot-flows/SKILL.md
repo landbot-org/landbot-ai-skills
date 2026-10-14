@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.6.1
+  version: 0.6.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.6.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.6.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -38,7 +38,7 @@ Everything the server does acts on the signed-in person's own brand, on producti
 
 ### "Just show me": no description, or "show me"
 
-If the person **asks for a bot** but gives no description, or says "show me" or "just show me", do not interview them. (A question about a block, a draft or the API is not a request for a bot; answer it.) Say in one line what you will build and ask: *"I'll build a lead-qualification bot and publish it so you can try it. Go?"* That yes is the publish yes for this bot (Step 4). Then build the default lead bot: the greeting asks for their name (`ask_question` in the greeting slot), then their work email (`ask_email`), then company size as a `buttons` block (`1–10` / `11–50` / `51+`); `51+` gets a `send_text` saying a person will follow up within a day, the other two a `send_text` thanking them by name. Name it `Lead qualification <MM-DD HH:MM>`; **always create a new bot, never reuse one found by name.** Five blocks, nothing above the `sandbox` tier, no `ask_yes_no`, no `code`. Switch its web chat to v4 (Step 3) and leave Landbot's default look; offer `landbot-style` as the next step. They can change anything afterwards; the point is a working bot on a share URL in one turn, not the right questions.
+If the person **asks for a bot** but gives no description, or says "show me" or "just show me", do not interview them. (A question about a block, a draft or the API is not a request for a bot; answer it.) Say in one line what you will build and ask: *"I'll build a lead-qualification bot and publish it so you can try it. Go?"* That yes is the publish yes for this bot (Step 4). Then build the default lead bot: the greeting asks for their name (`ask_question` in the greeting slot), then their work email (`ask_email`), then company size as a `buttons` block (`1–10` / `11–50` / `51+`); `51+` gets a `send_text` saying a person will follow up within a day, the other two a `send_text` thanking them by name. Name it `Lead qualification <MM-DD HH:MM>`; **always create a new bot, never reuse one found by name.** Five blocks, nothing above the `sandbox` tier, no `ask_yes_no`. Switch its web chat to v4 (Step 3) and leave Landbot's default look; offer `landbot-style` as the next step. They can change anything afterwards; the point is a working bot on a share URL in one turn, not the right questions.
 
 ### Any other bot
 
