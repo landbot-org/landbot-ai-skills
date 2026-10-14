@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.6.1
+  version: 0.7.0
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.6.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.7.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -57,7 +57,11 @@ Build the whole flow, then read `violations` after every write. On a web bot (`c
 
 ### A file the bot shows
 
-A block shows an image, a video, an audio or a document from a public URL. A file already online goes in as it is. A file on the person's machine is uploaded first with `create_media_upload`, which is what the catalog means by `POST /media`. Follow its description: you send the file's raw bytes yourself, in one `PUT` from a shell where the file is, so they never go through the conversation. That `PUT` is the one request you send outside the Landbot tools. The `data.url` it answers is what the block takes. Without a shell, ask the person for a public URL instead. Anyone with that URL can open the file, so upload only what the person wants the bot to show.
+A block shows an image, a video, an audio or a document from a public URL. A file already online goes in as it is. A file on the person's machine is uploaded first with `create_media_upload`, which is what the catalog means by `POST /media`. Follow its description: you send the file's raw bytes yourself, in one `PUT` from a shell where the file is, so they never go through the conversation. That `PUT`, and the one for a document an AI agent learns, are the only requests you send outside the Landbot tools. The `data.url` it answers is what the block takes. Without a shell, ask the person for a public URL instead. Anyone with that URL can open the file, so upload only what the person wants the bot to show.
+
+### A document an AI agent learns
+
+A text the person types goes into an agent's knowledge with `add_knowledge_text`, and a page or a document already online with `add_knowledge_website`. A document on the person's machine (PDF, Word, Markdown, plain text, RTF or HTML, up to 5 MB) goes up with `create_knowledge_document_upload`, the same way as a file the bot shows: follow its description, send the raw bytes in one `PUT` from a shell, then list the sources with `list_knowledge_sources` until it is no longer `pending`. A source is live as soon as it is read, even on an agent already published: add only what the person asked for, and on an agent they already had, get their yes first.
 
 ### Lay it out
 
