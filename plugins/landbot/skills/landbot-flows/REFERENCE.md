@@ -10,14 +10,6 @@ What earlier builds learned on production Landbot. The Landbot MCP server's tool
 - An AI agent cannot learn a `landbot.io` page (2026-10-09, on an isolated stack running the production code). `add_knowledge_website` refuses every URL whose domain ends in `landbot.io` with HTTP 422 `knowledge_source_not_accepted` ("The provided source URL is not valid"), which does not say why; `https://example.com` was read and reached `finished`. Tell the person, and offer to add the page's text with `add_knowledge_text` instead.
 - Do not probe production with deliberately invalid writes to discover enums. Read the schema; if it is silent, ask.
 
-## WhatsApp, Messenger and API chat
-
-- Only a web bot gets a channel when it is created. A WhatsApp, Messenger or API chat bot has none until the person connects a number, a page or webhooks in Landbot, and it can be built and published before that (read from Landbot's source, 2026-10-16). On production, 0.7.0 under Codex stopped on a new WhatsApp bot because it had no channel (2026-10-15).
-- Their entry block is the one with id `bot_start`, and on WhatsApp any block may be it (source, 2026-10-16). A draft with none heads from `hidden` and still reports `violations: []`. On production the builder then showed the Starting point connected to nothing, with an error, until the person connected a block to it by hand (2026-10-15, the same bot).
-- WhatsApp delivers `buttons` as plain text: the question, then one numbered line per option, which the contact answers by typing; Messenger sends the same block as native quick replies (read from both senders in Landbot's source, 2026-10-16). The tappable choices on WhatsApp are Reply buttons, up to 3 options, and List buttons, up to 10 (WhatsApp's own limits).
-- A WhatsApp test number connected in Landbot is linked to the bot's test copy, so it talks to what `deploy_draft_to_test` deployed; no such test channel exists for Messenger or API chat (source, 2026-10-16).
-- The catalog lists no WhatsApp-only block, `reply_buttons` and `list` included (`list_blocks` on production, 2026-10-16).
-
 ## What the visitor runtime does on v4 (`3.1.0`)
 
 - `ask_yes_no` never renders on `3.1.0` ("Thinking..." forever). It is a known v4 incompatibility the builder flags on save (checked 2026-09-22). Use `buttons` for Yes/No.

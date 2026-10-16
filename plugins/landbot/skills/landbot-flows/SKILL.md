@@ -82,7 +82,7 @@ The builder draws the diagram from each block's `top` and `left`, so give every 
 
 ## Step 2 — A clean draft is not a verdict
 
-`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for. A bot with no entry block (`welcome` on a web bot, `bot_start` on the others) reports no violation, starts nowhere and is not publishable. Say "the draft broke no rule", never "ready".
+`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for. A bot with no entry block (`welcome` on a web bot, `bot_start` on the others) reports no violation, yet it starts nowhere and the builder will not publish it. Say "the draft broke no rule", never "ready".
 
 ## Step 3 — The look, while the bot has never been published
 
@@ -99,7 +99,7 @@ Hand the bot back (Step 5) and ask, once, naming the bot:
 
 > I've built <name> and it is not live yet. Publish it, so visitors get it on <share URL>? Or I can deploy it to test first, so only you can try it on its test link.
 
-A WhatsApp, Messenger or API chat bot has no share URL to name. On WhatsApp, a test number connected in Landbot talks to what you deploy to test.
+A WhatsApp, Messenger or API chat bot has no share URL to name.
 
 `publish_bot` only after a yes to publishing this bot; `deploy_draft_to_test` only after a yes to that. A request that already said "build and publish it" is the yes. A fix after the publish needs another yes before it is published. A no, or "leave it as a draft", means the bot stays a draft and you stop there.
 
@@ -139,7 +139,7 @@ Never sign in anywhere in that browser, never open `app.landbot.io` for the pers
 
 **No in-app browser** (terminal, Codex, Cursor): give the share URL, list the branches, and ask the person to walk each one to its ending, on a computer and a phone. Until they say they have, say "published", never "works". Say once that in the Claude desktop app's Code tab you could walk every branch yourself in a browser pane beside the chat.
 
-**A WhatsApp, Messenger or API chat bot** cannot be walked in a browser. List the branches and ask the person to walk each one to its ending once it is connected; on WhatsApp, from a phone, through its number or a test number connected in Landbot. Until they say they have, say "published", never "works".
+**A WhatsApp, Messenger or API chat bot** cannot be walked in a browser. List the branches and ask the person to walk each one to its ending once it is connected; on WhatsApp, from a phone. Until they say they have, say "published", never "works".
 
 ## Known gaps
 
