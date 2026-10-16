@@ -55,7 +55,7 @@ Build the whole flow, then read `violations` after every write. These are the ru
 
 On a WhatsApp bot (`whatsapp`):
 
-- **A choice the contact taps is `reply_buttons` (up to 3 options) or `list` (up to 10), when the catalog lists them.** The server accepts `buttons` there too, but WhatsApp delivers it as plain text with the options numbered, and the contact has to type an answer. A yes/no is a choice too. When the catalog does not list the one a choice needs, see Known gaps.
+- **A choice is `reply_buttons` or `list` when the catalog lists them, not `buttons`**, which WhatsApp delivers as plain text with the options numbered. When the catalog does not list the one a choice needs, see Known gaps.
 
 On every bot:
 
@@ -74,7 +74,7 @@ A text the person types goes into an agent's knowledge with `add_knowledge_text`
 
 The builder draws the diagram from each block's `top` and `left`, so give every block its place in the same write that adds it:
 
-- **Leave the start point (`hidden`, at top 0, left 0) where it is, and wire nothing from it**, on every channel. Give the first block the entry id `create_bot` names for the bot's channel (`welcome` on the web, `bot_start` on the others) and anchor on it at top `200`, left `500`.
+- **Leave the start point (`hidden`, at top 0, left 0) where it is, and wire nothing from it**: the bot starts at its greeting, on every channel. Anchor on the greeting at top `200`, left `500`.
 - **Left is how far along the conversation is**: add `350` per step. A block goes to the right of *every* block that points at it, so where two paths meet, the meeting block goes past the furthest of them.
 - **Top is which branch you are on**: a block's first exit keeps its parent's `top`, so the main path is one straight line; the other exits go below it, `250` apart (`250 + 30` per exit below a block with many).
 - **Never give two blocks the same `top` and `left`**: overlapping blocks are invisible in the builder. Check the draft before handing it back.
@@ -82,7 +82,7 @@ The builder draws the diagram from each block's `top` and `left`, so give every 
 
 ## Step 2 — A clean draft is not a verdict
 
-`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for: a bot without its entry block reports none. Say "the draft broke no rule", never "ready".
+`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for. A bot with no greeting reports no violation. Say "the draft broke no rule", never "ready".
 
 ## Step 3 — The look, while the bot has never been published
 
@@ -147,4 +147,4 @@ Never sign in anywhere in that browser, never open `app.landbot.io` for the pers
 
 **The catalog is partial by design** and differs between environments. A block it does not list is not one to place: say so and name it; do not substitute a different block.
 
-**WhatsApp's own blocks can be missing from it.** When a choice on a WhatsApp bot needs `reply_buttons` or `list` and the catalog does not list it, say so before you build, and that `buttons` would reach the contact as numbered text to answer by typing. Place `buttons` there only if the person says that is fine.
+**WhatsApp's own blocks can be missing from it.** When a choice on a WhatsApp bot needs `reply_buttons` or `list` and the catalog does not list it, say so before you build, and that `buttons` would reach the contact as numbered text. Place `buttons` there only if the person says that is fine.
