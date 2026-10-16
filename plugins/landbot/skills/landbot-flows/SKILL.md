@@ -44,7 +44,7 @@ If the person **asks for a bot** but gives no description, or says "show me" or 
 
 For a web bot, when the request describes a look, or the person wants one, ask for it in one sentence before you build ("and what should it look like?"), because the look goes on before the first publish (Step 3).
 
-**Create once**, on the channel the bot is for: `channel_family` is set by `create_bot` and never changes. Never call `create_bot` a second time for the same request. If the answer looked wrong (an error, a timeout, a web bot with no channel), the bot very likely exists anyway: a web bot's channel can attach a few seconds after the create. Find it with `get_bot` or `list_bots` and carry on with it. Only a web (`landbot`) bot that still has no channel after that is a real problem: say so and stop. **A WhatsApp, Messenger or API chat bot is born with no channel**, so do not stop for that: the person connects the number, the page or the webhooks in Landbot, and the bot can be built and published before they do.
+**Create once**, on the channel the bot is for. Never call `create_bot` a second time for the same request. If the answer looked wrong (an error, a timeout, a web bot with no channel), the bot very likely exists anyway: a web bot's channel can attach a few seconds after the create. Find it with `get_bot` or `list_bots` and carry on with it. Only a web (`landbot`) bot that still has no channel after that is a real problem: say so and stop. Any other bot is created without one, as `create_bot` says: carry on.
 
 Build the whole flow, then read `violations` after every write. These are the rules the server cannot check for you. On a web bot (`channel_family` `landbot`):
 
@@ -74,7 +74,7 @@ A text the person types goes into an agent's knowledge with `add_knowledge_text`
 
 The builder draws the diagram from each block's `top` and `left`, so give every block its place in the same write that adds it:
 
-- **Leave the start point (`hidden`, at top 0, left 0) where it is, and wire nothing from it**, on every channel. The bot starts at the block whose id is `welcome` on a web bot (the greeting) and `bot_start` on WhatsApp, Messenger and API chat: give the first block that id. Only a block whose definition says `can_be_welcome: true` may take it, except on WhatsApp, where any block may. Anchor on it at top `200`, left `500`.
+- **Leave the start point (`hidden`, at top 0, left 0) where it is, and wire nothing from it**, on every channel. Give the first block the entry id `create_bot` names for the bot's channel (`welcome` on the web, `bot_start` on the others) and anchor on it at top `200`, left `500`.
 - **Left is how far along the conversation is**: add `350` per step. A block goes to the right of *every* block that points at it, so where two paths meet, the meeting block goes past the furthest of them.
 - **Top is which branch you are on**: a block's first exit keeps its parent's `top`, so the main path is one straight line; the other exits go below it, `250` apart (`250 + 30` per exit below a block with many).
 - **Never give two blocks the same `top` and `left`**: overlapping blocks are invisible in the builder. Check the draft before handing it back.
@@ -82,7 +82,7 @@ The builder draws the diagram from each block's `top` and `left`, so give every 
 
 ## Step 2 — A clean draft is not a verdict
 
-`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for. A bot with no entry block (`welcome` on a web bot, `bot_start` on the others) reports no violation, yet it starts nowhere and the builder will not publish it. Say "the draft broke no rule", never "ready".
+`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for: a bot without its entry block reports none. Say "the draft broke no rule", never "ready".
 
 ## Step 3 — The look, while the bot has never been published
 
@@ -110,7 +110,7 @@ If the publish is refused, nothing changed and the previous version keeps runnin
 **Every bot you create or change ends with links and a description of it.** Never finish with only an id.
 
 - **The builder link**: `builder_url` from `get_bot`. If the bot has an `ai_agent` block, `<builder_url>/ai_agent/<block_id>` opens the agent's own editor.
-- **The share URL**: `share_url` from `get_web_chat`, for a web bot. A WhatsApp, Messenger or API chat bot has none: say instead that, published or not, it reaches nobody until its number, page or webhooks are connected to it in Landbot.
+- **The share URL**: `share_url` from `get_web_chat`, for a web bot. A WhatsApp, Messenger or API chat bot has none: say instead that it reaches nobody until its number, page or webhooks are connected in Landbot.
 - **The description**: what a person talking to the bot goes through, in order, in plain language. Not the block types, the conversation:
 
   > Greets the visitor, asks for their name, then their email, and asks again if the email is not valid. Then it thanks them by name and ends. The AI agent takes over if they ask something the flow does not cover, and hands back to a person when it cannot answer.
