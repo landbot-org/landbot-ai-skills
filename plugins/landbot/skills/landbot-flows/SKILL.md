@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.7.0
+  version: 0.7.1
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.7.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.7.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -42,16 +42,23 @@ If the person **asks for a bot** but gives no description, or says "show me" or 
 
 ### Any other bot
 
-When the request describes a look, or the person wants one, ask for it in one sentence before you build ("and what should it look like?"), because the look goes on before the first publish (Step 3).
+For a web bot, when the request describes a look, or the person wants one, ask for it in one sentence before you build ("and what should it look like?"), because the look goes on before the first publish (Step 3).
 
-**Create once.** Never call `create_bot` a second time for the same request. If the answer looked wrong (an error, a timeout, no channel), the bot very likely exists anyway: its web channel can attach a few seconds after the create. Find it with `get_bot` or `list_bots` and carry on with it. Only a bot that still has no channel after that is a real problem: say so and stop.
+**Create once**, on the channel the bot is for: `channel_family` is set by `create_bot` and never changes. Never call `create_bot` a second time for the same request. If the answer looked wrong (an error, a timeout, a web bot with no channel), the bot very likely exists anyway: a web bot's channel can attach a few seconds after the create. Find it with `get_bot` or `list_bots` and carry on with it. Only a web (`landbot`) bot that still has no channel after that is a real problem: say so and stop. **A WhatsApp, Messenger or API chat bot is born with no channel**, so do not stop for that: the person connects the number, the page or the webhooks in Landbot, and the bot can be built and published before they do.
 
-Build the whole flow, then read `violations` after every write. On a web bot (`channel_family` `landbot`) these are the rules the server cannot check for you:
+Build the whole flow, then read `violations` after every write. These are the rules the server cannot check for you. On a web bot (`channel_family` `landbot`):
 
 - **Never place `ask_yes_no`.** It is in the catalog, but the v4 web chat does not render it: the visitor sees "Thinking..." forever. Build Yes/No as a `buttons` block. Catalog presence is not evidence the chat renders it.
 - **On `ask_date`, `format` and `pickerFormat` must agree, and the defaults do not.** `format` is the list of patterns the block accepts (strftime); `pickerFormat` is how the calendar writes the date. Set `pickerFormat` alone and every date the visitor sends is refused, forever, while the draft reports no violation. Set both: `dd/MM/yyyy` → `["%d/%m/%Y"]`, `MM/dd/yyyy` → `["%m/%d/%Y"]`, `yyyy/MM/dd` → `["%Y/%m/%d"]`.
 - **The visitor types the date**: tapping a day in the calendar does not fill the field. So the date question says the format in its own text ("dd/mm/yyyy").
 - **Five or more buttons stop looking like buttons.** From five options the v4 web chat draws a boxed list with a search field. Nothing is broken, but say so when you place them, because the person is picturing buttons.
+
+On a WhatsApp bot (`whatsapp`):
+
+- **A choice the contact taps is `reply_buttons` (up to 3 options) or `list` (up to 10), when the catalog lists them.** The server accepts `buttons` there too, but WhatsApp delivers it as plain text with the options numbered, and the contact has to type an answer. A yes/no is a choice too. When the catalog does not list the one a choice needs, see Known gaps.
+
+On every bot:
+
 - **An AI agent's `instructions` stop at 9,000 characters**, though its schema declares no limit. Count before you send; if it is over, shorten it rather than retrying.
 - Name the tier when you place a block that needs one above `sandbox` (`required_tier` in the catalog), so the person knows before, not after: the publish does not check the plan.
 
@@ -67,7 +74,7 @@ A text the person types goes into an agent's knowledge with `add_knowledge_text`
 
 The builder draws the diagram from each block's `top` and `left`, so give every block its place in the same write that adds it:
 
-- **Leave the start point (`hidden`, at top 0, left 0) where it is, and wire nothing from it**: on a web bot the bot starts at the greeting slot. Anchor on the greeting at top `200`, left `500`.
+- **Leave the start point (`hidden`, at top 0, left 0) where it is, and wire nothing from it**, on every channel. The bot starts at the block whose id is `welcome` on a web bot (the greeting) and `bot_start` on WhatsApp, Messenger and API chat: give the first block that id. Only a block whose definition says `can_be_welcome: true` may take it, except on WhatsApp, where any block may. Anchor on it at top `200`, left `500`.
 - **Left is how far along the conversation is**: add `350` per step. A block goes to the right of *every* block that points at it, so where two paths meet, the meeting block goes past the furthest of them.
 - **Top is which branch you are on**: a block's first exit keeps its parent's `top`, so the main path is one straight line; the other exits go below it, `250` apart (`250 + 30` per exit below a block with many).
 - **Never give two blocks the same `top` and `left`**: overlapping blocks are invisible in the builder. Check the draft before handing it back.
@@ -75,11 +82,11 @@ The builder draws the diagram from each block's `top` and `left`, so give every 
 
 ## Step 2 — A clean draft is not a verdict
 
-`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for. A web bot with no greeting reports no violation and is still not publishable. Say "the draft broke no rule", never "ready".
+`violations: []` means no rule the server checks fired, not that the bot is publishable or that it is the bot the person asked for. A bot with no entry block (`welcome` on a web bot, `bot_start` on the others) reports no violation, starts nowhere and is not publishable. Say "the draft broke no rule", never "ready".
 
 ## Step 3 — The look, while the bot has never been published
 
-A bot's web chat look (the v4 web chat, Custom CSS, the visitor's Back button) is read with `get_web_chat` and changed with `update_web_chat`. **On a bot never published, a change is live at once; once the bot is published, it goes to the chat's draft**, which visitors get only when the person publishes the bot from the Landbot builder. The answer says which (`target`). So for a bot you create:
+Only a web bot has a look; on WhatsApp, Messenger and API chat, skip this step. A web bot's look (the v4 web chat, Custom CSS, the visitor's Back button) is read with `get_web_chat` and changed with `update_web_chat`. **On a bot never published, a change is live at once; once the bot is published, it goes to the chat's draft**, which visitors get only when the person publishes the bot from the Landbot builder. The answer says which (`target`). So for a bot you create:
 
 1. Switch it to the v4 web chat (`use_v4`) right after `create_bot`: Custom CSS only reaches v4, and there is no switching back.
 2. When there is a look, style it now with `landbot-style`, **before the first publish**, so the first version visitors get already has it. While nothing is published nobody can see it, so this needs no yes.
@@ -92,6 +99,8 @@ Hand the bot back (Step 5) and ask, once, naming the bot:
 
 > I've built <name> and it is not live yet. Publish it, so visitors get it on <share URL>? Or I can deploy it to test first, so only you can try it on its test link.
 
+A WhatsApp, Messenger or API chat bot has no share URL to name. On WhatsApp, a test number connected in Landbot talks to what you deploy to test.
+
 `publish_bot` only after a yes to publishing this bot; `deploy_draft_to_test` only after a yes to that. A request that already said "build and publish it" is the yes. A fix after the publish needs another yes before it is published. A no, or "leave it as a draft", means the bot stays a draft and you stop there.
 
 If the publish is refused, nothing changed and the previous version keeps running: name each violation's block and param in plain language and offer to fix them.
@@ -101,7 +110,7 @@ If the publish is refused, nothing changed and the previous version keeps runnin
 **Every bot you create or change ends with links and a description of it.** Never finish with only an id.
 
 - **The builder link**: `builder_url` from `get_bot`. If the bot has an `ai_agent` block, `<builder_url>/ai_agent/<block_id>` opens the agent's own editor.
-- **The share URL**: `share_url` from `get_web_chat`, for a web bot.
+- **The share URL**: `share_url` from `get_web_chat`, for a web bot. A WhatsApp, Messenger or API chat bot has none: say instead that, published or not, it reaches nobody until its number, page or webhooks are connected to it in Landbot.
 - **The description**: what a person talking to the bot goes through, in order, in plain language. Not the block types, the conversation:
 
   > Greets the visitor, asks for their name, then their email, and asks again if the email is not valid. Then it thanks them by name and ends. The AI agent takes over if they ask something the flow does not cover, and hands back to a person when it cannot answer.
@@ -117,7 +126,7 @@ If the publish is refused, nothing changed and the previous version keeps runnin
 
 ## Step 6 — Walk it, after the publish
 
-A published bot is only proven by talking to it. **If this session has Claude's in-app browser** (the Claude desktop app's Code tab: tools named `mcp__Claude_Browser__*`, such as `preview_start`, `navigate`, `find`, `get_page_text`, `resize_window`, `read_console_messages`), walk it there; the person watches it run in the side pane:
+A published bot is only proven by talking to it. **If this session has Claude's in-app browser** (the Claude desktop app's Code tab: tools named `mcp__Claude_Browser__*`, such as `preview_start`, `navigate`, `find`, `get_page_text`, `resize_window`, `read_console_messages`), walk a web bot there; the person watches it run in the side pane:
 
 1. Open the share URL (`preview_start` with `url`, or `navigate` when the pane is open). The person may be asked once to allow the share host (`landbot.pro`, `landbot.online` or `landbot.site`); that is theirs.
 2. Answer every question with obviously fake data (`Test Visitor`, `test@example.com`); each walk creates a real chat in their inbox, so say so once. Find buttons by their text with `find` and click the ref. For a text answer, **click the input first** (focus is lost after every answer), type, then press the key named `Enter`; `Return` types nothing. On a date question, type the date in the block's `pickerFormat`.
@@ -130,8 +139,12 @@ Never sign in anywhere in that browser, never open `app.landbot.io` for the pers
 
 **No in-app browser** (terminal, Codex, Cursor): give the share URL, list the branches, and ask the person to walk each one to its ending, on a computer and a phone. Until they say they have, say "published", never "works". Say once that in the Claude desktop app's Code tab you could walk every branch yourself in a browser pane beside the chat.
 
+**A WhatsApp, Messenger or API chat bot** cannot be walked in a browser. List the branches and ask the person to walk each one to its ending once it is connected; on WhatsApp, from a phone, through its number or a test number connected in Landbot. Until they say they have, say "published", never "works".
+
 ## Known gaps
 
 **A bot a previous builder built cannot be written.** Every write refuses it, with no violations: the bot itself is the reason, so there is nothing to fix in the request and retrying changes nothing. Reading it still works. Report the message and offer to build a new bot instead.
 
 **The catalog is partial by design** and differs between environments. A block it does not list is not one to place: say so and name it; do not substitute a different block.
+
+**WhatsApp's own blocks can be missing from it.** When a choice on a WhatsApp bot needs `reply_buttons` or `list` and the catalog does not list it, say so before you build, and that `buttons` would reach the contact as numbered text to answer by typing. Place `buttons` there only if the person says that is fine.
