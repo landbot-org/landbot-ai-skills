@@ -1,26 +1,32 @@
 #!/usr/bin/env bash
-# The anchor list in landbot-style's catalog is copied from web-chat, which owns it in
-# js-packages: packages/@landbot-ui/web-chat/src/shared/ui/styling/anchors-catalog.json,
-# an array of { part, role, description }. This rewrites the table between the
-# anchors:start and anchors:end markers of references/style-catalog.md from that file.
+# Provisional: the anchor catalog belongs in the Landbot MCP server, which should serve it the way
+# it serves the block catalog. Until it does, this copies it into landbot-style.
 #
+# web-chat owns the catalog in js-packages: packages/@landbot-ui/web-chat/src/shared/ui/styling/
+# anchors-catalog.json, an array of { part, role, description }. Visitors get the web-chat version
+# landbot-3 pins, so the table is taken from that version's tag, not from js-packages main. This
+# rewrites the table between the anchors:start and anchors:end markers of references/style-catalog.md.
+#
+#   scripts/sync-anchor-catalog --landbot <checkout> --js-packages <checkout>
+#       reads the version in services/landbot-3/package.json on the landbot checkout's origin/main,
+#       then that version's @landbot-ui/web-chat@<version> tag in js-packages (fetch both first)
 #   scripts/sync-anchor-catalog <anchors-catalog.json>
-#   scripts/sync-anchor-catalog --js-packages <checkout> [ref]   read it with git show (ref: origin/main)
 #   either form with --check first: exit 1 when the table differs, write nothing
 set -euo pipefail
 cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
 DOC=plugins/landbot/skills/landbot-style/references/style-catalog.md
 SRC_PATH=packages/@landbot-ui/web-chat/src/shared/ui/styling/anchors-catalog.json
+USAGE="usage: $0 [--check] --landbot <checkout> --js-packages <checkout> | [--check] <anchors-catalog.json>"
 
 MODE=write; [ "${1:-}" = "--check" ] && { MODE=check; shift; }
-if [ "${1:-}" = "--js-packages" ]; then
-  [ -n "${2:-}" ] || { echo "usage: $0 [--check] --js-packages <checkout> [ref]" >&2; exit 64; }
-  json="$(git -C "$2" show "${3:-origin/main}:$SRC_PATH")"
-  from="js-packages ${3:-origin/main} ($(git -C "$2" show "${3:-origin/main}:packages/@landbot-ui/web-chat/package.json" | jq -r '"web-chat " + .version'))"
-elif [ -n "${1:-}" ]; then
+if [ "${1:-}" = "--landbot" ] && [ "${3:-}" = "--js-packages" ] && [ -n "${2:-}" ] && [ -n "${4:-}" ]; then
+  version="$(git -C "$2" show origin/main:services/landbot-3/package.json | jq -er '.dependencies["@landbot-ui/web-chat"]')"
+  json="$(git -C "$4" show "@landbot-ui/web-chat@$version:$SRC_PATH")"
+  from="web-chat $version, the version landbot-3 pins"
+elif [ -n "${1:-}" ] && [ "${1#--}" = "$1" ]; then
   json="$(cat -- "$1")"; from="$1"
 else
-  echo "usage: $0 [--check] <anchors-catalog.json> | --js-packages <checkout> [ref]" >&2; exit 64
+  echo "$USAGE" >&2; exit 64
 fi
 
 table="$(jq -r '

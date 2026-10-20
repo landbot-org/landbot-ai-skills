@@ -6,7 +6,7 @@ Rules:
 
 - **Everything goes through the Landbot MCP server.** No script calls Landbot's API and nothing asks for a token. A capability the server lacks is asked of the server, not worked around here.
 - **No bundled schema.** The skills read the catalog and schemas from the server at run time. Do not paste them into a skill.
-- The anchor table in `landbot-style/references/style-catalog.md` is the exception: the CSS anchors are not served by the MCP server, so the table is copied from web-chat's `anchors-catalog.json` in js-packages. Regenerate it with `scripts/sync-anchor-catalog --js-packages <checkout>` after a web-chat release that changes anchors; never edit it by hand. CI cannot reach js-packages, so it does not check it.
+- The anchor table in `landbot-style/references/style-catalog.md` is a provisional exception: the MCP server does not serve the CSS anchors yet, so the table is copied from web-chat's `anchors-catalog.json`, at the web-chat version landbot-3 pins. Regenerate it with `scripts/sync-anchor-catalog --landbot <checkout> --js-packages <checkout>` when landbot-3 moves to a web-chat release that changes anchors; never edit it by hand. CI cannot reach either repository, so it does not check it. Once the server serves the catalog, the skill reads it from there and the table, the script and this exception go.
 - **Every claim in a REFERENCE.md says when and where it was observed.** Anything observed on production gets a date. Stale is fine; unlabelled is not.
 - Keep `SKILL.md` under about 400 lines. Move long learnings to `REFERENCE.md`.
 - Paths in a `SKILL.md` are written as `${CLAUDE_SKILL_DIR}/scripts/…`. Claude Code substitutes them; `scripts/install.sh` writes absolute folders for Codex and Cursor. Never hard-code a home folder.
