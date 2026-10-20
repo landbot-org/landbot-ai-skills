@@ -50,8 +50,8 @@ Rules: only selectors from the catalog (the parts and their roles are listed in 
 
 - Frame the `box`, never the `control` inside it. Background, border, radius and shadow go on `input-field` only; `input-control` (the `<input>`) and `free-text` (the AI Agent's `<textarea>`) stay transparent with no border and no shadow, and take only font, colour and placeholder. Framing both draws a box inside a box.
 - `input-field` has two layouts in `data-lb-variant`: `inline` (touch, button at the end of the text row) and `stacked` (mouse, button under the text). Style both.
-- Change its padding and the AI Agent box's height with the `--input-group-*` tokens set on `[data-lb-part="input-field"]`, never with `padding` on the inner parts. REFERENCE.md §6 has the tested snippet that puts the button beside the text on desktop, and a temporary patch for chats still on web-chat before 2.26.
-- From web-chat 2.26.0 the phone question's field is an `input-field` too: what you write for `input-field` also styles it.
+- Change its padding and the AI Agent box's height with the `--input-group-*` tokens set on `[data-lb-part="input-field"]`, never with `padding` on the inner parts. REFERENCE.md §6 has the tested snippet that puts the button beside the text on desktop.
+- The phone question's field is an `input-field` too: what you write for `input-field` also styles it.
 
 Say in three or four lines what each layer does and what is left out.
 
@@ -59,7 +59,7 @@ Say in three or four lines what each layer does and what is left out.
 
 The v4 web chat has a native **Back** button: it re-asks the previous question, and the new answer replaces the old one (verified on production 2026-09-18 and again on 16 bots on 2026-09-25). Never hide it to make a chat look like a form, a game or a messaging app — a visitor who taps the wrong answer must be able to change it. Three things the CSS has to handle:
 
-- **It can be invisible on a touch screen.** Its wrapper is hover-only (`opacity-0` until hover) on any device web-chat does not detect as a phone or tablet, a touch laptop for instance. Force it: `div:has(> [data-lb-part="back-button"]) { opacity: 1 !important; }`, and style the button through `[data-lb-part="back-button"]` (web-chat 2.26.0 and later). On an earlier web chat that anchor does not exist: use the off-catalog `button[data-slot="button"][data-size="sm"][data-variant="ghost"]` in its place, and say so in the hand-back.
+- **It can be invisible on a touch screen.** Its wrapper is hover-only (`opacity-0` until hover) on any device the web chat does not detect as a phone or tablet, a touch laptop for instance. Force it: `div:has(> [data-lb-part="back-button"]) { opacity: 1 !important; }`, and style the button through `[data-lb-part="back-button"]`.
 - **Keep it in the page flow.** `position: fixed` traps it inside the scroll area, clipped and untappable. Place it with `order` or margins and style it to fit the look (a small "‹ Back" link is enough).
 - **It is switched per chat.** When `back_button_visible` is false it is not on the page at all, and CSS cannot bring it back: `update_web_chat` with `back_button_visible: true` switches it on (a change like any other, same rules as the CSS).
 
