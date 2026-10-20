@@ -51,7 +51,6 @@ Rules: only selectors from the catalog (the parts and their roles are listed in 
 - Frame the `box`, never the `control` inside it. Background, border, radius and shadow go on `input-field` only; `input-control` (the `<input>`) and `free-text` (the AI Agent's `<textarea>`) stay transparent with no border and no shadow, and take only font, colour and placeholder. Framing both draws a box inside a box.
 - `input-field` has two layouts in `data-lb-variant`: `inline` (touch, button at the end of the text row) and `stacked` (mouse, button under the text). Style both.
 - Change its padding and the AI Agent box's height with the `--input-group-*` tokens set on `[data-lb-part="input-field"]`, never with `padding` on the inner parts. REFERENCE.md §6 has the tested snippet that puts the button beside the text on desktop.
-- The phone question's field is an `input-field` too: what you write for `input-field` also styles it.
 
 Say in three or four lines what each layer does and what is left out.
 
@@ -130,7 +129,7 @@ Report what you checked and what you did not: a full-page share URL check does n
    (b) the brand colours are on the bot bubble and the buttons;
    (c) the brand font is used (`document.fonts.check` is true);
    (d) every button and the input can be reached, and nothing is covered;
-   (e) the input, in both layouts: desktop is `stacked`, phone is `inline`. If the flow has an `ai_agent` block, check its `<textarea>` (`free-text`) as well as the text `<input>`: reach it in the conversation and measure it the same way. On each, the vertical centres of the text, the send button and the field agree within 1px (`getBoundingClientRect()` on `input-control` or `free-text`, `input-submit` and `input-field`), and there is no box inside a box: `getComputedStyle` on the control shows a transparent background, no border and no shadow. Check a phone question too if the flow has one.
+   (e) the input, in both layouts: desktop is `stacked`, phone is `inline`. If the flow has an `ai_agent` block, check its `<textarea>` (`free-text`) as well as the text `<input>`: reach it in the conversation and measure it the same way. On each, the vertical centres of the text, the send button and the field agree within 1px (`getBoundingClientRect()` on `input-control` or `free-text`, `input-submit` and `input-field`), and there is no box inside a box: `getComputedStyle` on the control shows a transparent background, no border and no shadow.
 5. If one fails, fix the CSS and push again. On a published bot that push goes to the draft: say so, and the fix reaches visitors when the person publishes it. Stop after three rounds and report what is still wrong.
 6. With a behaviour module on, also check it did its job at both widths (reply buttons inside the bubble, or the bar filling), and that `read_console_messages` shows no error from it.
 
