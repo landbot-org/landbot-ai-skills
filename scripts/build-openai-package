@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# OpenAI's plugin directory (ChatGPT and Codex) takes a plugin as a ZIP uploaded at platform.openai.com/plugins, in
+# the Agent Plugins layout: plugin.json and mcp.json at the root of the archive, skills/ and assets/ next to them.
+# The listing, the review test cases and the MCP server's settings live in openai/. The skills and the icon are the
+# ones the Claude plugin ships, and the version is the Claude plugin's.
+#
+#   scripts/build-openai-package   write dist/landbot-openai-<version>.zip
+set -euo pipefail
+cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
+PLUGIN=plugins/landbot
+VERSION="$(jq -r .version "$PLUGIN/.claude-plugin/plugin.json")"
+OUT="dist/landbot-openai-$VERSION.zip"
+
+# The limits OpenAI checks at final submission. The portal accepts longer values at upload and refuses them later.
+problems="$(jq -r '
+  .extensions["com.openai"] as $openai | $openai.interface as $listing
+  | (if (.description | length) > 1024 then "description is over 1024 characters" else empty end),
+    ($listing | (.displayName, .shortDescription) | select(length > 30 or test("\n")) | "over 30 characters or not one line: \(.)"),
+    (if ($listing.longDescription | length) > 4000 then "interface.longDescription is over 4000 characters" else empty end),
+    (if ($listing.capabilities | length) > 20 then "interface.capabilities has more than 20 entries" else empty end),
+    ($listing.capabilities[] | select(length > 120) | "capability over 120 characters: \(.)"),
+    (if ($listing.defaultPrompt | length) > 3 then "interface.defaultPrompt has more than 3 prompts" else empty end),
+    ($listing.defaultPrompt[] | select(length > 128) | "prompt over 128 characters: \(.)"),
+    (if ($openai.review.test_cases.positive | length) != 5 then "review needs exactly 5 positive test cases" else empty end),
+    (if ($openai.review.test_cases.negative | length) != 3 then "review needs exactly 3 negative test cases" else empty end)
+' openai/plugin.json)"
+if [ -n "$problems" ]; then
+  printf 'openai/plugin.json: %s\n' "$problems" >&2
+  exit 1
+fi
+
+STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
+jq --arg version "$VERSION" '{"$schema": .["$schema"], name: .name, version: $version} + .' openai/plugin.json > "$STAGE/plugin.json"
+cp openai/mcp.json "$STAGE/mcp.json"
+# openai/plugin.json points logo and composerIcon at this file.
+mkdir -p "$STAGE/assets"
+cp "$PLUGIN/.claude-plugin/icon.svg" "$STAGE/assets/icon.svg"
+# Tracked files only, so no .DS_Store or local leftovers reach the review.
+git ls-files -z "$PLUGIN/skills" | while IFS= read -r -d '' file; do
+  dest="$STAGE/${file#"$PLUGIN"/}"
+  mkdir -p "$(dirname "$dest")"
+  cp -p "$file" "$dest"
+done
+
+mkdir -p dist
+rm -f "$OUT"
+(cd "$STAGE" && zip -q -X -r - .) > "$OUT"
+echo "wrote $OUT"
