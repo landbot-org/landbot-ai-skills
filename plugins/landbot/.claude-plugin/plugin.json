@@ -1,12 +1,12 @@
 {
   "name": "landbot",
   "description": "Build and publish AI conversion agents in Landbot from your coding agent — qualify website visitors, book meetings and route leads, on your site and on WhatsApp.",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "author": {
     "name": "Landbot",
     "url": "https://landbot.io"
   },
-  "homepage": "https://landbot.io/claude",
+  "homepage": "https://github.com/landbot-org/landbot-ai-skills",
   "repository": "https://github.com/landbot-org/landbot-ai-skills",
   "license": "MIT",
   "documentationUrl": "https://dev.landbot.io/guides/mcp-server",
