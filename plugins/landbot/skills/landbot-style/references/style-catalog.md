@@ -81,7 +81,7 @@ This table is provisional. If the Landbot MCP server offers a tool that returns 
 | `option-checkbox` | action | One option of a multiple-choice question. |
 | `selection-counter` | text | How many options are selected in a multiple-choice question. |
 | `options-search` | control | Search field that filters a long list of options. |
-| `text-input` | container | A text question: error and field. Layout only. |
+| `text-input` | container | A text, phone or date question: error and field. Layout only. A date question has no data-lb-variant. |
 | `input-field` | box | The box around a text, phone, date or free-text input. Style the frame here; data-lb-variant says inline or stacked. |
 | `input-control` | control | The `<input>` inside input-field (text, phone, date). Transparent; style text and placeholder, not the frame. |
 | `input-actions` | container | Row inside input-field that holds the send button. |
