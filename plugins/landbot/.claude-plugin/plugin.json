@@ -9,8 +9,8 @@
   "homepage": "https://github.com/landbot-org/landbot-ai-skills",
   "repository": "https://github.com/landbot-org/landbot-ai-skills",
   "license": "MIT",
-  "documentationUrl": "https://help.landbot.io/article/z28e0ppime-get-started-with-the-landbot-mcp",
-  "supportUrl": "https://help.landbot.io/",
+  "documentationUrl": "https://dev.landbot.io/guides/mcp-server",
+  "supportUrl": "https://help.landbot.io/article/z28e0ppime-get-started-with-the-landbot-mcp",
   "privacyPolicyUrl": "https://landbot.io/privacy-policy",
   "termsOfServiceUrl": "https://landbot.io/terms-conditions",
   "keywords": [
