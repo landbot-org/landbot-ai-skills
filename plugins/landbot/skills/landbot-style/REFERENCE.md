@@ -30,7 +30,7 @@ Avatars are images from the bot configuration, not colours. Multi-select `option
 
 - On `3.1.0`, `ask_yes_no` never renders. Build Yes/No as `buttons`. This belongs to the flow, but a styling request is often where it is first noticed.
 - Enter submits short text inputs on `3.1.0`.
-- Input-row trap: the submit wrapper inside `input-field` is full width. Any rule that turns the row into a flex container lets it swallow the width and the `<input>` collapses to about 23 px. Pair it with `> input { flex:1 1 0%; width:auto; min-width:0 }` and `> div { flex:0 0 auto; width:auto }`, then type real text and measure `input.getBoundingClientRect().width`.
+- The text input, its layouts and its padding are in §6.
 - Channel Custom JS (Design › Custom code › Add JS, the channel's `foot`) runs on the share page on `3.1.0`. It is a separate surface from flow `code` blocks. Landbot serves it only to accounts with the Custom Code feature (the trial has it). Where it is missing, the script is stored and not served. A look must never need its script to work.
 - Use it for behaviour only, when asked, and never for data. The MCP server does not write it: the person pastes it in the builder.
 - A dark look also needs the channel's `design` colours, or the page shows a white loader before the chat draws. The MCP server does not write `design`: the person sets those colours in the builder's Design tab; say so when a dark look is asked for.
@@ -38,3 +38,48 @@ Avatars are images from the bot configuration, not colours. Multi-select `option
 ## 5. Welcome screens on form-style replicas
 
 Three screen types exist (welcome, question, thank-you) and the catalog does not distinguish them. Style the welcome explicitly or it inherits the question look: the greeting text is the first bot message, the welcome CTA is `[data-lb-part="option-button"]:only-child` (the only single-button list). Keep the bot's text free of emoji if the source has none; the text is data, not CSS.
+
+## 6. The input: one box, two layouts, padding through tokens
+
+Observed on the v4 web chat in October 2026.
+
+**One box.** `input-field` is the frame around every text, email, number, phone, date and AI Agent input. Inside it, `input-control` is the `<input>`, `free-text` is the AI Agent's `<textarea>`, and `input-actions` is the row holding the send button, `input-submit`. Background, border, radius and shadow go on `input-field` only. The controls stay transparent, with no border and no shadow; give them only font, colour, caret and placeholder. A background or border on `free-text` as well as on `input-field` draws a box inside a box.
+
+**Two layouts**, in `data-lb-variant` on `input-field`:
+
+- `inline`: touch screens. The send button sits at the end of the text row.
+- `stacked`: mouse. The send button sits on its own row, under the text.
+
+So a phone and a desktop show different inputs. Check both (SKILL.md Step 4).
+
+**Padding is set through tokens, not selectors.** Web-chat sets these on `input-field` itself, so set them there too: a value in `:root` loses to the element's own. They apply to the `stacked` layout.
+
+| Token | What it pads | Web-chat value |
+|---|---|---|
+| `--input-group-control-padding-inline` | left and right of the text | 16px |
+| `--input-group-control-padding-block-start` | above the text | 16px |
+| `--input-group-control-padding-block-end` | below the text | 8px |
+| `--input-group-addon-padding-inline` | left and right of the button row | 16px |
+| `--input-group-addon-padding-block` | below the button row | 16px |
+| `--input-group-textarea-min-height` | the AI Agent textarea's minimum height | 0px (one line; it grows with the text up to 112px) |
+
+The send button to the right of the text, centred, on desktop too. Measured 2026-10-19 on text and AI Agent inputs: the centres of the text, the button and the field agree within 1px in both layouts.
+
+```css
+[data-lb-part="input-field"][data-lb-variant="stacked"] {
+  flex-direction: row; align-items: center;
+  --input-group-control-padding-block-start: 16px;
+  --input-group-control-padding-block-end: 16px;   /* same as above: the text is centred */
+  --input-group-addon-padding-block: 0px;          /* the button row adds no height */
+}
+/* In a row the button row is full width and squeezes the text to ~30px: give the width back */
+[data-lb-part="input-field"][data-lb-variant="stacked"] > :is([data-lb-part="input-control"], [data-lb-part="free-text"]) { flex: 1 1 0%; width: auto; min-width: 0; }
+[data-lb-part="input-field"][data-lb-variant="stacked"] > [data-lb-part="input-actions"] { flex: 0 0 auto; width: auto; }
+```
+
+To change the empty AI Agent box's height, set `--input-group-textarea-min-height` on `input-field`, not `min-height` on `free-text`. To reach only the AI Agent's box: `[data-lb-part="input-field"]:has(> [data-lb-part="free-text"])`.
+
+### Back button and entrance animations
+
+- **Back** is `[data-lb-part="back-button"]`. Its wrapper is hover-only on devices the web chat does not take for a phone or tablet, so keep `div:has(> [data-lb-part="back-button"]) { opacity: 1 !important; }` (SKILL.md Step 2b).
+- **Entrance animations** on `[data-lb-part="message"]` or `[data-lb-part="message-bubble"]` play once per message, including when Back appears or goes away. Always add a `prefers-reduced-motion: reduce` rule that turns them off.

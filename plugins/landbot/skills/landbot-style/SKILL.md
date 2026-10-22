@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) mcp__plugin_landbot_landbot__get_web_chat
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.7.3
+  version: 0.8.0
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.7.3`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.8.0`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -44,7 +44,13 @@ Three layers, in this order, in one block (details and the full catalog in `refe
 2. **Anchors** as plain rules, **no `!important`**: `[data-lb-part="…"]` with `data-lb-author`, `data-lb-state`, `data-lb-variant`. The channel CSS is unlayered and beats web-chat's layered utilities on its own.
 3. **Scrollbars** last, global, values from the brief's palette.
 
-Rules: only selectors from the catalog (39 parts, listed in the catalog file); non-system fonts via a Google Fonts `@import` at the top; the bot bubble background has **no token**, it goes through an anchor; never per-instance selectors. Put a comment on the first line with a short unique marker, e.g. `/* lb-style: acme-dark 2026-09-17 */` — verification greps for it.
+Rules: only selectors from the catalog (the parts and their roles are listed in the catalog file); non-system fonts via a Google Fonts `@import` at the top; the bot bubble background has **no token**, it goes through an anchor; never per-instance selectors. Put a comment on the first line with a short unique marker, e.g. `/* lb-style: acme-dark 2026-09-17 */` — verification greps for it.
+
+**The input** (details in REFERENCE.md §6):
+
+- Frame the `box`, never the `control` inside it. Background, border, radius and shadow go on `input-field` only; `input-control` (the `<input>`) and `free-text` (the AI Agent's `<textarea>`) stay transparent with no border and no shadow, and take only font, colour and placeholder. Framing both draws a box inside a box.
+- `input-field` has two layouts in `data-lb-variant`: `inline` (touch, button at the end of the text row) and `stacked` (mouse, button under the text). Style both.
+- Change its padding and the AI Agent box's height with the `--input-group-*` tokens set on `[data-lb-part="input-field"]`, never with `padding` on the inner parts. REFERENCE.md §6 has the tested snippet that puts the button beside the text on desktop.
 
 Say in three or four lines what each layer does and what is left out.
 
@@ -52,7 +58,7 @@ Say in three or four lines what each layer does and what is left out.
 
 The v4 web chat has a native **Back** button: it re-asks the previous question, and the new answer replaces the old one (verified on production 2026-09-18 and again on 16 bots on 2026-09-25). Never hide it to make a chat look like a form, a game or a messaging app — a visitor who taps the wrong answer must be able to change it. Three things the CSS has to handle:
 
-- **It is invisible on phones by default.** Its wrapper is hover-only (`opacity-0` until hover), so on a touch screen nobody sees it. Force it: `div:has(> button[data-slot="button"][data-size="sm"][data-variant="ghost"]) { opacity: 1 !important; }` (no `data-lb-part` anchor exists for it; this selector is off-catalog, so say so in the hand-back).
+- **It can be invisible on a touch screen.** Its wrapper is hover-only (`opacity-0` until hover) on any device the web chat does not detect as a phone or tablet, a touch laptop for instance. Force it: `div:has(> [data-lb-part="back-button"]) { opacity: 1 !important; }`, and style the button through `[data-lb-part="back-button"]`.
 - **Keep it in the page flow.** `position: fixed` traps it inside the scroll area, clipped and untappable. Place it with `order` or margins and style it to fit the look (a small "‹ Back" link is enough).
 - **It is switched per chat.** When `back_button_visible` is false it is not on the page at all, and CSS cannot bring it back: `update_web_chat` with `back_button_visible: true` switches it on (a change like any other, same rules as the CSS).
 
@@ -118,17 +124,18 @@ Report what you checked and what you did not: a full-page share URL check does n
 1. Open the share URL (`preview_start` with `url`, or `navigate` when the pane is open). Answer the first question with fake data so a user reply and the next question are on screen.
 2. Run the three console checks above with `javascript_tool`, and take a screenshot at desktop width.
 3. `resize_window` with preset `mobile`, reload the share URL with a new query string (`?look=2`), answer once, and take a second screenshot. Then `resize_window` with preset `desktop` to put the pane back.
-4. Check these four things on both screenshots, against the brief:
+4. Check these five things on both screenshots, against the brief:
    (a) every bot message is readable against its background;
    (b) the brand colours are on the bot bubble and the buttons;
    (c) the brand font is used (`document.fonts.check` is true);
-   (d) every button and the input can be reached, and nothing is covered.
+   (d) every button and the input can be reached, and nothing is covered;
+   (e) the input, in both layouts: desktop is `stacked`, phone is `inline`. If the flow has an `ai_agent` block, check its `<textarea>` (`free-text`) as well as the text `<input>`: reach it in the conversation and measure it the same way. On each, the vertical centres of the text, the send button and the field agree within 1px (`getBoundingClientRect()` on `input-control` or `free-text`, `input-submit` and `input-field`), and there is no box inside a box: `getComputedStyle` on the control shows a transparent background, no border and no shadow.
 5. If one fails, fix the CSS and push again. On a published bot that push goes to the draft: say so, and the fix reaches visitors when the person publishes it. Stop after three rounds and report what is still wrong.
 6. With a behaviour module on, also check it did its job at both widths (reply buttons inside the bubble, or the bar filling), and that `read_console_messages` shows no error from it.
 
-In the hand-back, say "looked at by me in the in-app browser at desktop and phone width", plus the result of each of the four checks.
+In the hand-back, say "looked at by me in the in-app browser at desktop and phone width", plus the result of each of the five checks.
 
-**No in-app browser** (terminal, Codex, Cursor): give the share URL and the four checks above, and ask the person to open it on a computer and a phone. Until they answer, say "the CSS is live", never "styled".
+**No in-app browser** (terminal, Codex, Cursor): give the share URL and the five checks above, and ask the person to open it on a computer and a phone. Until they answer, say "the CSS is live", never "styled".
 
 ## Step 5 — Hand back
 
