@@ -1,7 +1,7 @@
 {
   "name": "landbot",
-  "description": "Build and publish AI conversion agents in Landbot from your coding agent — qualify website visitors, book meetings and route leads, on your site and on WhatsApp.",
-  "version": "0.7.2",
+  "description": "Build and publish AI agents and chatbots in Landbot from your coding agent — qualify leads, book meetings and answer customer questions, on your site and on WhatsApp.",
+  "version": "0.7.3",
   "author": {
     "name": "Landbot",
     "url": "https://landbot.io"
@@ -15,15 +15,16 @@
   "termsOfServiceUrl": "https://landbot.io/terms-conditions",
   "keywords": [
     "landbot",
+    "ai-agent",
+    "chatbot",
     "conversion-agent",
     "lead-qualification",
-    "sales-agent",
+    "customer-support",
+    "faq",
     "meeting-booking",
     "lead-generation",
-    "chatbot",
     "whatsapp",
     "web-chat",
-    "mcp",
-    "skill"
+    "mcp"
   ]
 }
