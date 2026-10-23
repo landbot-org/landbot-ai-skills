@@ -1,120 +1,23 @@
-# Style catalog — tokens, anchors, cascade rules and a worked example
+# Style model — layers, cascade rules and a worked example
 
-Observed on production Landbot web chat v4 in September 2026. Verify on the target channel; a web-chat release can change internals.
+What Custom CSS can style, the anchors, their roles and the tokens of each layer, comes from the Landbot MCP server: `get_web_chat_style_catalog` (SKILL.md Step 2). This file holds only what the server does not give: how the pieces go together, a full example, and what CSS cannot reach.
+
+Observed on production Landbot web chat v4 in September and October 2026. Verify on the target channel; a web-chat release can change internals.
 
 ## The model: three layers in one block
 
-1. **Theme (tokens in `:root`, with `!important`).** The global look: background, text, borders, primary button, messages, inputs, calendar, header, typography.
-2. **Anchors (plain rules, NO `!important`).** Specific parts, states and accents: the bot bubble background, focus/error, calendly, takeover, corners, hover.
+1. **Tokens.** The global look: background, text, borders, primary button, messages, inputs, calendar, header, typography. Theme tokens go in `:root`; component tokens go in the `selector` the catalog gives each one.
+2. **Anchors (plain rules, NO `!important`).** Specific parts, states and accents: the bot bubble background, focus/error, calendly, takeover, corners, hover. A rule on a part sets only what its `role` allows.
 3. **Scrollbars (global).** Browser bars; not an anchor, just standard CSS.
 
-## The golden cascade rule (the key finding: when to use `!important`)
+## The golden cascade rule (when to use `!important`)
 
 - **Anchors -> plain, WITHOUT `!important`.** The channel's Custom CSS is **unlayered**; web-chat's Tailwind v4 utilities live in `@layer utilities`. In CSS, **what is outside a layer beats what is inside**, no `!important` needed. Verified live.
-- **Theme tokens -> `:root { --x: ... !important }`.** The v3 config sets those tokens **inline on `<html>`**, and an inline value is only beaten by `!important`. Without it, the tokens the config already touches (header, user bubble, font) don't change.
+- **Tokens -> in their `selector`, with `!important` exactly when the catalog says `important: true`.** The channel config sets the theme tokens **inline on `<html>`**, and an inline value is only beaten by `!important`. Component tokens are not set inline: in `:root` they win plain, and the `input-field` ones must go on `[data-lb-part="input-field"]`, because web-chat sets them on that element and a value in `:root` loses to the element's own.
+- **Derived tokens.** A theme token with `derived_from` is computed from its base when the chat loads. Changing the base in CSS does not move them: set the derived ones you need too (the example below sets them for a dark look).
 - **One-off exception:** if a specific property won't stick, a component may defend it with its own `!important`; there you add it to the anchor. Practical rule: emit plain; if a rule shows struck through in DevTools, add `!important`.
 
-## Theme layer: the tokens (redefine in `:root` with `!important`)
-
-| Group (control) | Tokens |
-|---|---|
-| Background (`background`) | `--background`, `--select-content-background`, `--select-item-background-default` |
-| Text (`foreground`) | `--foreground`, `--muted`, `--muted-foreground`, `--select-item-color-default`, `--select-item-background-hover` |
-| Border (`border`) | `--border`, `--select-content-border` |
-| Primary / option button (`optionBackgroundColor` + `optionBorderColor` + `optionTextColor`) | `--button-color-primary-default`, `--button-border-color-primary-default`, `--button-font-color-primary-default` |
-| Calendar | `--calendar-day-bg-selected`, `--calendar-day-color-selected`, `--calendar-day-color-today`, `--calendar-day-bg-today`, `--calendar-day-bg-hover`, `--calendar-day-color-default`, `--calendar-header-color`, `--calendar-day-color-outside`, `--calendar-day-color-disabled`, `--calendar-day-bg-range-middle` |
-| Messages | `--chat-bubble-color-font-bot`, `--chat-bubble-surface-user`, `--chat-bubble-border-color-user`, `--chat-bubble-color-font-user` |
-| Inputs / textarea / select | `--input-background-default`, `--textarea-background-default`, `--select-trigger-background-default`, `--input-border-color-default`, `--textarea-border-color-default`, `--select-trigger-border-default`, `--input-color-text-default`, `--textarea-color-text-default`, `--select-trigger-color-value`, `--select-trigger-color-placeholder` |
-| Header | `--web-chat-header-background`, `--web-chat-header-text-color` |
-| Typography | `--font-family-sans`, `--font-size` |
-
-Note: **there is NO token for the bot bubble background** (only its text). That background goes through an anchor. The **selected calendar day** color comes from `--calendar-day-bg-selected` (token), not an anchor.
-
-## Anchor layer: the catalog
-
-Attributes: `data-lb-part` · `data-lb-interaction` · `data-lb-author` (`bot`/`user`) · `data-lb-variant` · `data-lb-state` (`active`/`error`/`selected`/`disabled`).
-
-Every part has a **role**, which says what a rule on it may do:
-
-| Role | What goes on it |
-|---|---|
-| `container` | Layout: it holds other parts. Give it a card look only when nothing inside it draws its own frame. |
-| `box` | The frame: background, border, radius, padding, shadow. |
-| `control` | A native `<input>`, `<textarea>` or search field **inside** a box. Leave it transparent, with no border and no shadow; set only font, text colour, caret and placeholder. |
-| `text` | Font and colour. |
-| `action` | Something the visitor clicks: background, border, radius, hover. |
-| `media` | An image, avatar or flag: size, radius, border. |
-
-**Frame the `box`, never the `control` inside it.** `input-field` is the box around every text, email, number, phone, date and AI Agent input; `input-control` (the `<input>`) and `free-text` (the AI Agent's `<textarea>`) are controls inside it. A background or border on both draws a box inside a box. To reach only the AI Agent's box: `[data-lb-part="input-field"]:has(> [data-lb-part="free-text"])`.
-
-`input-field` carries `data-lb-variant` (`inline` or `stacked`); REFERENCE.md §6 explains both.
-
-This table is provisional. If the Landbot MCP server offers a tool that returns the web chat's style catalog, use its answer instead: it matches what visitors get.
-
-<!-- anchors:start — generated by scripts/sync-anchor-catalog; do not edit by hand -->
-
-56 parts.
-
-| Part | Role | What it is |
-|---|---|---|
-| `message` | container | One message row: avatar, header and bubble. Layout only. |
-| `message-avatar` | media | Avatar next to a bot message. |
-| `message-bubble` | box | The bubble of a message. Background, border, radius and padding go here. |
-| `message-text` | text | The text inside a message bubble. |
-| `message-header` | container | Avatar, name and time row above the first message of a bot group. |
-| `message-author` | text | Author name in the message header. |
-| `launcher` | action | The floating button that opens the chat. |
-| `launcher-avatar` | media | Image inside the launcher. |
-| `proactive-message` | container | Proactive message shown next to the launcher. Layout only. |
-| `proactive-message-bubble` | box | The bubble of the proactive message. |
-| `proactive-message-text` | text | The text of the proactive message. |
-| `proactive-message-close` | action | Button that dismisses the proactive message. |
-| `window` | box | The chat window. Its background is the conversation background. |
-| `header` | box | The bar at the top of the chat window. |
-| `message-timestamp` | text | Time shown next to a message. |
-| `options-list` | container | Scrollable list that holds the options of a question. |
-| `branding` | text | The "Powered by Landbot" footer. |
-| `back-button` | action | Button that goes back to the previous question. |
-| `options-group` | container | A buttons question: prompt and options. Layout only. |
-| `options-prompt` | text | Prompt above a group of options. |
-| `option-button` | action | One option of a buttons question. |
-| `option-checkbox` | action | One option of a multiple-choice question. |
-| `selection-counter` | text | How many options are selected in a multiple-choice question. |
-| `options-search` | control | Search field that filters a long list of options. |
-| `text-input` | container | A text, phone or date question: error and field. Layout only. A date question has no data-lb-variant. |
-| `input-field` | box | The box around a text, phone, date or free-text input. Style the frame here; data-lb-variant says inline or stacked. |
-| `input-control` | control | The `<input>` inside input-field (text, phone, date). Transparent; style text and placeholder, not the frame. |
-| `input-actions` | container | Row inside input-field that holds the send button. |
-| `input-submit` | action | The send button. |
-| `input-error` | text | Validation message above the field. |
-| `input-country-select` | container | The country prefix picker of a phone question. |
-| `input-country-flag` | media | Flag of the selected country. |
-| `date-picker` | container | The calendar of a date question. |
-| `free-text` | control | The `<textarea>` inside input-field for free text (AI Agent). Transparent; style text and placeholder, not the frame. |
-| `media` | container | An image or video message. Layout only. |
-| `media-caption` | text | Caption under an image, video or document. |
-| `media-download` | action | Link that downloads a media file. |
-| `media-state` | container | Loading or error overlay on a media file. |
-| `media-retry` | action | Button that retries loading a media file. |
-| `media-open` | action | Button that opens a media file in the viewer. |
-| `media-viewer` | box | Full-screen viewer for images and documents. |
-| `media-viewer-toolbar` | container | Toolbar at the top of the media viewer. |
-| `media-viewer-zoom` | container | Zoom buttons in the media viewer toolbar. |
-| `media-viewer-close` | action | Button that closes the media viewer. |
-| `audio` | container | An audio message. Layout only. |
-| `document` | container | A document message. Layout only. |
-| `document-name` | text | File name of a document. |
-| `document-badge` | text | File type label of a document (PDF, DOC…). |
-| `calendly` | container | A Calendly booking message. Layout only. |
-| `calendly-prompt` | text | Text above the Calendly buttons. |
-| `calendly-cta` | action | Button that opens Calendly. |
-| `calendly-skip` | action | Button that skips the booking. |
-| `takeover` | box | Card shown when a human agent takes over the conversation. |
-| `takeover-avatar` | media | Avatar of the human agent. |
-| `takeover-title` | text | Title of the takeover card. |
-| `takeover-subtitle` | text | Subtitle of the takeover card. |
-
-<!-- anchors:end -->
+There is **no token for the bot bubble background** (only its text): it goes through an anchor. The selected calendar day has **no anchor**: it goes through `--calendar-day-bg-selected`.
 
 ## Scrollbars (global, not an anchor)
 
@@ -150,78 +53,161 @@ Values and fidelity rules (from IBM's design language / Carbon):
 - **Blue:** interactive `#0f62fe` (Blue 60); dark-theme accent `#4589ff` (Blue 50); **darker hover `#0353e9`** (button-primary-hover, in both light and dark).
 - **Grays (Carbon scale):** `#161616` (100) · `#262626` (90) · `#393939` (80) · `#525252` (70) · `#6f6f6f` (60) · `#8d8d8d` (50) · `#a8a8a8` (40) · `#c6c6c6` (30) · `#e0e0e0` (20) · `#f4f4f4` (10).
 - **Error:** `#da1e28` (light) / `#fa4d56` (Red 40, dark).
-- **Fields:** Carbon style = **bottom border only** (`border:none; border-bottom:1px solid <gray>`) that turns blue on focus.
+- **Fields:** Carbon style = **bottom border only** that turns blue on focus.
 - **Whitespace:** generous (2x Grid). More padding on buttons (`12px 16px`), bubbles and cards.
 
 ## Full example: IBM Carbon dark
 
+Token names, selectors and `important` checked against `get_web_chat_style_catalog` on 2026-10-23. Read the catalog again before reusing it.
+
 ```css
-/* IBM Carbon dark - THEME (:root, !important) + ANCHORS (plain) + SCROLLBARS */
+/* lb-style: ibm-carbon-dark — THEME + COMPONENT tokens, ANCHORS (plain), SCROLLBARS */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
+/* THEME tokens: :root, !important (the config sets them inline on <html>) */
 :root {
-  --background:#161616 !important;
-  --select-content-background:#262626 !important;
-  --select-item-background-default:#262626 !important;
-  --foreground:#f4f4f4 !important;
-  --muted:#8d8d8d !important;
-  --muted-foreground:#c6c6c6 !important;
-  --select-item-color-default:#f4f4f4 !important;
-  --select-item-background-hover:#393939 !important;
+  /* background and what derives from it */
+  --color-surface-1:#161616 !important;
+  --color-surface-2:#262626 !important;
+  --color-surface-3:#161616 !important;
+  --color-surface-4:#393939 !important;
+  --color-surface-backdrop:#000000 !important;
+  --color-surface-interactive-1:#161616 !important;
+  --color-surface-interactive-2:#262626 !important;
+  --color-surface-interactive-3:#393939 !important;
+  --color-surface-chat-user-1:#0f62fe !important;
+  --color-control-1:#262626 !important;
+  --color-control-2:#262626 !important;
+  --color-control-3:#262626 !important;
+  --color-control-4:#393939 !important;
+  --color-action-primary-4:#393939 !important;
+  --color-action-primary-5:#525252 !important;
+  --color-action-secondary-1:#161616 !important;
+  --color-action-secondary-2:#262626 !important;
+  --color-action-secondary-3:#393939 !important;
+  --color-action-secondary-4:#393939 !important;
+  --color-action-tertiary-1:#161616 !important;
+  --color-action-tertiary-2:#262626 !important;
+  --color-action-tertiary-3:#393939 !important;
+  --color-action-tertiary-4:#393939 !important;
+  --color-border-1:#393939 !important;
+  --color-border-control-1:#6f6f6f !important;
+  --color-border-control-3:#8d8d8d !important;
+  --color-border-interactive-1:#393939 !important;
+  --color-border-interactive-2:#6f6f6f !important;
+  --color-border-interactive-3:#6f6f6f !important;
+  --color-border-action-secondary-1:#393939 !important;
+  --color-border-action-secondary-4:#393939 !important;
+  --color-border-chat-user-1:#0f62fe !important;
+  /* text and what derives from it */
+  --color-font-1:#f4f4f4 !important;
+  --color-font-2:#c6c6c6 !important;
+  --color-font-3:#8d8d8d !important;
+  --color-font-chat-bot-1:#f4f4f4 !important;
+  --color-font-chat-user-1:#ffffff !important;
+  --color-font-control-1:#f4f4f4 !important;
+  --color-font-control-2:#8d8d8d !important;
+  --color-font-control-4:#f4f4f4 !important;
+  --color-font-action-secondary-1:#f4f4f4 !important;
+  --color-font-action-secondary-2:#6f6f6f !important;
+  --color-font-action-tertiary-1:#c6c6c6 !important;
+  --color-font-action-tertiary-2:#f4f4f4 !important;
+  --color-font-action-tertiary-3:#f4f4f4 !important;
+  --color-font-action-tertiary-4:#6f6f6f !important;
+  /* primary and what derives from it */
+  --color-action-primary-1:#0f62fe !important;
+  --color-action-primary-2:#0353e9 !important;
+  --color-action-primary-3:#002d9c !important;
+  --color-ring-focus:#4589ff !important;
+  --color-surface-interactive-selected:#002d9c !important;
+  --color-control-selected-1:#002d9c !important;
+  --color-font-4:#4589ff !important;
+  --color-font-action-primary-1:#ffffff !important;
+  --color-font-action-primary-2:#8d8d8d !important;
+  --color-border-action-primary-1:#0f62fe !important;
+  --color-border-control-selected:#4589ff !important;
+  --color-border-interactive-selected:#4589ff !important;
+  /* the rest of the theme */
   --border:#393939 !important;
   --select-content-border:#393939 !important;
-  --button-color-primary-default:#0f62fe !important;
   --button-border-color-primary-default:#0f62fe !important;
   --button-font-color-primary-default:#ffffff !important;
-  --select-trigger-border-focus:#4589ff !important;
-  --select-item-color-selected:#4589ff !important;
-  --select-item-background-selected:#393939 !important;
-  --calendar-day-color-default:#f4f4f4 !important;
-  --calendar-header-color:#f4f4f4 !important;
-  --calendar-day-color-outside:#6f6f6f !important;
-  --calendar-day-color-disabled:#525252 !important;
-  --calendar-day-bg-hover:#393939 !important;
-  --calendar-day-bg-today:#393939 !important;
-  --calendar-day-bg-selected:#0f62fe !important;
   --calendar-day-color-selected:#ffffff !important;
-  --calendar-day-color-today:#4589ff !important;
-  --calendar-day-bg-range-middle:#1f3a5f !important;
   --chat-bubble-color-font-bot:#f4f4f4 !important;
   --chat-bubble-surface-user:#0f62fe !important;
   --chat-bubble-border-color-user:#0f62fe !important;
   --chat-bubble-color-font-user:#ffffff !important;
   --input-background-default:#262626 !important;
-  --textarea-background-default:#262626 !important;
-  --select-trigger-background-default:#262626 !important;
-  --input-border-color-default:#6f6f6f !important;
-  --textarea-border-color-default:#6f6f6f !important;
-  --select-trigger-border-default:#6f6f6f !important;
-  --input-color-text-default:#f4f4f4 !important;
-  --textarea-color-text-default:#f4f4f4 !important;
   --select-trigger-color-value:#f4f4f4 !important;
   --select-trigger-color-placeholder:#8d8d8d !important;
   --web-chat-header-background:#000000 !important;
   --web-chat-header-text-color:#f4f4f4 !important;
+  --web-chat-launcher-background:#0f62fe !important;
   --font-family-sans:"IBM Plex Sans", sans-serif !important;
+  /* ALIAS tokens: also :root, !important */
+  --background:#161616 !important;
+  --foreground:#f4f4f4 !important;
+  --muted-foreground:#c6c6c6 !important;
 }
+
+/* COMPONENT tokens with selector :root: plain */
+:root {
+  --button-color-primary-default:#0f62fe;
+  --button-color-primary-hover:#0353e9;
+  --button-color-primary-active:#002d9c;
+  --button-color-primary-disabled:#393939;
+  --calendar-day-radius:0;
+  --calendar-nav-radius:0;
+  --calendar-day-bg-hover:#393939;
+  --calendar-day-bg-today:#393939;
+  --calendar-day-bg-selected:#0f62fe;
+  --calendar-day-color-outside:#6f6f6f;
+  --calendar-day-color-disabled:#525252;
+  --select-trigger-radius:0;
+  --select-content-radius:0;
+  --select-content-background:#262626;
+  --select-item-radius:0;
+  --select-item-background-default:#262626;
+  --select-item-background-hover:#393939;
+  --select-item-background-selected:#393939;
+  --select-item-color-selected:#4589ff;
+}
+
+/* COMPONENT tokens with selector input-field: on input-field, plain. The box is input-field alone. */
+[data-lb-part="input-field"] {
+  --input-group-radius:0;
+  --input-group-radius-coarse:0;
+  --input-group-ring-width:0px;                       /* Carbon: no ring, the bottom line turns blue */
+  --input-group-background-default:#262626;           /* once typed; the empty box is --input-background-default */
+  --input-group-background-hover:#262626;
+  --input-group-background-focus:#262626;
+  --input-group-border-color-disabled:#6f6f6f;        /* the empty box, the one seen most */
+  --input-group-border-color-default:#6f6f6f;
+  --input-group-border-color-hover:#8d8d8d;
+  --input-group-border-color-focus:#4589ff;
+  --input-group-border-color-error:#fa4d56;
+  --input-group-color-text-default:#f4f4f4;
+  --input-group-color-text-disabled:#f4f4f4;          /* the caret of the empty box */
+  --input-group-color-text-placeholder:#8d8d8d;
+  --input-group-color-text-error:#fa4d56;
+  border-width:0 0 1px;                               /* bottom line only; its colour comes from the tokens */
+  box-shadow:none;
+}
+[data-lb-part="input-field"]:focus-within { border-bottom-width:2px; }
+[data-lb-part="text-input"][data-lb-state="error"] [data-lb-part="input-field"] { border-bottom-width:2px; }
+/* The <input> and the agent's <textarea> are controls: transparent, no border, no shadow, text only */
+[data-lb-part="input-control"],[data-lb-part="free-text"] { background:transparent; border:none; box-shadow:none; font-family:"IBM Plex Sans",sans-serif; }
 
 /* ANCHORS (plain) */
 [data-lb-part="message-text"] { font-family:"IBM Plex Sans",sans-serif; line-height:1.5; }
 [data-lb-part="message"][data-lb-author="bot"] [data-lb-part="message-bubble"] {
   background:#262626; color:#f4f4f4; border:1px solid #393939; border-left:3px solid #4589ff; padding:12px 16px;
 }
-[data-lb-part="message-bubble"],[data-lb-part="option-button"],[data-lb-part="input-field"],
-[data-lb-part="input-submit"],[data-lb-part="date-picker"],[data-lb-part="calendly"],
-[data-lb-part="takeover"],[data-lb-part="media"],[data-lb-part="options-search"],
+[data-lb-part="message-bubble"],[data-lb-part="option-button"],[data-lb-part="input-submit"],
+[data-lb-part="date-picker"],[data-lb-part="takeover"],[data-lb-part="calendly-cta"],
 [data-lb-part="proactive-message-bubble"] { border-radius:0; }
-[data-lb-part="date-picker"],[data-lb-part="calendly"],[data-lb-part="takeover"],
-[data-lb-part="options-group"] { background:#262626; border:1px solid #393939; }
-[data-lb-part="calendly"],[data-lb-part="takeover"] { padding:16px; }
-/* The box is input-field alone; the <input> and the agent's <textarea> inside it stay bare */
-[data-lb-part="input-field"] { background:#262626; border:none; border-bottom:1px solid #6f6f6f; box-shadow:none; }
-[data-lb-part="input-control"],[data-lb-part="free-text"] { background:transparent; border:none; box-shadow:none; color:#f4f4f4; }
-[data-lb-part="input-field"]:focus-within { border-bottom:2px solid #4589ff; }
-[data-lb-part="text-input"][data-lb-state="error"] [data-lb-part="input-field"] { border-bottom:2px solid #fa4d56; }
+[data-lb-part="date-picker"],[data-lb-part="takeover"] { background:#262626; border:1px solid #393939; }
+[data-lb-part="takeover"] { padding:16px; border-left:3px solid #4589ff; }
 [data-lb-part="input-error"] { color:#fa4d56; }
 [data-lb-part="options-prompt"] { color:#f4f4f4; font-weight:600; }
 [data-lb-part="options-prompt"]::before { content:""; display:inline-block; width:8px; height:8px; margin-right:8px; background:#4589ff; }
@@ -229,21 +215,14 @@ Values and fidelity rules (from IBM's design language / Carbon):
   background:#0f62fe; color:#fff; border:1px solid #0f62fe; font-weight:400; letter-spacing:0.16px; margin-bottom:8px; padding:12px 16px;
 }
 [data-lb-part="option-button"]:hover { background:#0353e9; color:#fff; }
-[data-lb-part="options-search"] { background:#262626; }
 [data-lb-part="option-checkbox"][data-lb-state="selected"] { accent-color:#4589ff; color:#4589ff; }
 [data-lb-part="selection-counter"] { color:#c6c6c6; }
-[data-lb-part="input-submit"] { background:#0f62fe; color:#fff; }
-[data-lb-part="input-submit"]:hover { background:#0353e9; }
 [data-lb-part="media-caption"] { color:#c6c6c6; }
 [data-lb-part="media-download"] { color:#4589ff; }
-[data-lb-part="calendly"] { border-top:3px solid #4589ff; }
 [data-lb-part="calendly-prompt"] { color:#f4f4f4; }
-[data-lb-part="calendly-cta"]:hover { background:#0353e9; }
 [data-lb-part="calendly-skip"] { color:#c6c6c6; }
-[data-lb-part="takeover"] { border-left:3px solid #4589ff; }
 [data-lb-part="takeover-title"] { color:#f4f4f4; font-weight:600; }
 [data-lb-part="takeover-subtitle"] { color:#c6c6c6; }
-[data-lb-part="launcher"] { background:#0f62fe; }
 [data-lb-part="proactive-message-bubble"] { background:#262626; color:#f4f4f4; border:1px solid #393939; border-left:3px solid #4589ff; }
 [data-lb-part="proactive-message-close"]:hover { color:#4589ff; }
 [data-lb-part="window"] { border:1px solid #393939; }
@@ -260,4 +239,4 @@ Values and fidelity rules (from IBM's design language / Carbon):
 ```
 
 ### Explanation (template)
-The theme sets the base (background, header, user bubble, inputs, calendar, typography) with `!important` because they are inline. The plain anchors add what the theme doesn't reach: the bot card, focus/error states, Carbon fields (bottom line), calendly/takeover accents, the chrome (window frame, header, timestamp, branding), and the scrollbars. Out of scope: per-instance, forcing the options list height, and the avatars (bot image).
+The theme tokens set the base (background, text and primary, with the tokens derived from each, plus header, user bubble, input, launcher and typography) with `!important` because the config sets them inline. The component tokens square the calendar and its dropdowns and colour the input box per state, set where the catalog says, without `!important`. The plain anchors add what the tokens don't reach: the bot card, the Carbon bottom line, takeover accents, the chrome (window frame, header, timestamp, branding), and the scrollbars. The box is `input-field` alone; the `<input>` and the AI Agent's `<textarea>` stay transparent. Out of scope: per-instance, forcing the options list height, and the avatars (bot image).

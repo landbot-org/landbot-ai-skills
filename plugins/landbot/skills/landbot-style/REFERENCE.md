@@ -52,18 +52,9 @@ Observed on the v4 web chat in October 2026.
 
 So a phone and a desktop show different inputs. Check both (SKILL.md Step 4).
 
-**Padding is set through tokens, not selectors.** Web-chat sets these on `input-field` itself, so set them there too: a value in `:root` loses to the element's own. They apply to the `stacked` layout.
+**Frame, colours and padding are set through tokens, not selectors.** The `--input-group-*` tokens come from `get_web_chat_style_catalog` with `layer: "component"`: put each in its `selector` (`[data-lb-part="input-field"]`), with `!important` only when `important` is true (none was on 2026-10-23), and check `applies_in` for the layout it acts in. Web-chat sets them on `input-field` itself, so a value in `:root` loses to the element's own. Most of the padding tokens act only in `stacked`; the touch layout has its own `-coarse` ones. Where web-chat sets its own value for a layout, the catalog shows it in `web_chat_values`.
 
-| Token | What it pads | Web-chat value |
-|---|---|---|
-| `--input-group-control-padding-inline` | left and right of the text | 16px |
-| `--input-group-control-padding-block-start` | above the text | 16px |
-| `--input-group-control-padding-block-end` | below the text | 8px |
-| `--input-group-addon-padding-inline` | left and right of the button row | 16px |
-| `--input-group-addon-padding-block` | below the button row | 16px |
-| `--input-group-textarea-min-height` | the AI Agent textarea's minimum height | 0px (one line; it grows with the text up to 112px) |
-
-The send button to the right of the text, centred, on desktop too. Measured 2026-10-19 on text and AI Agent inputs: the centres of the text, the button and the field agree within 1px in both layouts.
+The send button to the right of the text, centred, on desktop too. Measured 2026-10-19 on text and AI Agent inputs: the centres of the text, the button and the field agree within 1px in both layouts. Its three tokens are checked against the catalog on 2026-10-23: selector `input-field`, not `important`, acting in `stacked`.
 
 ```css
 [data-lb-part="input-field"][data-lb-variant="stacked"] {
