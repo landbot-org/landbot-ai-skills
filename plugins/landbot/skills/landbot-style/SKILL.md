@@ -1,17 +1,17 @@
 ---
 name: landbot-style
 description: Style a Landbot v4 web chat. Turn a brief (brand colours, a reference site, "make it look like IBM / dark / our site") into ONE Custom CSS block — theme tokens in :root, data-lb-* anchors, scrollbars — apply it through the Landbot MCP server, then verify it on the share URL. Use when asked to style, theme, restyle or brand a Landbot chat, or while landbot-flows builds a bot that should have a look.
-allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) mcp__plugin_landbot_landbot__get_web_chat
+allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__get_web_chat_style_catalog
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.8.0
+  version: 0.9.0
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.8.0`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.9.0`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
-Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). The token and anchor catalog with a full worked example is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
+Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). What the CSS can style (anchors, roles, tokens) is read live from the Landbot MCP server with `get_web_chat_style_catalog` (Step 2). How the layers fit together, with a full worked example, is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
-This skill reads and writes the chat through the Landbot MCP server (`get_web_chat`, `update_web_chat`; `landbot-flows` Step 0 says how to connect it). It also ships `scripts/verify-share`, which reads the chat's **published** config from the public share URL and needs no sign-in, and `modules/`, two ready-made behaviours (`messaging` and `steps`, each a `.js` and a companion `.css`).
+This skill reads and writes the chat through the Landbot MCP server (`get_web_chat`, `get_web_chat_style_catalog`, `update_web_chat`; `landbot-flows` Step 0 says how to connect it). It also ships `scripts/verify-share`, which reads the chat's **published** config from the public share URL and needs no sign-in, and `modules/`, two ready-made behaviours (`messaging` and `steps`, each a `.js` and a companion `.css`).
 
 - **Claude Code** replaces `${CLAUDE_SKILL_DIR}` with this skill's folder before you read this file.
 - **Codex, Cursor, other agents:** `scripts/install.sh` writes the absolute folder into this file. If a command here still shows a placeholder in braces (`CLAUDE_SKILL_DIR`) instead of a folder, replace it with the folder this SKILL.md lives in. Look at where this file is; do not guess.
@@ -38,19 +38,29 @@ Ask only about what the chat's CSS can touch: mode, palette or accent, corner sh
 
 ## Step 2 — Generate ONE CSS block
 
-Three layers, in this order, in one block (details and the full catalog in `references/style-catalog.md`):
+**First read what the CSS can style, from the server.** Before writing any CSS, call `get_web_chat_style_catalog`:
 
-1. **Theme tokens** in `:root { --x: … !important }`. The channel config sets these inline on `<html>`, so only `!important` beats them.
-2. **Anchors** as plain rules, **no `!important`**: `[data-lb-part="…"]` with `data-lb-author`, `data-lb-state`, `data-lb-variant`. The channel CSS is unlayered and beats web-chat's layered utilities on its own.
+1. **Without `layer`:** the `anchors` (each part with its `role` and the values of `data-lb-variant`, `data-lb-state`, `data-lb-author` and `data-lb-interaction`, with what each means) and the `roles` (what a rule on each role may set).
+2. **With `layer: "theme"`:** the theme tokens: colours, fonts and sizes of the whole chat.
+3. **With `layer: "component"`, only when the look touches the input, the calendar, the selects or the buttons:** the tokens of those components.
+
+Use exactly the selectors it returns. Set each token in its `selector`, with `!important` only when its `important` is true; `applies_in` names the `data-lb-variant` values where it acts. A token with `derived_from` is computed from its base when the chat loads: set the derived ones too when you change the base. The catalog is the same for every bot, so read it once per conversation.
+
+**If the tool is not there** (Codex or Cursor with an older server): say that the server does not serve the style catalog, so the CSS can only use the anchors and tokens shown in the example in `references/style-catalog.md`. Use only those, invent none, and suggest updating the Landbot MCP server.
+
+Three layers, in this order, in one block (how they fit together and a full example in `references/style-catalog.md`):
+
+1. **Tokens.** Theme tokens in `:root { --x: … !important }`: the channel config sets them inline on `<html>`, so only `!important` beats them. Component tokens in their own `selector`, plain.
+2. **Anchors** as plain rules, **no `!important`**: `[data-lb-part="…"]` with `data-lb-author`, `data-lb-state`, `data-lb-variant`. The channel CSS is unlayered and beats web-chat's layered utilities on its own. A rule sets only what the part's `role` allows.
 3. **Scrollbars** last, global, values from the brief's palette.
 
-Rules: only selectors from the catalog (the parts and their roles are listed in the catalog file); non-system fonts via a Google Fonts `@import` at the top; the bot bubble background has **no token**, it goes through an anchor; never per-instance selectors. Put a comment on the first line with a short unique marker, e.g. `/* lb-style: acme-dark 2026-09-17 */` — verification greps for it.
+Rules: only selectors and tokens from the catalog; non-system fonts via a Google Fonts `@import` at the top; the bot bubble background has **no token**, it goes through an anchor; never per-instance selectors. Put a comment on the first line with a short unique marker, e.g. `/* lb-style: acme-dark 2026-09-17 */` — verification greps for it.
 
 **The input** (details in REFERENCE.md §6):
 
 - Frame the `box`, never the `control` inside it. Background, border, radius and shadow go on `input-field` only; `input-control` (the `<input>`) and `free-text` (the AI Agent's `<textarea>`) stay transparent with no border and no shadow, and take only font, colour and placeholder. Framing both draws a box inside a box.
 - `input-field` has two layouts in `data-lb-variant`: `inline` (touch, button at the end of the text row) and `stacked` (mouse, button under the text). Style both.
-- Change its padding and the AI Agent box's height with the `--input-group-*` tokens set on `[data-lb-part="input-field"]`, never with `padding` on the inner parts. REFERENCE.md §6 has the tested snippet that puts the button beside the text on desktop.
+- Change its frame, colours, padding and the AI Agent box's height with the `--input-group-*` tokens of the `component` layer, set on `[data-lb-part="input-field"]` as their `selector` says, never with `padding` on the inner parts. REFERENCE.md §6 has the tested snippet that puts the button beside the text on desktop.
 
 Say in three or four lines what each layer does and what is left out.
 
@@ -110,7 +120,7 @@ Exit 0 means: v4 renderer, Custom CSS present in the **published** config, and y
 Then in the browser, on the share URL (its host is `landbot.pro`, `landbot.online` or `landbot.site`), after answering one option so a user pill and the next question are visible:
 
 ```js
-document.querySelectorAll('[data-lb-part]').length            // > 0 (about 16 on load, ~29 after two turns)
+document.querySelectorAll('[data-lb-part]').length            // > 0
 document.fonts.check('18px "<Font>"')                          // true when the @import loaded
 getComputedStyle(document.querySelector('[data-lb-part="option-button"]')).backgroundColor
 ```
@@ -143,5 +153,5 @@ In the hand-back, say "looked at by me in the in-app browser at desktop and phon
 - How it was applied, live or to the draft, and the Custom CSS it replaced (`previous`), to undo it.
 - Any behaviour module and its CONFIG, with the paste steps if the person has not added it yet.
 - The verify result, with the config URL.
-- What the CSS could not reach (see REFERENCE.md §3) and any selector outside the catalog you used, marked fragile.
+- What the CSS could not reach (see REFERENCE.md §3) and any selector outside `get_web_chat_style_catalog` you used, marked fragile.
 - One question, optional: "Which part or state could you not style?" Pass the answer on with the bot id as an issue on the skills repo.
