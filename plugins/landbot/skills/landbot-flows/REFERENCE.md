@@ -6,7 +6,6 @@ What earlier builds learned on production Landbot. The Landbot MCP server's tool
 
 - **The share host belongs to the brand** (2026-10-03, production). Landbot serves a brand's web chats on one of `landbot.pro`, `landbot.online` or `landbot.site`; of the web channels created in September 2026, 87% were on `.online`, 9% on `.pro`, 4% on `.site`. A share URL on another host answers 404, so take it from `get_web_chat`, never build it.
 - Button outputs carry a `$` prefix and condition outputs are `true` / `false` (September 2026). Read the variant's `outputs`; never guess one.
-- AI-agent input interactions needed `config.variant` (`text`, `number`, `email`) although the schema is loose (September 2026).
 - An AI agent cannot learn a `landbot.io` page (2026-10-09, on an isolated stack running the production code). `add_knowledge_website` refuses every URL whose domain ends in `landbot.io` with HTTP 422 `knowledge_source_not_accepted` ("The provided source URL is not valid"), which does not say why; `https://example.com` was read and reached `finished`. Tell the person, and offer to add the page's text with `add_knowledge_text` instead.
 - Do not probe production with deliberately invalid writes to discover enums. Read the schema; if it is silent, ask.
 
