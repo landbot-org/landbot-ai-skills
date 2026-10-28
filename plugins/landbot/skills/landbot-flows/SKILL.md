@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.9.1
+  version: 0.9.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.9.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.9.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -49,7 +49,6 @@ When the request describes a look, or the person wants one, ask for it in one se
 Build the whole flow, then read `violations` after every write. On a web bot (`channel_family` `landbot`) these are the rules the server cannot check for you:
 
 - **Never place `ask_yes_no`.** It is in the catalog, but the v4 web chat does not render it: the visitor sees "Thinking..." forever. Build Yes/No as a `buttons` block. Catalog presence is not evidence the chat renders it.
-- **On `ask_date`, `format` and `pickerFormat` must agree, and the defaults do not.** `format` is the list of patterns the block accepts (strftime); `pickerFormat` is how the calendar writes the date. Set `pickerFormat` alone and every date the visitor sends is refused, forever, while the draft reports no violation. Set both: `dd/MM/yyyy` → `["%d/%m/%Y"]`, `MM/dd/yyyy` → `["%m/%d/%Y"]`, `yyyy/MM/dd` → `["%Y/%m/%d"]`.
 - **The visitor types the date**: tapping a day in the calendar does not fill the field. So the date question says the format in its own text ("dd/mm/yyyy").
 - **Five or more buttons stop looking like buttons.** From five options the v4 web chat draws a boxed list with a search field. Nothing is broken, but say so when you place them, because the person is picturing buttons.
 - **An AI agent's `instructions` stop at 9,000 characters**, though its schema declares no limit. Count before you send; if it is over, shorten it rather than retrying.

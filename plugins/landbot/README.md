@@ -26,7 +26,7 @@ In the Claude desktop app's Code tab, the agent opens the chat in the app's buil
 
 **landbot-flows** reads Landbot's live block catalog, creates the bot, places and wires the blocks, sets up an AI agent block when the brief calls for one, and publishes on your say-so. It hands back the builder link, the share URL and a plain description of the conversation. Because it reads the catalog at run time, a new block type on Landbot's side needs no update here.
 
-**landbot-style** turns a brief ("like our site", "dark", "like a form") into one Custom CSS block for the v4 web chat, applies it or tells you where to paste it, and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which you paste in the builder and Landbot serves to accounts with the Custom Code feature; the trial has it, and the chat works without them.
+**landbot-style** turns a brief ("like our site", "dark", "like a form") into one Custom CSS block for the v4 web chat, applies it or tells you where to paste it, and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code feature; the trial has it, and the chat works without them.
 
 ## Where it runs
 

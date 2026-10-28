@@ -32,7 +32,7 @@ Avatars are images from the bot configuration, not colours. Multi-select `option
 - Enter submits short text inputs on `3.1.0`.
 - The text input, its layouts and its padding are in §6.
 - Channel Custom JS (Design › Custom code › Add JS, the channel's `foot`) runs on the share page on `3.1.0`. It is a separate surface from flow `code` blocks. Landbot serves it only to accounts with the Custom Code feature (the trial has it). Where it is missing, the script is stored and not served. A look must never need its script to work.
-- Use it for behaviour only, when asked, and never for data. The MCP server does not write it: the person pastes it in the builder.
+- Use it for behaviour only, when asked, and never for data.
 - A dark look also needs the channel's `design` colours, or the page shows a white loader before the chat draws. The MCP server does not write `design`: the person sets those colours in the builder's Design tab; say so when a dark look is asked for.
 
 ## 5. Welcome screens on form-style replicas
