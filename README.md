@@ -9,7 +9,7 @@ One plugin, `landbot`, with two skills:
 | Skill | What it does |
 |---|---|
 | `landbot-flows` | Reads the live block catalog, creates the bot, places and wires blocks, sets up an AI agent block, puts the web chat on the current renderer, publishes when you say so, and hands back the builder link and the share URL. |
-| `landbot-style` | Turns "make it look like our site / dark / like a form" into one Custom CSS block, applies it to the web chat (or tells you where to paste it) and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which you paste in the builder and Landbot serves to accounts with the Custom Code feature (the trial has it); the chat works without them. |
+| `landbot-style` | Turns "make it look like our site / dark / like a form" into one Custom CSS block, applies it to the web chat (or tells you where to paste it) and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code feature (the trial has it); the chat works without them. |
 
 Requirements: a Landbot account (free to create) and a coding agent that connects to remote MCP servers.
 
@@ -61,7 +61,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 Then add `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
-Each skill prints its version (`landbot-flows 0.9.1`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.9.2`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Signing in
 

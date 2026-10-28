@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__get_web_chat_style_catalog
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.9.1
+  version: 0.9.2
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.9.1`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.9.2`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). What the CSS can style (anchors, roles, tokens) is read live from the Landbot MCP server with `get_web_chat_style_catalog` (Step 2). How the layers fit together, with a full worked example, is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -31,7 +31,7 @@ A bot the person already had is never changed without their yes: name the bot an
 Ask only about what the chat's CSS can touch: mode, palette or accent, corner shape, typography, density. Out of scope: logo, avatars (bot images), iconography, motion.
 
 - Open with one question: "In one sentence, what should the chat convey, or which brand should it look like?"
-- Warn once about the limits: colours, shape, typography and states; not the logo, the avatars or the fine header.
+- Warn once about the limits: colours, shape, typography and states; not the logo, the avatars or the fine header. The header's title and image are not CSS: `update_web_chat` sets them.
 - Offer concrete choices, not open questions: reference brand or hex palette or a preset (IBM / generic dark / generic light); light or dark; square, soft or rounded; boxed fields or bottom-line only.
 - If they give a strong reference ("our site", a URL, "IBM"), infer the whole package and confirm it in one line rather than asking item by item. For a URL, read it and extract background, text, accent, font and corner radius.
 - As soon as you have mode + palette/accent + shape, stop asking and produce the first pass. Typography and density are better tuned by looking than by asking.
@@ -98,14 +98,14 @@ CSS cannot move reply buttons into the bubble that asked, stamp times on message
 | `messaging` | a messaging-app chat: reply buttons inside the bubble that asked, times on messages, a "Today" chip, "typing…" under the header name, a composer bar on button turns | `placeholder`, `dayLabel` |
 | `steps` | a form: a progress bar that fills as they answer, "2 of 5", letter keys A, B, C for the buttons | `total` (questions on the longest path), `counter`, `counterText`, `keys` |
 
-The MCP server does not write Custom JS: the person adds it in the builder. To prepare one:
+To add one:
 
 1. Copy the module's `.js` to a working file and **change only the values in its `CONFIG` block** (strings, numbers, true/false). Append the module's `.css` to the end of the look's CSS, set its colour variables (`--lbm-*`, `--lbs-*`) from the brief in `:root`, and push the CSS as in Step 3.
-2. Give the person the script and these steps: open the bot in the builder → **Design** → **Custom code** → **Add JS**, paste, **Apply**, then **Publish**.
+2. Push the script as you push the CSS: `update_web_chat` with `custom_js` set to the whole file. Say before the first push that it replaces the chat's Custom JS whole, and keep the `custom_js` of `previous`, the undo. The person can also paste it: open the bot in the builder → **Design** → **Custom code** → **Add JS**, paste, **Apply**, then **Publish**.
 3. Landbot serves Custom JS only to accounts with the Custom Code feature; elsewhere it is stored and not served. The chat works without it, because every module rule in the CSS styles only what the script adds. Do not guess which plans have it.
-4. Once they have published, **walk it** in the in-app browser (`landbot-flows` Step 6), then `read_console_messages` with errors only. A script error, a button that does not answer, or a page that stops responding is a failure: say so and ask them to remove the script.
+4. Once it is live (as for the CSS in Step 4), **walk it** in the in-app browser (`landbot-flows` Step 6), then `read_console_messages` with errors only. A script error, a button that does not answer, or a page that stops responding is a failure: say so and offer to put back the Custom JS of `previous`.
 
-**A custom script, when neither module fits** and the person asked for a behaviour: say in plain words what it will do on their page, and give it to them to paste the same way. Keep it short and page-only, with an `lb-js: <name>` marker comment: no sending data out, no cookies, no loading or building code, no navigation. Wrap everything in `try`; add only attributes, classes and your own elements, never move Landbot's nodes; read `textContent`, never `innerText`, inside anything that runs on page changes (it can loop); guard a `MutationObserver` so its own changes do not trigger it again; and write the CSS so the chat looks complete when the script does not run.
+**A custom script, when neither module fits** and the person asked for a behaviour: say in plain words what it will do on their page, and push it the same way. Keep it short and page-only, with an `lb-js: <name>` marker comment: no sending data out, no cookies, no loading or building code, no navigation. Wrap everything in `try`; add only attributes, classes and your own elements, never move Landbot's nodes; read `textContent`, never `innerText`, inside anything that runs on page changes (it can loop); guard a `MutationObserver` so its own changes do not trigger it again; and write the CSS so the chat looks complete when the script does not run.
 
 ## Step 4 — Verify on the share URL (the only checks that prove anything)
 
@@ -151,7 +151,7 @@ In the hand-back, say "looked at by me in the in-app browser at desktop and phon
 
 - The CSS block (once, complete).
 - How it was applied, live or to the draft, and the Custom CSS it replaced (`previous`), to undo it.
-- Any behaviour module and its CONFIG, with the paste steps if the person has not added it yet.
+- Any behaviour module, its CONFIG and the Custom JS it replaced (`previous`).
 - The verify result, with the config URL.
 - What the CSS could not reach (see REFERENCE.md §3) and any selector outside `get_web_chat_style_catalog` you used, marked fragile.
 - One question, optional: "Which part or state could you not style?" Pass the answer on with the bot id as an issue on the skills repo.
