@@ -7,7 +7,7 @@ Observed on production Landbot web chat v4 in September and October 2026. Verify
 ## The model: three layers in one block
 
 1. **Tokens.** The global look: background, text, borders, primary button, messages, inputs, calendar, header, typography. Theme tokens go in `:root`; component tokens go in the `selector` the catalog gives each one.
-2. **Anchors (plain rules, NO `!important`).** Specific parts, states and accents: the bot bubble background, focus/error, calendly, takeover, corners, hover. A rule on a part sets only what its `role` allows.
+2. **Anchors (plain rules, NO `!important`).** Specific parts, states and accents: a one-sided border on the bot bubble, focus/error, calendly, takeover, corners, hover. A rule on a part sets only what its `role` allows.
 3. **Scrollbars (global).** Browser bars; not an anchor, just standard CSS.
 
 ## The golden cascade rule (when to use `!important`)
@@ -17,7 +17,7 @@ Observed on production Landbot web chat v4 in September and October 2026. Verify
 - **Derived tokens.** A theme token with `derived_from` is computed from its base when the chat loads. Changing the base in CSS does not move them: set the derived ones you need too (the example below sets them for a dark look).
 - **One-off exception:** if a specific property won't stick, a component may defend it with its own `!important`; there you add it to the anchor. Practical rule: emit plain; if a rule shows struck through in DevTools, add `!important`.
 
-There is **no token for the bot bubble background** (only its text): it goes through an anchor. The selected calendar day has **no anchor**: it goes through `--calendar-day-bg-selected`.
+The bot bubble is text with no frame: its `--chat-bubble-*-bot` tokens (surface, border colour and width, radius, padding) are transparent or 0. Frame it through them, and set the padding whenever you set a background or border. The selected calendar day has **no anchor**: it goes through `--calendar-day-bg-selected`.
 
 ## Scrollbars (global, not an anchor)
 
@@ -58,7 +58,7 @@ Values and fidelity rules (from IBM's design language / Carbon):
 
 ## Full example: IBM Carbon dark
 
-Token names, selectors and `important` checked against `get_web_chat_style_catalog` on 2026-10-23. Read the catalog again before reusing it.
+Token names, selectors and `important` checked against `get_web_chat_style_catalog` on 2026-10-23, the `--chat-bubble-*-bot` ones on 2026-10-29. Read the catalog again before reusing it.
 
 ```css
 /* lb-style: ibm-carbon-dark — THEME + COMPONENT tokens, ANCHORS (plain), SCROLLBARS */
@@ -156,6 +156,13 @@ Token names, selectors and `important` checked against `get_web_chat_style_catal
   --button-color-primary-hover:#0353e9;
   --button-color-primary-active:#002d9c;
   --button-color-primary-disabled:#393939;
+  /* the bot bubble: a frame needs padding too, or the text touches it */
+  --chat-bubble-surface-bot:#262626;
+  --chat-bubble-border-color-bot:#393939;
+  --chat-bubble-border-width-bot:1px;
+  --chat-bubble-radius-bot:0;
+  --chat-bubble-padding-y-bot:12px;
+  --chat-bubble-padding-x-bot:16px;
   --calendar-day-radius:0;
   --calendar-nav-radius:0;
   --calendar-day-bg-hover:#393939;
@@ -200,9 +207,8 @@ Token names, selectors and `important` checked against `get_web_chat_style_catal
 
 /* ANCHORS (plain) */
 [data-lb-part="message-text"] { font-family:"IBM Plex Sans",sans-serif; line-height:1.5; }
-[data-lb-part="message"][data-lb-author="bot"] [data-lb-part="message-bubble"] {
-  background:#262626; color:#f4f4f4; border:1px solid #393939; border-left:3px solid #4589ff; padding:12px 16px;
-}
+/* The Carbon accent, which no token draws: the tokens above frame and pad the bot bubble */
+[data-lb-part="message"][data-lb-author="bot"] [data-lb-part="message-bubble"] { border-left:3px solid #4589ff; }
 [data-lb-part="message-bubble"],[data-lb-part="option-button"],[data-lb-part="input-submit"],
 [data-lb-part="date-picker"],[data-lb-part="takeover"],[data-lb-part="calendly-cta"],
 [data-lb-part="proactive-message-bubble"] { border-radius:0; }
@@ -239,4 +245,4 @@ Token names, selectors and `important` checked against `get_web_chat_style_catal
 ```
 
 ### Explanation (template)
-The theme tokens set the base (background, text and primary, with the tokens derived from each, plus header, user bubble, input, launcher and typography) with `!important` because the config sets them inline. The component tokens square the calendar and its dropdowns and colour the input box per state, set where the catalog says, without `!important`. The plain anchors add what the tokens don't reach: the bot card, the Carbon bottom line, takeover accents, the chrome (window frame, header, timestamp, branding), and the scrollbars. The box is `input-field` alone; the `<input>` and the AI Agent's `<textarea>` stay transparent. Out of scope: per-instance, forcing the options list height, and the avatars (bot image).
+The theme tokens set the base (background, text and primary, with the tokens derived from each, plus header, user bubble, input, launcher and typography) with `!important` because the config sets them inline. The component tokens frame and pad the bot bubble, square the calendar and its dropdowns and colour the input box per state, set where the catalog says, without `!important`. The plain anchors add what the tokens don't reach: the bot bubble's left accent, the Carbon bottom line, takeover accents, the chrome (window frame, header, timestamp, branding), and the scrollbars. The box is `input-field` alone; the `<input>` and the AI Agent's `<textarea>` stay transparent. Out of scope: per-instance, forcing the options list height, and the avatars (bot image).

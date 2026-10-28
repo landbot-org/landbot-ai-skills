@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__get_web_chat_style_catalog
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.9.2
+  version: 0.9.3
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.9.2`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.9.3`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). What the CSS can style (anchors, roles, tokens) is read live from the Landbot MCP server with `get_web_chat_style_catalog` (Step 2). How the layers fit together, with a full worked example, is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -54,7 +54,9 @@ Three layers, in this order, in one block (how they fit together and a full exam
 2. **Anchors** as plain rules, **no `!important`**: `[data-lb-part="…"]` with `data-lb-author`, `data-lb-state`, `data-lb-variant`. The channel CSS is unlayered and beats web-chat's layered utilities on its own. A rule sets only what the part's `role` allows.
 3. **Scrollbars** last, global, values from the brief's palette.
 
-Rules: only selectors and tokens from the catalog; non-system fonts via a Google Fonts `@import` at the top; the bot bubble background has **no token**, it goes through an anchor; never per-instance selectors. Put a comment on the first line with a short unique marker, e.g. `/* lb-style: acme-dark 2026-09-17 */` — verification greps for it.
+Rules: only selectors and tokens from the catalog; non-system fonts via a Google Fonts `@import` at the top; never per-instance selectors. Put a comment on the first line with a short unique marker, e.g. `/* lb-style: acme-dark 2026-09-17 */` — verification greps for it.
+
+**The bot bubble is text with no frame.** Its tokens in the `component` layer, `--chat-bubble-surface-bot`, `-border-color-bot`, `-border-width-bot`, `-radius-bot`, `-padding-x-bot` and `-padding-y-bot`, are transparent or 0. To frame it, set them in `:root`, and always the two padding ones with a background or border, or the text touches the frame. The anchor `[data-lb-part="message"][data-lb-author="bot"] [data-lb-part="message-bubble"]` is only for what the tokens do not cover, such as a border on one side or a shadow. The chat's bubble shape can override the tokens: `rounded` and `squared` replace the radius, and `transparent` drops the background, the border and the padding. With `transparent`, or a server whose catalog lacks the `-bot` tokens, put the frame on the anchor, with `padding` in the same rule.
 
 **The input** (details in REFERENCE.md §6):
 
@@ -123,6 +125,16 @@ Then in the browser, on the share URL (its host is `landbot.pro`, `landbot.onlin
 document.querySelectorAll('[data-lb-part]').length            // > 0
 document.fonts.check('18px "<Font>"')                          // true when the @import loaded
 getComputedStyle(document.querySelector('[data-lb-part="option-button"]')).backgroundColor
+// [] when no text touches its frame: every framed bubble keeps >= 8px between its edge and its text
+[...document.querySelectorAll('[data-lb-part="message-bubble"]')].flatMap(b => {
+  const s = getComputedStyle(b), t = b.querySelector('[data-lb-part="message-text"]');
+  const framed = s.backgroundColor !== 'rgba(0, 0, 0, 0)' || s.boxShadow !== 'none'
+    || ['Top', 'Right', 'Bottom', 'Left'].some(e => parseFloat(s[`border${e}Width`]) > 0);
+  if (!framed || !t) return [];
+  const o = b.getBoundingClientRect(), i = t.getBoundingClientRect();
+  const gap = Math.min(i.top - o.top, o.right - i.right, o.bottom - i.bottom, i.left - o.left);
+  return gap < 8 ? [{ text: t.textContent.slice(0, 30), gap: Math.round(gap) }] : [];
+})
 ```
 
 Report what you checked and what you did not: a full-page share URL check does not verify the embedded bubble on a customer site.
@@ -132,20 +144,21 @@ Report what you checked and what you did not: a full-page share URL check does n
 `verify-share` proves the CSS is in the published config, not that the chat looks right. **If this session has Claude's in-app browser** (the Claude desktop app's Code tab: tools named `mcp__Claude_Browser__*`), look at the chat there once the bot is published. The person watches it in the side pane:
 
 1. Open the share URL (`preview_start` with `url`, or `navigate` when the pane is open). Answer the first question with fake data so a user reply and the next question are on screen.
-2. Run the three console checks above with `javascript_tool`, and take a screenshot at desktop width.
+2. Run the four console checks above with `javascript_tool`, and take a screenshot at desktop width.
 3. `resize_window` with preset `mobile`, reload the share URL with a new query string (`?look=2`), answer once, and take a second screenshot. Then `resize_window` with preset `desktop` to put the pane back.
-4. Check these five things on both screenshots, against the brief:
+4. Check these six things on both screenshots, against the brief:
    (a) every bot message is readable against its background;
    (b) the brand colours are on the bot bubble and the buttons;
    (c) the brand font is used (`document.fonts.check` is true);
    (d) every button and the input can be reached, and nothing is covered;
-   (e) the input, in both layouts: desktop is `stacked`, phone is `inline`. If the flow has an `ai_agent` block, check its `<textarea>` (`free-text`) as well as the text `<input>`: reach it in the conversation and measure it the same way. On each, the vertical centres of the text, the send button and the field agree within 1px (`getBoundingClientRect()` on `input-control` or `free-text`, `input-submit` and `input-field`), and there is no box inside a box: `getComputedStyle` on the control shows a transparent background, no border and no shadow.
+   (e) the input, in both layouts: desktop is `stacked`, phone is `inline`. If the flow has an `ai_agent` block, check its `<textarea>` (`free-text`) as well as the text `<input>`: reach it in the conversation and measure it the same way. On each, the vertical centres of the text, the send button and the field agree within 1px (`getBoundingClientRect()` on `input-control` or `free-text`, `input-submit` and `input-field`), and there is no box inside a box: `getComputedStyle` on the control shows a transparent background, no border and no shadow;
+   (f) no text touches the frame of its box: the fourth console check returns `[]` at both widths. A bubble it lists needs padding (Step 2).
 5. If one fails, fix the CSS and push again. On a published bot that push goes to the draft: say so, and the fix reaches visitors when the person publishes it. Stop after three rounds and report what is still wrong.
 6. With a behaviour module on, also check it did its job at both widths (reply buttons inside the bubble, or the bar filling), and that `read_console_messages` shows no error from it.
 
-In the hand-back, say "looked at by me in the in-app browser at desktop and phone width", plus the result of each of the five checks.
+In the hand-back, say "looked at by me in the in-app browser at desktop and phone width", plus the result of each of the six checks.
 
-**No in-app browser** (terminal, Codex, Cursor): give the share URL and the five checks above, and ask the person to open it on a computer and a phone. Until they answer, say "the CSS is live", never "styled".
+**No in-app browser** (terminal, Codex, Cursor): give the share URL and the six checks above, and ask the person to open it on a computer and a phone. Until they answer, say "the CSS is live", never "styled".
 
 ## Step 5 — Hand back
 
