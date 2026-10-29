@@ -36,7 +36,7 @@ What earlier builds learned on production Landbot. The Landbot MCP server's tool
 
 ## The web chat's look
 
-- `update_web_chat` writes live only while the bot has never been published and its chat has no unpublished changes; otherwise it writes the chat's draft, which the person publishes from the builder (2026-10). The builder's Preview shows that draft, Custom CSS included (2026-09-25). A builder tab opened before a draft write publishes the copy it loaded, so the person reloads it before pressing Publish there.
+- `update_web_chat` writes live only while the bot has never been published and its chat has no unpublished changes; otherwise it writes the chat's draft, which goes live with the bot's next publication, through `publish_bot` or the builder's Publish (production, 2026-10-29). The builder's Preview shows that draft, Custom CSS included (2026-09-25). A builder tab opened before a draft write publishes the copy it loaded, so the person reloads it before pressing Publish there.
 - The `design` colours, hidden fields and the page head are set in the builder: `update_web_chat` does not write them.
 
 ## What this skill does not do

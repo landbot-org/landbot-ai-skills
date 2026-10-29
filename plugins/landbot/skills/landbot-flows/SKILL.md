@@ -4,10 +4,10 @@ description: Build and edit Landbot bots through the Landbot MCP server — read
 allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.9.3
+  version: 0.9.4
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.9.3`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.9.4`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -78,12 +78,12 @@ The builder draws the diagram from each block's `top` and `left`, so give every 
 
 ## Step 3 — The look, while the bot has never been published
 
-A bot's web chat look (the v4 web chat, Custom CSS, the visitor's Back button) is read with `get_web_chat` and changed with `update_web_chat`. **On a bot never published, a change is live at once; once the bot is published, it goes to the chat's draft**, which visitors get only when the person publishes the bot from the Landbot builder. The answer says which (`target`). So for a bot you create:
+A bot's web chat look (the v4 web chat, Custom CSS, the visitor's Back button) is read with `get_web_chat` and changed with `update_web_chat`. **On a bot never published, a change is live at once; once the bot is published, it goes to the chat's draft**, which visitors get with the bot's next publication: `publish_bot` puts it live along with the flow. The answer says which (`target`). So for a bot you create:
 
 1. Switch it to the v4 web chat (`use_v4`) right after `create_bot`: Custom CSS only reaches v4, and there is no switching back.
 2. When there is a look, style it now with `landbot-style`, **before the first publish**, so the first version visitors get already has it. While nothing is published nobody can see it, so this needs no yes.
 
-For a bot the person already had: say that the change goes to the draft and needs their yes; it reaches visitors when they publish from the builder. Before switching such a bot to v4, read its draft: if it uses `ask_yes_no` blocks, say those steps stop working on the v4 web chat once they publish.
+For a bot the person already had: say that the change goes to the draft and needs their yes; it reaches visitors with the bot's next publication, which also puts live whatever else the draft holds and needs a yes of its own. Before switching such a bot to v4, read its draft: if it uses `ask_yes_no` blocks, say those steps stop working on the v4 web chat once it is published.
 
 ## Step 4 — One yes to publish
 
