@@ -4,10 +4,10 @@ description: Style a Landbot v4 web chat. Turn a brief (brand colours, a referen
 allowed-tools: Bash("${CLAUDE_SKILL_DIR}/scripts/verify-share" *) mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__get_web_chat_style_catalog
 metadata:
   short-description: Style a Landbot v4 web chat with one Custom CSS block
-  version: 0.9.3
+  version: 0.9.4
 ---
 
-**First line of your first reply when this skill activates: `landbot-style 0.9.3`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-style 0.9.4`.** Then carry on. A different version shown elsewhere means two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) first (the v4 gate, apply and verify mechanics, what CSS cannot reach). What the CSS can style (anchors, roles, tokens) is read live from the Landbot MCP server with `get_web_chat_style_catalog` (Step 2). How the layers fit together, with a full worked example, is in [references/style-catalog.md](references/style-catalog.md). Build the flow with `landbot-flows`; this skill only styles.
 
@@ -21,7 +21,7 @@ This skill reads and writes the chat through the Landbot MCP server (`get_web_ch
 `get_web_chat` answers both:
 
 - **`renders_v4`.** The anchors and tokens only exist on the v4 web chat. On the legacy one the CSS saves and **changes nothing**, and nothing in the builder warns you. If it is false, `update_web_chat` with `use_v4` switches it (there is no switching back): for a bot `landbot-flows` created in this conversation, do it; for a bot the person already had, say Custom CSS needs the v4 web chat and get their yes first, warning that `ask_yes_no` blocks in its flow stop working on v4. Do not generate CSS "just in case".
-- **Live or draft.** On a bot never published, whose chat has no unpublished changes, a change is **live at once**. Otherwise it goes to the chat's **draft**: visitors get it when the person publishes the bot from the Landbot builder, and the builder's **Preview** shows it before then. Say which, before the first change.
+- **Live or draft.** On a bot never published, whose chat has no unpublished changes, a change is **live at once**. Otherwise it goes to the chat's **draft**: visitors get it with the bot's next publication (`publish_bot` after the person's yes, or Publish in the builder), and the builder's **Preview** shows it before then. Say which, before the first change.
 - **`share_url`**, which Step 4 verifies on.
 
 A bot the person already had is never changed without their yes: name the bot and say the change goes to its draft.
@@ -111,7 +111,7 @@ To add one:
 
 ## Step 4 — Verify on the share URL (the only checks that prove anything)
 
-Once the look is live (a bot never published, or after the person published it):
+Once the look is live (a bot never published, or once the bot is published again):
 
 ```bash
 "${CLAUDE_SKILL_DIR}/scripts/verify-share" <share-url> "lb-style: acme-dark"
@@ -153,7 +153,7 @@ Report what you checked and what you did not: a full-page share URL check does n
    (d) every button and the input can be reached, and nothing is covered;
    (e) the input, in both layouts: desktop is `stacked`, phone is `inline`. If the flow has an `ai_agent` block, check its `<textarea>` (`free-text`) as well as the text `<input>`: reach it in the conversation and measure it the same way. On each, the vertical centres of the text, the send button and the field agree within 1px (`getBoundingClientRect()` on `input-control` or `free-text`, `input-submit` and `input-field`), and there is no box inside a box: `getComputedStyle` on the control shows a transparent background, no border and no shadow;
    (f) no text touches the frame of its box: the fourth console check returns `[]` at both widths. A bubble it lists needs padding (Step 2).
-5. If one fails, fix the CSS and push again. On a published bot that push goes to the draft: say so, and the fix reaches visitors when the person publishes it. Stop after three rounds and report what is still wrong.
+5. If one fails, fix the CSS and push again. On a published bot that push goes to the draft: say so, and the fix reaches visitors with the bot's next publication. Stop after three rounds and report what is still wrong.
 6. With a behaviour module on, also check it did its job at both widths (reply buttons inside the bubble, or the bar filling), and that `read_console_messages` shows no error from it.
 
 In the hand-back, say "looked at by me in the in-app browser at desktop and phone width", plus the result of each of the six checks.

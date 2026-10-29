@@ -61,7 +61,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 Then add `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
-Each skill prints its version (`landbot-flows 0.9.3`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+Each skill prints its version (`landbot-flows 0.9.4`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Signing in
 
@@ -73,7 +73,7 @@ The first time the agent uses Landbot, your browser opens Landbot's sign-in and 
 
 The skill builds the bot and styles it before anything is live, then asks once before publishing it. On a bot you already had, it asks before every change. It ends with the builder link, the share URL and a plain description of the conversation.
 
-Then: "make it look like `<your site>`". On a bot that was never published the look applies at once; on a published one it goes to the bot's draft, which you publish from the builder.
+Then: "make it look like `<your site>`". On a bot that was never published the look applies at once; on a published one it goes to the bot's draft, and reaches visitors the next time the bot is published.
 
 ## Embed
 

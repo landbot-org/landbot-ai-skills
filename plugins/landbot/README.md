@@ -35,7 +35,7 @@ Claude Code, or the Claude desktop app's Code tab, which is the recommended way.
 ## What the agent will and will not do
 
 - It builds and styles a new bot before anything is live, then asks once before publishing it. On a bot you already had, it asks before every change.
-- On a published bot, changes to the web chat's look go to the bot's draft, which you publish from the builder.
+- On a published bot, changes to the web chat's look go to the bot's draft, and reach visitors the next time the bot is published.
 - It acts only with the access you allowed at sign-in, and you can sign out at any time.
 
 ## Where data goes
