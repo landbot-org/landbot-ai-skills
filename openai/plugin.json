@@ -1,0 +1,111 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "landbot",
+  "description": "Build and publish AI conversion agents in Landbot from ChatGPT or Codex: qualify website visitors, book meetings and route leads, on your site and on WhatsApp.",
+  "author": {
+    "name": "Landbot",
+    "url": "https://landbot.io"
+  },
+  "homepage": "https://dev.landbot.io/guides/mcp-server",
+  "repository": "https://github.com/landbot-org/landbot-ai-skills",
+  "license": "MIT",
+  "keywords": [
+    "landbot",
+    "conversion-agent",
+    "lead-qualification",
+    "sales-agent",
+    "meeting-booking",
+    "lead-generation",
+    "chatbot",
+    "whatsapp",
+    "web-chat",
+    "mcp",
+    "skill"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Landbot",
+        "shortDescription": "Build AI conversion agents",
+        "longDescription": "Describe the conversation you want and get a Landbot bot built for you: a lead-qualification flow, a one-question-at-a-time form, a booking assistant, or an AI agent that answers from your content. It reads Landbot's live block catalog, creates the bot, places and wires its blocks, and links you to it in the Landbot builder.\n\nWhat it can do:\n- Create web and WhatsApp bots from a plain-language brief, and change the flow of a bot you already have.\n- Set up AI agents that answer from the texts and web pages you give them.\n- Connect Google Sheets, SendGrid and Calendly blocks to the accounts your brand has connected. When none will do, it gives you a link to connect one in Landbot.\n- Style the web chat: Custom CSS, the header title and avatar, and the texts visitors see.\n- Deploy a bot to test so you can try it, and publish it when you say so.\n\nHow it works: the first time you use it, Landbot's sign-in opens and asks you to allow access. There is no token to copy. From then on it acts with your account's permissions, on your brand, and asks before it deploys or publishes anything. Underneath it is a normal Landbot bot: you keep the builder, the inbox, the integrations and the WhatsApp channel.\n\nYou need a Landbot account. Some features, such as Custom CSS, depend on your Landbot plan.",
+        "developerName": "Landbot",
+        "category": "Business & Operations",
+        "capabilities": [
+          "Create web and WhatsApp bots from a plain-language description",
+          "Read Landbot's live block catalog and wire blocks into a working flow",
+          "Edit the flow of an existing bot: messages, questions, buttons and connections",
+          "Create AI agents that answer from your texts and web pages",
+          "Connect Google Sheets, SendGrid and Calendly blocks to your brand's accounts",
+          "Style the web chat with Custom CSS, a header title and avatar, and the texts visitors see",
+          "Deploy a bot to test, and publish it once you approve"
+        ],
+        "websiteURL": "https://landbot.io",
+        "supportURL": "https://help.landbot.io/",
+        "privacyPolicyURL": "https://landbot.io/privacy-policy",
+        "termsOfServiceURL": "https://landbot.io/terms-conditions",
+        "defaultPrompt": [
+          "Build a lead-qualification bot for my website that asks for name, email and company size",
+          "Show me my Landbot bots and which ones are published",
+          "Give my website chat a dark look that matches my brand colors"
+        ],
+        "brandColor": "#33405E",
+        "logo": "./assets/icon.svg",
+        "composerIcon": "./assets/icon.svg"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Lists the bots of the signed-in Landbot account without changing anything.",
+              "prompt": "Show me my Landbot bots and tell me which ones are published.",
+              "tools_triggered": "list_bots",
+              "expected_behavior": "Calls list_bots and lists the account's bots by name, with their channel and whether each one is published. It changes nothing."
+            },
+            {
+              "description": "Builds a new web bot from a plain-language description, without publishing it.",
+              "prompt": "Create a web chatbot called Newsletter signup that asks for the visitor's name and email, then thanks them.",
+              "tools_triggered": "list_blocks, get_block_definition, create_bot, add_draft_blocks",
+              "expected_behavior": "Reads the block catalog, creates a web bot named Newsletter signup and adds a greeting, a name question, an email question and a thank-you message, connected in that order. It reports that the draft breaks no rules, links to the bot in the Landbot builder, and does not publish it without asking."
+            },
+            {
+              "description": "Changes a message in the draft of a bot the account already has. The test account has a web bot named Demo lead form.",
+              "prompt": "In my Demo lead form bot, change the last message to: Thanks! We'll get back to you within one business day.",
+              "tools_triggered": "list_bots, get_bot_draft, update_draft_block",
+              "expected_behavior": "Finds the Demo lead form bot, reads its draft and, after the user confirms, changes the text of its final message. It says the change is in the draft and reaches visitors only when the bot is published."
+            },
+            {
+              "description": "Deploys a bot's draft to its test copy once the user has asked for it.",
+              "prompt": "Deploy my Demo lead form bot to test so I can try it before publishing.",
+              "tools_triggered": "list_bots, deploy_draft_to_test",
+              "expected_behavior": "Deploys the Demo lead form draft to the bot's test copy, reports any warnings, and tells the user where to try it in Landbot. Visitors keep getting the published version, and nothing is published."
+            },
+            {
+              "description": "Styles a web bot's chat with Custom CSS.",
+              "prompt": "Give the chat of my Demo lead form bot a dark background and orange buttons.",
+              "tools_triggered": "list_bots, get_web_chat, update_web_chat",
+              "expected_behavior": "Reads how the chat looks, writes a Custom CSS block with a dark background and orange buttons, and says whether the change is live or in the draft that visitors get once the bot is published from the Landbot builder."
+            }
+          ],
+          "negative": [
+            {
+              "description": "A general question unrelated to Landbot. No Landbot tool should run; ChatGPT answers on its own.",
+              "prompt": "What's the capital of Australia?"
+            },
+            {
+              "description": "A web page, not a conversation. The plugin should not create a bot or call any Landbot tool; ChatGPT can help with the HTML itself.",
+              "prompt": "Write the HTML for a landing page for my bakery."
+            },
+            {
+              "description": "Messaging people is outside the plugin: it builds bots and has no tool that sends messages to contacts. It should call no Landbot tool and say it cannot send the message.",
+              "prompt": "Send a WhatsApp message to all my customers saying we're closed tomorrow."
+            }
+          ]
+        },
+        "commerce": false
+      },
+      "publication": {
+        "release_notes": "First release: build, edit, style, test and publish Landbot bots and AI agents from ChatGPT and Codex through the Landbot MCP server."
+      }
+    }
+  }
+}
