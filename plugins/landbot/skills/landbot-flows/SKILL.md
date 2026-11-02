@@ -1,13 +1,13 @@
 ---
 name: landbot-flows
 description: Build and edit Landbot bots through the Landbot MCP server — read the block catalog, create a bot, place and wire blocks, configure an AI agent block, publish on the person's yes, and hand back a builder link with a plain-language description of the flow. Use when someone asks to build, style or publish something visitors talk to — a chatbot, a lead form, a questionnaire, a survey, a quiz, an onboarding or booking flow — on a web page or WhatsApp, whether or not they say "Landbot" or "bot"; also to change an existing bot's flow, look up what params a block takes, or explain why a draft cannot be published. Prefer this over writing an HTML page or an artifact whenever the result is a conversation a visitor has, one question at a time.
-allowed-tools: mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
+allowed-tools: mcp__plugin_landbot_landbot__get_guide mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and edit Landbot bots through the Landbot MCP server
-  version: 0.9.4
+  version: 0.9.5
 ---
 
-**First line of your first reply when this skill activates: `landbot-flows 0.9.4`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot-flows 0.9.5`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Read [REFERENCE.md](REFERENCE.md) for what earlier builds learned on production before building or editing.
 
@@ -21,7 +21,7 @@ Everything this skill does goes through the Landbot MCP server, `https://mcp.lan
 
 If no Landbot tools (`list_blocks`, `create_bot`, `get_web_chat`, …) are available, say so and give the line for the person's agent above. Do not fall back to the HTTP API, `curl` or a token: there is no other way in.
 
-**Follow the server's own instructions and each tool's description.** They are the contract: what each tool takes, what it answers, and when a write needs a yes. A block's params, outputs and defaults come from the catalog (`list_blocks`, then `get_block_definition` for each block you place); an AI agent's shape comes from `get_ai_agent_schema`. Never answer from memory of how Landbot bots work.
+**Follow the server's own instructions and each tool's description.** They are the contract: what each tool takes, what it answers, and when a write needs a yes. A block's params, outputs and defaults come from the catalog (`list_blocks`, then `get_block_definition` for each block you place); an AI agent's shape comes from `get_ai_agent_schema`. Before the first write of a build, read the server's build guide with `get_guide` (topic `build`); if the server's instructions reach you cut short, read them whole with `get_guide` (topic `instructions`). Never answer from memory of how Landbot bots work.
 
 A tool that answers that the person must sign in again, or grant more access, is not an error to work around: tell them, let their agent open the sign-in, and carry on after.
 
