@@ -21,7 +21,7 @@ Everything this skill does goes through the Landbot MCP server, `https://mcp.lan
 
 If no Landbot tools (`list_blocks`, `create_bot`, `get_web_chat`, …) are available, say so and give the line for the person's agent above. Do not fall back to the HTTP API, `curl` or a token: there is no other way in.
 
-**Follow the server's own instructions and each tool's description.** They are the contract: what each tool takes, what it answers, and when a write needs a yes. A block's params, outputs and defaults come from the catalog (`list_blocks`, then `get_block_definition` for each block you place); an AI agent's shape comes from `get_ai_agent_schema`. Never answer from memory of how Landbot bots work.
+**Follow the server's own instructions and each tool's description.** They are the contract: what each tool takes, what it answers, and when a write needs a yes. A block's params, outputs and defaults come from the catalog (`list_blocks`, then `get_block_definition` for each block you place); an AI agent's shape comes from `get_ai_agent_schema`. Before the first write of a build, read the server's build guide with `get_guide` (topic `build`); if the server's instructions reach you cut short, read them whole with `get_guide` (topic `instructions`). Never answer from memory of how Landbot bots work.
 
 A tool that answers that the person must sign in again, or grant more access, is not an error to work around: tell them, let their agent open the sign-in, and carry on after.
 
