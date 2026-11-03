@@ -4,20 +4,24 @@ Describe a conversation to Claude, Codex or Cursor; get a published Landbot bot 
 
 What people build with it: lead-qualification bots, one-question-at-a-time forms, product configurators that end in a quote request, step-by-step lessons, AI assistants that answer from your docs and hand over to a human. Every one of them keeps Landbot's builder, inbox, integrations and WhatsApp channel underneath.
 
-One plugin, `landbot`, with two skills:
+One plugin, `landbot`, with one skill, also called `landbot`. It connects your agent to the Landbot MCP server and tells it which of the server's guides to read before each step:
 
-| Skill | What it does |
+| Guide | What the agent learns from it |
 |---|---|
-| `landbot-flows` | Reads the live block catalog, creates the bot, places and wires blocks, sets up an AI agent block, puts the web chat on the current renderer, publishes when you say so, and hands back the builder link and the share URL. |
-| `landbot-style` | Turns "make it look like our site / dark / like a form" into one Custom CSS block, applies it to the web chat (or tells you where to paste it) and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code feature (the trial has it); the chat works without them. |
+| `build` | The order of a build, the bot to build when you just say "show me", where the blocks go on the canvas, and what the visitor's chat does that the block catalog does not say. |
+| `style` | How to turn "make it look like our site / dark / like a form" into one Custom CSS block for the web chat, keep the visitor's Back button, and check the look where visitors get it. |
+| `style-messaging`, `style-steps` | Two ready-made behaviours that go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code add-on; the chat works without them. |
+| `hand-back` | The yes to ask for before publishing, what to hand back (the builder link, the share URL and a plain description of the conversation), and how to try the bot on every branch. |
+
+The guides live on the server and the agent reads them with the server's `get_guide` tool, so they change without a plugin update and reach every agent connected to the server, with or without this plugin.
 
 Requirements: a Landbot account (free to create) and a coding agent that connects to remote MCP servers.
 
 ## Install
 
-Pick your agent. Each install gives you both skills.
+Pick your agent.
 
-**Claude desktop app, Code tab (recommended), no terminal.** Open **Customize › Plugins**, choose **Add marketplace**, paste `landbot-org/landbot-ai-skills`, then install **landbot**, and describe your bot in a new session in the Code tab. There the agent builds your chat live in the app's built-in browser, beside the conversation: you watch each question appear and the look change step by step, and it talks to the bot on every branch and checks it at desktop and phone width. (Cowork runs the skills too; it has no browser pane, and it is not tested end to end yet.)
+**Claude desktop app, Code tab (recommended), no terminal.** Open **Customize › Plugins**, choose **Add marketplace**, paste `landbot-org/landbot-ai-skills`, then install **landbot**, and describe your bot in a new session in the Code tab. There the agent can open your chat in the app's built-in browser, beside the conversation, and talk to the published bot on every branch, at desktop and phone width. (Cowork runs the plugin too; it has no browser pane, and it is not tested end to end yet.)
 
 **Claude Code (terminal).** Your agent can run these itself; you can also type them:
 
@@ -47,13 +51,13 @@ Then connect the Landbot MCP server:
 codex mcp add landbot --url https://mcp.landbot.io/mcp && codex mcp login landbot
 ```
 
-Or copy the skill folders directly (works on every Codex version), and connect the server the same way:
+Or copy the skill folder directly (works on every Codex version), and connect the server the same way:
 
 ```bash
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh codex
 ```
 
-**Cursor.** From your project root (`--global` puts them in `~/.cursor/skills/` for every project):
+**Cursor.** From your project root (`--global` puts it in `~/.cursor/skills/` for every project):
 
 ```bash
 git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/scripts/install.sh cursor
@@ -61,7 +65,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 Then add `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
-Each skill prints its version (`landbot-flows 0.9.5`) the first time it runs. If you see an older number, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+The skill prints its version (`landbot 0.10.0`) the first time it runs. If you see an older number, or `landbot-flows`, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Signing in
 
@@ -71,7 +75,7 @@ The first time the agent uses Landbot, your browser opens Landbot's sign-in and 
 
 > Build a lead-qualification bot for `<your site>`: greet, ask name, email and company size, tell companies over 50 people a person will follow up, thank the rest. Publish it and give me the builder link and the share URL.
 
-The skill builds the bot and styles it before anything is live, then asks once before publishing it. On a bot you already had, it asks before every change. It ends with the builder link, the share URL and a plain description of the conversation.
+The agent builds the bot and styles it before anything is live, then asks once before publishing it. On a bot you already had, it asks before every change. It ends with the builder link, the share URL and a plain description of the conversation.
 
 Then: "make it look like `<your site>`". On a bot that was never published the look applies at once; on a published one it goes to the bot's draft, and reaches visitors the next time the bot is published.
 
@@ -81,7 +85,11 @@ Share → Embed in the builder gives you the snippet. Paste it on any page.
 
 ## Updates
 
-Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The skills read the live block catalog at run time, so a new block type on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
+Claude Code and Codex fetch updates from this repo: `claude plugin update landbot@landbot-skills` or `codex plugin marketplace upgrade`. `install.sh` users run it again. The agent reads the server's guides and its live block catalog at run time, so a change to either on Landbot's side needs no update here. What changed in each version is on the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page.
+
+## Upgrading from 0.9
+
+Since 0.10.0 the plugin has one skill, `landbot`, in place of `landbot-flows` and `landbot-style`: what those two taught now comes from the Landbot MCP server's guides. The plugin updates as usual. If you copied the skills with `install.sh`, run it again: it removes the two old folders.
 
 ## Upgrading from 0.4
 
@@ -96,7 +104,7 @@ On Linux and WSL, also remove the `export LANDBOT_API_TOKEN=…` line from your 
 
 ## Where data goes
 
-The agent talks to one Landbot host, `mcp.landbot.io`, which acts on your Landbot account with the access you allowed at sign-in. The only other hosts the skills read are `storage.googleapis.com/landbot.pro`, `/landbot.online` and `/landbot.site`, the public buckets that serve published chat configs, to verify a share URL.
+The agent talks to one Landbot host, `mcp.landbot.io`, which acts on your Landbot account with the access you allowed at sign-in.
 
 ## Privacy
 

@@ -24,8 +24,7 @@ body:
     attributes:
       label: Skill
       options:
-        - landbot-flows
-        - landbot-style
+        - landbot
         - Installation (plugin or install.sh)
     validations:
       required: true
@@ -33,7 +32,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: The first line the skill printed, for example `landbot-flows 0.3.4`.
+      description: The first line the skill printed, for example `landbot 0.10.0`.
     validations:
       required: true
   - type: dropdown

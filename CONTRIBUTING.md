@@ -1,26 +1,23 @@
 # Contributing
 
-One plugin, `plugins/landbot/`, holds every skill: one folder each under `plugins/landbot/skills/<name>/` with a `SKILL.md`, an optional `REFERENCE.md`, optional `scripts/` (bash, `curl` and `jq` only) and `agents/openai.yaml` for Codex. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json` and the Landbot MCP server is declared in `plugins/landbot/.mcp.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). The Cursor files, `plugins/landbot/.cursor-plugin/plugin.json` and `.cursor-plugin/marketplace.json`, are derived from those two. How they are kept in sync, and how the version is set and bumped, is under [Versions](#versions).
+One plugin, `plugins/landbot/`, with one skill, `plugins/landbot/skills/landbot/`: a `SKILL.md` and `agents/openai.yaml` for Codex. The skill connects the agent to the Landbot MCP server and tells it which of the server's guides to read; how to build, style, try and hand back a bot is in those guides, which the server serves with `get_guide`. The plugin manifest is `plugins/landbot/.claude-plugin/plugin.json` and the Landbot MCP server is declared in `plugins/landbot/.mcp.json`; the marketplace index is `.claude-plugin/marketplace.json` (Codex reads the same file). The Cursor files, `plugins/landbot/.cursor-plugin/plugin.json` and `.cursor-plugin/marketplace.json`, are derived from those two. How they are kept in sync, and how the version is set and bumped, is under [Versions](#versions).
 
 Rules:
 
 - **Everything goes through the Landbot MCP server.** No script calls Landbot's API and nothing asks for a token. A capability the server lacks is asked of the server, not worked around here.
-- **No bundled schema.** The skills read the catalog and schemas from the server at run time. Do not paste them into a skill.
-- **Every claim in a REFERENCE.md says when and where it was observed.** Anything observed on production gets a date. Stale is fine; unlabelled is not.
-- Keep `SKILL.md` under about 400 lines. Move long learnings to `REFERENCE.md`.
-- Paths in a `SKILL.md` are written as `${CLAUDE_SKILL_DIR}/scripts/…`. Claude Code substitutes them; `scripts/install.sh` writes absolute folders for Codex and Cursor. Never hard-code a home folder.
-- `allowed-tools` pre-approves reads only: `verify-share` and the Landbot MCP server's read tools, named `mcp__plugin_landbot_landbot__<tool>` in Claude Code. Anything that writes to a bot or web chat must keep prompting.
+- **No bundled knowledge.** The catalog, the schemas and the guides come from the server at run time. A change to how a bot is built, styled, tried or handed back goes to the server's guides or tools, not into the skill.
+- Keep the `SKILL.md` to connecting the server and pointing at its guides.
+- `allowed-tools` pre-approves reads only: the Landbot MCP server's read tools, named `mcp__plugin_landbot_landbot__<tool>` in Claude Code. Anything that writes to a bot or web chat must keep prompting.
 - Test on a brand that is not a customer's before opening a pull request, and say in the PR which environment you tested against.
-- CI runs `claude plugin validate --strict` on both manifests and `scripts/sync-manifests --check`, then `smoke/versions.sh` and `smoke/guards.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && scripts/sync-manifests --check && smoke/versions.sh && smoke/guards.sh`.
+- CI runs `claude plugin validate --strict` on both manifests and `scripts/sync-manifests --check`, then `smoke/versions.sh`, on every pull request and on `main`. On every pull request it also runs `smoke/pr-title.sh` on the title and `smoke/version-bump.sh` against `main`. All of it must be green before merge. To run the same checks locally: `claude plugin validate --strict . && claude plugin validate --strict plugins/landbot && scripts/sync-manifests --check && smoke/versions.sh`.
 
 ## Versions
 
-The plugin is the unit that Claude Code and Codex install and update, so it carries one version for both skills. `plugins/landbot/.claude-plugin/plugin.json` is the only place where it is set; the Cursor manifest copies it (below), and the entry in `marketplace.json` has no `version`. Both agents give a person who already installed the plugin a new copy only when that version changes, so a change under `plugins/` that people should receive needs a bump.
+The plugin is the unit that Claude Code and Codex install and update, so it carries one version, which its skill repeats. `plugins/landbot/.claude-plugin/plugin.json` is the only place where it is set; the Cursor manifest copies it (below), and the entry in `marketplace.json` has no `version`. Both agents give a person who already installed the plugin a new copy only when that version changes, so a change under `plugins/` that people should receive needs a bump.
 
 The same value is repeated, and must match, in:
 
-- each `SKILL.md`: `metadata.version` and the "First line" it tells the agent to print;
-- the header comment of each file in `plugins/landbot/skills/landbot-style/modules/`;
+- the `SKILL.md`: `metadata.version` and the "First line" it tells the agent to print;
 - the version quoted in `README.md` and `skills.md`.
 
 `smoke/versions.sh` checks all of them.
@@ -38,7 +35,7 @@ The plugin stays on `0.x`. Moving to `1.0` is a decision of its own, not the res
 
 Changes outside `plugins/`, such as docs or CI, do not bump the version. `smoke/version-bump.sh` fails a pull request that changes `plugins/` without raising the version.
 
-Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`, with `(<scope>)` and `!` optional. Types: `feat`, `fix`, `docs`, `ci`, `build`, `chore`, `refactor`, `test`. Scopes: `flows` and `style` for a change to one skill, `deps` for dependency updates; no scope when a change touches the whole plugin or the repository. The title becomes the commit on `main`, and `smoke/pr-title.sh` checks it.
+Pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <summary>`, with `(<scope>)` and `!` optional. Types: `feat`, `fix`, `docs`, `ci`, `build`, `chore`, `refactor`, `test`. Scope: `deps` for dependency updates; no scope otherwise. The title becomes the commit on `main`, and `smoke/pr-title.sh` checks it.
 
 When a push to `main` carries a version that has no tag yet, the `release` workflow runs `scripts/release.sh`: it tags `vX.Y.Z` on that commit and publishes its GitHub Release. The notes list the commit titles since the previous release, grouped into breaking changes, features, fixes and other changes; the [Releases](https://github.com/landbot-org/landbot-ai-skills/releases) page is the changelog. Do not create `vX.Y.Z` tags or releases by hand. `scripts/release.sh --dry-run` prints the tag and the notes for `HEAD` without changing anything. `vX.Y.Z-rcN` tags are made by hand for testing a candidate; a person can install one by adding the marketplace at that ref (`landbot-org/landbot-ai-skills#v0.3.5-rc1` in Claude Code).
 
