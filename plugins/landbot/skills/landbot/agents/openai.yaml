@@ -1,0 +1,4 @@
+interface:
+  display_name: "Landbot"
+  short_description: "Build, style and publish Landbot bots from a description"
+  default_prompt: "Use $landbot to build a Landbot bot that asks for a name and an email, then thanks the person."

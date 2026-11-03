@@ -1,6 +1,6 @@
 ## What
 
-<!-- What changes for the person using the skills. -->
+<!-- What changes for the person using the plugin. -->
 
 ## Tested against
 
@@ -9,5 +9,4 @@
 ## Checklist
 
 - [ ] No token, partial token or account email anywhere in the diff, the tests or this description.
-- [ ] If the skills' behaviour changed: the version is bumped, `scripts/sync-manifests` was run, and `smoke/versions.sh` and `scripts/sync-manifests --check` pass.
-- [ ] New or changed claims in a `REFERENCE.md` say when and where they were observed.
+- [ ] If the skill's behaviour changed: the version is bumped, `scripts/sync-manifests` was run, and `smoke/versions.sh` and `scripts/sync-manifests --check` pass.

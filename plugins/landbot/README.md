@@ -20,13 +20,17 @@ Describe a conversation to your coding agent and get a published Landbot bot wit
 
 The agent builds the bot and its look before anything is live, asks once before publishing, and ends with the builder link and the share URL.
 
-In the Claude desktop app's Code tab, the agent opens the chat in the app's built-in browser beside the conversation: you watch the look change step by step, and once it is published the agent tries the bot on every branch, at desktop and phone width.
+In the Claude desktop app's Code tab, the agent can open the chat in the app's built-in browser beside the conversation and, once the bot is published, try it on every branch, at desktop and phone width.
 
-## The two skills
+## The skill and the guides
 
-**landbot-flows** reads Landbot's live block catalog, creates the bot, places and wires the blocks, sets up an AI agent block when the brief calls for one, and publishes on your say-so. It hands back the builder link, the share URL and a plain description of the conversation. Because it reads the catalog at run time, a new block type on Landbot's side needs no update here.
+The plugin's one skill, **landbot**, connects the agent to the Landbot MCP server and has it read the server's guides before each step:
 
-**landbot-style** turns a brief ("like our site", "dark", "like a form") into one Custom CSS block for the v4 web chat, applies it or tells you where to paste it, and verifies it on the published share URL. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code feature; the trial has it, and the chat works without them.
+- **build**: the order of a build, the bot to build when you just say "show me", and where the blocks go on the canvas. The agent reads Landbot's live block catalog, creates the bot, places and wires the blocks, and sets up an AI agent block when the brief calls for one.
+- **style**: one Custom CSS block for the v4 web chat from a brief ("like our site", "dark", "like a form"), checked where visitors get it. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code add-on; the chat works without them.
+- **hand-back**: the yes before publishing, the builder link, the share URL and a plain description of the conversation, and how to try the bot on every branch.
+
+The guides and the catalog are read from the server at run time, so a change on Landbot's side needs no plugin update.
 
 ## Where it runs
 
@@ -40,7 +44,7 @@ Claude Code, or the Claude desktop app's Code tab, which is the recommended way.
 
 ## Where data goes
 
-The agent talks to one Landbot host, **mcp.landbot.io**, which acts on your Landbot account with the access you allowed. The skills also read **storage.googleapis.com/landbot.pro**, **/landbot.online** and **/landbot.site**, the public buckets that serve published chat configs, to verify a share URL. The full account is in SECURITY.md in the repository.
+The agent talks to one Landbot host, **mcp.landbot.io**, which acts on your Landbot account with the access you allowed. The full account is in SECURITY.md in the repository.
 
 Privacy: what the plugin reads on your machine, stores and sends is set out in the plugin's [Privacy policy](https://github.com/landbot-org/landbot-ai-skills/blob/main/PRIVACY.md). What Landbot does with the data that reaches its services is covered by Landbot's [Privacy Policy](https://landbot.io/privacy-policy).
 
