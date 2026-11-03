@@ -24,7 +24,10 @@ for old in landbot-flows landbot-style; do
     echo "removed $old $DEST/$old (the landbot skill replaces it)"
   fi
 done
-rm -rf "$DEST/landbot"
+if [ -d "$DEST/landbot" ]; then
+  rm -rf "$DEST/landbot"
+  echo "replaced $DEST/landbot (a folder of that name was already there)"
+fi
 cp -R "$HERE/plugins/landbot/skills/landbot" "$DEST/landbot"
 echo "installed landbot $DEST/landbot (version $(grep -m1 -oE 'landbot [0-9]+\.[0-9]+\.[0-9]+' "$DEST/landbot/SKILL.md" | cut -d' ' -f2))"
 echo
