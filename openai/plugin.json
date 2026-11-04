@@ -71,7 +71,7 @@
               "description": "Changes a message in the draft of a bot the account already has. The test account has a web bot named Demo lead form.",
               "prompt": "In my Demo lead form bot, change the last message to: Thanks! We'll get back to you within one business day.",
               "tools_triggered": "list_bots, get_bot_draft, update_draft_block",
-              "expected_behavior": "Finds the Demo lead form bot, reads its draft and, after the user confirms, changes the text of its final message. It says the change is in the draft and reaches visitors only when the bot is published."
+              "expected_behavior": "Finds the Demo lead form bot, reads its draft and changes the text of its final message. If it first asks to confirm the bot, the user says yes. It says the change is in the draft and reaches visitors only when the bot is published."
             },
             {
               "description": "Deploys a bot's draft to its test copy once the user has asked for it.",
@@ -83,7 +83,7 @@
               "description": "Styles a web bot's chat with Custom CSS.",
               "prompt": "Give the chat of my Demo lead form bot a dark background and orange buttons.",
               "tools_triggered": "list_bots, get_web_chat, get_guide, get_web_chat_style_catalog, update_web_chat",
-              "expected_behavior": "Says which bot it will change and asks for a yes. Then it reads how the chat looks, the style guide and what Custom CSS can style, and writes Custom CSS with a dark background and orange buttons. It says whether the change went live or went to the chat's draft, which visitors get the next time the bot is published."
+              "expected_behavior": "Reads how the chat looks, the style guide and what Custom CSS can style, and writes Custom CSS with a dark background and orange buttons. If it first asks to confirm the bot, the user says yes. It says whether the change went live or went to the chat's draft, which visitors get the next time the bot is published."
             }
           ],
           "negative": [
