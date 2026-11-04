@@ -64,8 +64,8 @@
             {
               "description": "Builds a new web bot from a plain-language description, without publishing it.",
               "prompt": "Create a web chatbot called Newsletter signup that asks for the visitor's name and email, then thanks them.",
-              "tools_triggered": "list_blocks, get_block_definition, create_bot, add_draft_blocks",
-              "expected_behavior": "Reads the block catalog, creates a web bot named Newsletter signup and adds a greeting, a name question, an email question and a thank-you message, connected in that order. It reports that the draft breaks no rules, links to the bot in the Landbot builder, and does not publish it without asking."
+              "tools_triggered": "get_guide, list_blocks, get_block_definition, create_bot, update_web_chat, add_draft_blocks",
+              "expected_behavior": "Reads the build guide and the block catalog, creates a web bot named Newsletter signup, switches its chat to the v4 web chat, and adds a greeting, a name question, an email question and a thank-you message, connected in that order. It hands the bot back with its builder link and a plain description of the conversation, says whether the draft breaks any rule, and offers to let the user try it or publish it, without doing either until the user says yes."
             },
             {
               "description": "Changes a message in the draft of a bot the account already has. The test account has a web bot named Demo lead form.",
@@ -75,15 +75,15 @@
             },
             {
               "description": "Deploys a bot's draft to its test copy once the user has asked for it.",
-              "prompt": "Deploy my Demo lead form bot to test so I can try it before publishing.",
+              "prompt": "Deploy my Demo lead form bot to its test link in Landbot so I can try it before publishing.",
               "tools_triggered": "list_bots, deploy_draft_to_test",
-              "expected_behavior": "Deploys the Demo lead form draft to the bot's test copy, reports any warnings, and tells the user where to try it in Landbot. Visitors keep getting the published version, and nothing is published."
+              "expected_behavior": "Deploys the Demo lead form draft to the bot's test copy, reports any warnings, and tells the user to open the bot's test link in Landbot to try it. Visitors keep getting the published version, and nothing is published."
             },
             {
               "description": "Styles a web bot's chat with Custom CSS.",
               "prompt": "Give the chat of my Demo lead form bot a dark background and orange buttons.",
-              "tools_triggered": "list_bots, get_web_chat, update_web_chat",
-              "expected_behavior": "Reads how the chat looks, writes a Custom CSS block with a dark background and orange buttons, and says whether the change is live or in the draft that visitors get once the bot is published from the Landbot builder."
+              "tools_triggered": "list_bots, get_web_chat, get_guide, get_web_chat_style_catalog, update_web_chat",
+              "expected_behavior": "Says which bot it will change and asks for a yes. Then it reads how the chat looks, the style guide and what Custom CSS can style, and writes Custom CSS with a dark background and orange buttons. It says whether the change went live or went to the chat's draft, which visitors get the next time the bot is published."
             }
           ],
           "negative": [
