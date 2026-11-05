@@ -4,11 +4,12 @@
 # The listing, the review test cases and the MCP server's settings live in openai/. The skills and the icon are the
 # ones the Claude plugin ships, and the version is the Claude plugin's.
 #
-#   scripts/build-openai-package   write dist/landbot-openai-<version>.zip
+#   scripts/build-openai-package             write dist/landbot-openai-<version>.zip
+#   scripts/build-openai-package <version>   the same with another version, to upload again after a rejection
 set -euo pipefail
 cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
 PLUGIN=plugins/landbot
-VERSION="$(jq -r .version "$PLUGIN/.claude-plugin/plugin.json")"
+VERSION="${1:-$(jq -r .version "$PLUGIN/.claude-plugin/plugin.json")}"
 OUT="dist/landbot-openai-$VERSION.zip"
 
 # The limits OpenAI checks at final submission. The portal accepts longer values at upload and refuses them later.
