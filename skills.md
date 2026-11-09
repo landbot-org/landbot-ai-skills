@@ -45,12 +45,12 @@ The first Landbot tool call opens Landbot's sign-in in the browser (Codex: `code
 ## 4. Build the first bot
 Use the `landbot` skill with the person's description, and read the server's build guide (`get_guide` with topic `build`) before the first write. **If they asked for a bot but gave no description, or said "show me", do not interview them:** the build guide says which bot to build.
 
-When they described a look, it goes on before the first publish, as the style guide says (`get_guide` with topic `style`). Then hand the bot back and ask once to publish it, as the hand-back guide says (`get_guide` with topic `hand-back`): the builder link and the note that goes with it (the builder is for looking; changes go through you), the share URL, and a plain-language description of the conversation. With the in-app browser, walk every branch after the publish. On a Sandbox or Trial plan the share URL first shows Landbot's safety notice ("You’re about to open a chat with …"): it is not an error. Click "Continue to chat", never "Report this bot".
+When they described a look, it goes on before the first publish, as the style guide says (`get_guide` with topic `style`). Then hand the bot back and ask once to publish it, as the hand-back guide says (`get_guide` with topic `hand-back`): the builder link and the note that goes with it (the builder is for looking; changes go through you), the share URL, and a plain-language description of the conversation. With the in-app browser, walk every branch after the publish.
 
 ## 5. Embed
 Offer to add the embed snippet (builder › Share › Embed) to their site's code. **HUMAN** deploys.
 
 ## Limits
-On the v4 web chat use `buttons` for yes/no. Custom CSS and Custom JS (the messaging and step-form behaviours) work on every plan; on Sandbox and Trial, Custom JS needs the v4 web chat, and the chat works without it. On Sandbox and Trial, visitors, and you when you try the bot, first see a Landbot safety notice on the share URL: "Continue to chat" passes it, and upgrading the plan removes it.
+On the v4 web chat use `buttons` for yes/no.
 
 Help: open an issue at https://github.com/landbot-org/landbot-ai-skills (bot id and step) or use the assistant on the skills page.
