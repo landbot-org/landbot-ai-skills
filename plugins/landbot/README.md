@@ -27,7 +27,7 @@ In the Claude desktop app's Code tab, the agent can open the chat in the app's b
 The plugin's one skill, **landbot**, connects the agent to the Landbot MCP server and has it read the server's guides before each step:
 
 - **build**: the order of a build, the bot to build when you just say "show me", and where the blocks go on the canvas. The agent reads Landbot's live block catalog, creates the bot, places and wires the blocks, and sets up an AI agent block when the brief calls for one.
-- **style**: one Custom CSS block for the v4 web chat from a brief ("like our site", "dark", "like a form"), checked where visitors get it. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code add-on; the chat works without them.
+- **style**: one Custom CSS block for the v4 web chat from a brief ("like our site", "dark", "like a form"), checked where visitors get it. Two ready-made behaviours go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS; the chat works without them.
 - **hand-back**: the yes before publishing, the builder link, the share URL and a plain description of the conversation, and how to try the bot on every branch.
 
 The guides and the catalog are read from the server at run time, so a change on Landbot's side needs no plugin update.

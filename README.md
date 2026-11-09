@@ -10,7 +10,7 @@ One plugin, `landbot`, with one skill, also called `landbot`. It connects your a
 |---|---|
 | `build` | The order of a build, the bot to build when you just say "show me", where the blocks go on the canvas, and what the visitor's chat does that the block catalog does not say. |
 | `style` | How to turn "make it look like our site / dark / like a form" into one Custom CSS block for the web chat, keep the visitor's Back button, and check the look where visitors get it. |
-| `style-messaging`, `style-steps` | Two ready-made behaviours that go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS, which Landbot serves to accounts with the Custom Code add-on; the chat works without them. |
+| `style-messaging`, `style-steps` | Two ready-made behaviours that go beyond CSS: a messaging-app chat (reply buttons inside the bubble, times, "typing…") and a step form (progress bar, "2 of 5", letter keys). They are Custom JS; the chat works without them. |
 | `hand-back` | The yes to ask for before publishing, what to hand back (the builder link, the share URL and a plain description of the conversation), and how to try the bot on every branch. |
 
 The guides live on the server and the agent reads them with the server's `get_guide` tool, so they change without a plugin update and reach every agent connected to the server, with or without this plugin.
@@ -65,7 +65,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 Then add `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
-The skill prints its version (`landbot 0.10.0`) the first time it runs. If you see an older number, or `landbot-flows`, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+The skill prints its version (`landbot 0.10.1`) the first time it runs. If you see an older number, or `landbot-flows`, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Signing in
 
