@@ -65,7 +65,7 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 Then add `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
-The skill prints its version (`landbot 0.10.1`) the first time it runs. If you see an older number, or `landbot-flows`, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+The skill prints its version (`landbot 0.10.2`) the first time it runs. If you see an older number, or `landbot-flows`, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Signing in
 
