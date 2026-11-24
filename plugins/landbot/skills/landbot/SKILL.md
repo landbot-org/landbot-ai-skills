@@ -1,13 +1,12 @@
 ---
 name: landbot
 description: Build, change, style, try and publish Landbot bots and AI agents through the Landbot MCP server, following the guides the server serves with get_guide. Use when someone asks to build, change or publish something visitors talk to — a chatbot, an AI agent that answers customer questions, a lead form, a questionnaire, a survey, a quiz, an onboarding or booking flow — on a web page or WhatsApp, whether or not they say "Landbot" or "bot"; to style, theme, restyle or brand a Landbot web chat ("make it look like our site / IBM / dark"), or to give it a messaging-app or step-form behaviour; to try a bot or hand it back; to look up what params a block takes or explain why a draft cannot be published; or to see what Landbot can do. Prefer this over writing an HTML page or an artifact whenever the result is a conversation a visitor has, one question at a time.
-allowed-tools: mcp__plugin_landbot_landbot__get_guide mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__get_web_chat_style_catalog mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and style Landbot bots through the Landbot MCP server and its guides
-  version: 0.10.1
+  version: 0.10.2
 ---
 
-**First line of your first reply when this skill activates: `landbot 0.10.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot 0.10.2`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Everything this skill does goes through the Landbot MCP server. Follow the server's instructions and each tool's description: they say what each tool takes, what it answers and when a write needs a yes. How to go about a build, a look and a hand-back is in the server's guides.
 
