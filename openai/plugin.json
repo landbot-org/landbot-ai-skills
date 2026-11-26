@@ -11,23 +11,23 @@
   "license": "MIT",
   "keywords": [
     "landbot",
+    "ai-agent",
+    "chatbot",
     "conversion-agent",
     "lead-qualification",
-    "sales-agent",
+    "customer-support",
+    "faq",
     "meeting-booking",
     "lead-generation",
-    "chatbot",
     "whatsapp",
-    "web-chat",
-    "mcp",
-    "skill"
+    "web-chat"
   ],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Landbot",
-        "shortDescription": "Build AI conversion agents",
-        "longDescription": "Describe the conversation you want and get a Landbot bot built for you: a lead-qualification flow, a one-question-at-a-time form, a booking assistant, or an AI agent that answers from your content. It reads Landbot's live block catalog, creates the bot, places and wires its blocks, and links you to it in the Landbot builder.\n\nWhat it can do:\n- Create web and WhatsApp bots from a plain-language brief, and change the flow of a bot you already have.\n- Set up AI agents that answer from the texts and web pages you give them.\n- Connect Google Sheets, SendGrid and Calendly blocks to the accounts your brand has connected. When none will do, it gives you a link to connect one in Landbot.\n- Style the web chat: Custom CSS, the header title and avatar, and the texts visitors see.\n- Deploy a bot to test so you can try it, and publish it when you say so.\n\nHow it works: the first time you use it, Landbot's sign-in opens and asks you to allow access. There is no token to copy. From then on it acts with your account's permissions, on your brand, and asks before it deploys or publishes anything. Underneath it is a normal Landbot bot: you keep the builder, the inbox, the integrations and the WhatsApp channel.\n\nYou need a Landbot account. Some features, such as Custom CSS, depend on your Landbot plan.",
+        "shortDescription": "Qualify leads & book meetings",
+        "longDescription": "Build AI agents and chatbots for your website and WhatsApp that qualify leads, book meetings and answer customer questions — by describing what you need in this chat. Landbot runs the agent; ChatGPT builds it in your Landbot account.\n\nWhat you can do\n- Qualify visitors — ask the questions your sales team would, and route by the answers.\n- Book meetings — offer qualified visitors a Calendly slot inside the conversation.\n- Capture and route leads — send answers to your Google Sheet or email.\n- Answer from your own content — point the agent at your website or documents.\n- Answer support questions — resolve FAQs from your own content and hand off to your team.\n- Launch on WhatsApp — the same agent, on the channel your customers already use.\n- Test, then go live — try it on a test link; it’s published only when you say so.\n\nWho it’s for\nMarketing, sales and support teams that run conversations on their website or WhatsApp and want leads qualified and customer questions answered.\n\nBefore you start\n- You need a Landbot account. You sign in with Landbot when you connect.\n- Nothing goes live without your confirmation: agents are built as drafts, tested on a link and published only when you approve.\n- WhatsApp agents need a WhatsApp number connected in Landbot first.\n- Google Sheets, email and Calendly steps use accounts you connect in Landbot.\n\nSecurity\nLandbot is SOC 2 and GDPR compliant. Security documentation, DPA and subprocessor list at trust.landbot.io.",
         "developerName": "Landbot",
         "category": "Business & Operations",
         "capabilities": [
@@ -39,18 +39,19 @@
           "Style the web chat with Custom CSS, a header title and avatar, and the texts visitors see",
           "Deploy a bot to test, and publish it once you approve"
         ],
-        "websiteURL": "https://landbot.io",
+        "websiteURL": "https://landbot.io/build-with-ai/chatgpt?utm_source=chatgpt_directory&utm_medium=marketplace&utm_campaign=amo&utm_content=website",
         "supportURL": "https://help.landbot.io/",
         "privacyPolicyURL": "https://landbot.io/privacy-policy",
         "termsOfServiceURL": "https://landbot.io/terms-conditions",
         "defaultPrompt": [
-          "Build a lead-qualification bot for my website that asks for name, email and company size",
-          "Show me my Landbot bots and which ones are published",
-          "Give my website chat a dark look that matches my brand colors"
+          "Build a conversion agent for my pricing page that qualifies visitors and shares my demo booking link with the good ones.",
+          "Build a support chatbot for my website that answers FAQs from my help center and hands tricky cases to my team.",
+          "Add an AI agent to my homepage that answers buying questions from my website and collects emails from interested visitors."
         ],
-        "brandColor": "#33405E",
+        "brandColor": "#636BFC",
         "logo": "./assets/icon.svg",
-        "composerIcon": "./assets/icon.svg"
+        "composerIcon": "./assets/icon.svg",
+        "brandColorDark": "#636BFC"
       },
       "review": {
         "test_cases": {

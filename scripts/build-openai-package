@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # OpenAI's plugin directory (ChatGPT and Codex) takes a plugin as a ZIP uploaded at platform.openai.com/plugins, in
 # the Agent Plugins layout: plugin.json and mcp.json at the root of the archive, skills/ and assets/ next to them.
-# The listing, the review test cases and the MCP server's settings live in openai/. The skills and the icon are the
-# ones the Claude plugin ships, and the version is the Claude plugin's.
+# The listing, the review test cases and the MCP server's settings live in openai/. The skills are the
+# ones the Claude plugin ships, the icon is openai/icon.svg, and the version is the Claude plugin's.
 #
 #   scripts/build-openai-package             write dist/landbot-openai-<version>.zip
 #   scripts/build-openai-package <version>   the same with another version, to upload again after a rejection
@@ -35,7 +35,7 @@ jq --arg version "$VERSION" '{"$schema": .["$schema"], name: .name, version: $ve
 cp openai/mcp.json "$STAGE/mcp.json"
 # openai/plugin.json points logo and composerIcon at this file.
 mkdir -p "$STAGE/assets"
-cp "$PLUGIN/.claude-plugin/icon.svg" "$STAGE/assets/icon.svg"
+cp openai/icon.svg "$STAGE/assets/icon.svg"
 # Tracked files only, so no .DS_Store or local leftovers reach the review.
 git ls-files -z "$PLUGIN/skills" | while IFS= read -r -d '' file; do
   dest="$STAGE/${file#"$PLUGIN"/}"

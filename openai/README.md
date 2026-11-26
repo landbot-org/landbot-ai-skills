@@ -7,7 +7,7 @@
 | `plugin.json` | `openai/plugin.json`, with the version of `plugins/landbot/.claude-plugin/plugin.json` |
 | `mcp.json` | `openai/mcp.json` |
 | `skills/` | `plugins/landbot/skills/`, tracked files only |
-| `assets/icon.svg` | `plugins/landbot/.claude-plugin/icon.svg` |
+| `assets/icon.svg` | `openai/icon.svg`, the logomark on the purple tile. The Claude plugin keeps its own icon |
 
 `openai/plugin.json` holds the directory listing (`extensions["com.openai"].interface`), the review test cases, the demo video (`review.demo_recording_url`) and the release notes. `openai/mcp.json` declares the Landbot MCP server with OAuth through a Client ID Metadata Document: ChatGPT registers itself, so there is no client id or secret. OpenAI's pages put that `auth` object inside the server entry, which the Agent Plugins 1.0.0 schema does not allow; the portal reads it there.
 
