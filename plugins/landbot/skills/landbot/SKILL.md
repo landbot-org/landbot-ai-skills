@@ -4,10 +4,10 @@ description: Build, change, style, try and publish Landbot bots and AI agents th
 allowed-tools: mcp__plugin_landbot_landbot__get_guide mcp__plugin_landbot_landbot__list_blocks mcp__plugin_landbot_landbot__get_block_definition mcp__plugin_landbot_landbot__list_bots mcp__plugin_landbot_landbot__get_bot mcp__plugin_landbot_landbot__get_bot_draft mcp__plugin_landbot_landbot__get_ai_agent_schema mcp__plugin_landbot_landbot__get_ai_agent mcp__plugin_landbot_landbot__list_knowledge_sources mcp__plugin_landbot_landbot__get_web_chat mcp__plugin_landbot_landbot__get_web_chat_style_catalog mcp__plugin_landbot_landbot__list_connected_accounts mcp__plugin_landbot_landbot__get_account_connection mcp__plugin_landbot_landbot__list_spreadsheets mcp__plugin_landbot_landbot__list_sheets mcp__plugin_landbot_landbot__list_sheet_columns mcp__plugin_landbot_landbot__list_calendly_event_types
 metadata:
   short-description: Build and style Landbot bots through the Landbot MCP server and its guides
-  version: 0.10.0
+  version: 0.10.1
 ---
 
-**First line of your first reply when this skill activates: `landbot 0.10.0`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
+**First line of your first reply when this skill activates: `landbot 0.10.1`.** Then carry on. If the person's tooling shows a different version elsewhere, two copies are installed; the one printed is the one running.
 
 Everything this skill does goes through the Landbot MCP server. Follow the server's instructions and each tool's description: they say what each tool takes, what it answers and when a write needs a yes. How to go about a build, a look and a hand-back is in the server's guides.
 
