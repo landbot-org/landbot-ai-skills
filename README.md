@@ -65,11 +65,39 @@ git clone https://github.com/landbot-org/landbot-ai-skills && landbot-ai-skills/
 
 Then add `https://mcp.landbot.io/mcp` as a remote MCP server in Cursor's MCP settings.
 
-The skill prints its version (`landbot 0.10.1`) the first time it runs. If you see an older number, or `landbot-flows`, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
+The skill prints its version (`landbot 0.10.2`) the first time it runs. If you see an older number, or `landbot-flows`, an earlier copy is still installed; remove it (`claude plugin uninstall`, or delete the folder `install.sh` printed) so only one is left.
 
 ## Signing in
 
 The first time the agent uses Landbot, your browser opens Landbot's sign-in and asks you to allow access. There is no token to copy: the agent acts as you, on your brand, with the access you allowed, and you can sign out from the agent (`/mcp` in Claude Code) at any time.
+
+In Claude Code, each Landbot tool also asks for permission the first time it runs, so the first build stops a few times, not only for the yes before publishing. Always allow the read tools (`get_*` and `list_*`); keep the tools that write (`create_bot`, `replace_draft`, `publish_bot`, `update_web_chat` and the like) asking. To skip the read prompts from the start, add the read tools to `permissions.allow` in `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_landbot_landbot__get_guide",
+      "mcp__plugin_landbot_landbot__list_blocks",
+      "mcp__plugin_landbot_landbot__get_block_definition",
+      "mcp__plugin_landbot_landbot__list_bots",
+      "mcp__plugin_landbot_landbot__get_bot",
+      "mcp__plugin_landbot_landbot__get_bot_draft",
+      "mcp__plugin_landbot_landbot__get_ai_agent_schema",
+      "mcp__plugin_landbot_landbot__get_ai_agent",
+      "mcp__plugin_landbot_landbot__list_knowledge_sources",
+      "mcp__plugin_landbot_landbot__get_web_chat",
+      "mcp__plugin_landbot_landbot__get_web_chat_style_catalog",
+      "mcp__plugin_landbot_landbot__list_connected_accounts",
+      "mcp__plugin_landbot_landbot__get_account_connection",
+      "mcp__plugin_landbot_landbot__list_spreadsheets",
+      "mcp__plugin_landbot_landbot__list_sheets",
+      "mcp__plugin_landbot_landbot__list_sheet_columns",
+      "mcp__plugin_landbot_landbot__list_calendly_event_types"
+    ]
+  }
+}
+```
 
 ## First bot
 
