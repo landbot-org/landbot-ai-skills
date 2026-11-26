@@ -31,4 +31,6 @@ Read the guide a step needs with `get_guide` before you take it, never from memo
 - `style-messaging` or `style-steps`: when the person asks for a chat that works like a messaging app, or for a form with a progress bar and letter keys.
 - `hand-back`: before you hand a bot back, ask to publish it or deploy it to test, or try it.
 
+If `get_guide` is refused, or nobody is there to answer its permission prompt, stop and tell the person: do not build, style or hand back without the guide.
+
 If the server's instructions reach you cut short, read them whole with `get_guide` and topic `instructions`. Where a guide and a tool's description disagree, the tool wins.

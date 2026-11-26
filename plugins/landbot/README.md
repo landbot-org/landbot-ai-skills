@@ -13,7 +13,7 @@ Describe a conversation to your coding agent and get a published Landbot bot wit
 ## How it works
 
 1. Install the plugin.
-2. The first time the agent uses Landbot, your browser opens Landbot's sign-in and asks you to allow access. There is no token to copy.
+2. The first time the agent uses Landbot, your browser opens Landbot's sign-in and asks you to allow access. There is no token to copy. In Claude Code, each Landbot tool also asks for permission the first time it runs: always allow the read tools (`get_*`, `list_*`) and keep the ones that write asking. The repository README has a settings snippet that pre-allows the read tools.
 3. Describe the bot. For example:
 
 > Build a lead-qualification bot for our site: greet, ask name, email and company size, tell companies over 50 people that a person will follow up, thank the rest. Publish it and give me the builder link and the share URL.
