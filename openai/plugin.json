@@ -57,10 +57,10 @@
         "test_cases": {
           "positive": [
             {
-              "description": "Lists the bots of the signed-in Landbot account without changing anything.",
-              "prompt": "Show me my Landbot bots and tell me which ones are published.",
-              "tools_triggered": "list_bots",
-              "expected_behavior": "Calls list_bots and lists the account's bots by name, with their channel and whether each one is published. It changes nothing."
+              "description": "Reads the FAQ an AI agent answers from, without changing anything. The test account has a web bot named Demo FAQ agent whose AI agent has a knowledge source with its FAQ turned on.",
+              "prompt": "In my Demo FAQ agent bot, show me the questions and answers its AI agent answers from.",
+              "tools_triggered": "list_bots, get_bot_draft, get_ai_agent, list_knowledge_sources, list_faq_answers",
+              "expected_behavior": "Finds the Demo FAQ agent bot, reads its draft to find its AI agent, and lists the agent's knowledge sources and the FAQ answers generated from them, each with the questions it answers. If it first asks to confirm the bot, the user says yes. It changes nothing."
             },
             {
               "description": "Builds a new web bot from a plain-language description, without publishing it.",
