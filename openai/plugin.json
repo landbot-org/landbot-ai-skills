@@ -103,7 +103,7 @@
           ]
         },
         "commerce": false,
-        "demo_recording_url": "https://www.loom.com/share/3d9c4b813368405faaa82e5d9941bb17"
+        "demo_recording_url": "https://www.loom.com/share/ad83bc001bca4f5ca5e2beda39f4927b"
       },
       "publication": {
         "release_notes": "First release: build, edit, style, test and publish Landbot bots and AI agents from ChatGPT and Codex through the Landbot MCP server, including managing an AI agent's FAQ and getting the link and the embed code of a published web bot."
